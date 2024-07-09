@@ -1,0 +1,142 @@
+openapi: 3.0.0
+info:
+  title: MAOS Core API
+  version: 1.0.0
+  description: API for managing invocation jobs and configurations in the MAOS system
+
+servers:
+  - url: https://api.example.com/{api-version}
+    variables:
+      api-version:
+        default: v1
+
+security:
+  - bearerAuth: []
+
+paths:
+  /{api-version}/config:
+    get:
+      summary: Get configuration of the caller
+      operationId: getCallerConfig
+      tags:
+        - Configuration
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Configuration'
+        '401':
+          description: Unauthorized
+
+  /{api-version}/invocation/next:
+    get:
+      summary: Get next invocation job
+      operationId: getNextInvocation
+      tags:
+        - Invocation
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvocationJob'
+        '404':
+          description: No invocation job available
+        '401':
+          description: Unauthorized
+
+  /{api-version}/invocation/{invoke_id}/response:
+    post:
+      summary: Return invocation result
+      operationId: returnInvocationResponse
+      tags:
+        - Invocation
+      parameters:
+        - name: invoke_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                result:
+                  type: object
+                  description: The result of the invocation
+      responses:
+        '200':
+          description: Successful response
+        '404':
+          description: Invocation job not found
+        '401':
+          description: Unauthorized
+
+  /{api-version}/invocation/{invoke_id}/error:
+    post:
+      summary: Return invocation error
+      operationId: returnInvocationError
+      tags:
+        - Invocation
+      parameters:
+        - name: invoke_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: object
+                  description: The error details of the invocation
+      responses:
+        '200':
+          description: Successful response
+        '404':
+          description: Invocation job not found
+        '401':
+          description: Unauthorized
+
+components:
+  schemas:
+    InvocationJob:
+      type: object
+      properties:
+        id:
+          type: string
+          description: The unique identifier for the invocation job
+        payload:
+          type: object
+          description: The payload for the invocation job
+
+    Configuration:
+      type: object
+      additionalProperties:
+        type: string
+      description: A key-value structure representing the caller's configuration
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Enter the pre-assigned API key as a bearer token
+
+tags:
+  - name: Invocation
+    description: Operations related to invocation jobs
+  - name: Configuration
+    description: Operations related to caller configuration
+
+x-namespaces:
+  - Maos

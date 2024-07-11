@@ -1,0 +1,272 @@
+openapi: 3.0.0
+info:
+  title: Vector Store Interface
+  version: 0.0.1
+servers:
+  - url: https://api.example.com/{api-version}
+    variables:
+      api-version:
+        default: v1
+security:
+  - bearerAuth: []
+  - trace: []
+
+paths:
+  /{api-version}/db:
+    get:
+      summary: List database.
+      tags:
+        - db
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: string
+                    description: The list of databases.
+              examples:
+                db:
+                  value:
+                    data:
+                      - name: "db1"
+                      - name: "db2"
+                      - name: "db3"
+
+  /{api-version}/collection:
+    get:
+      summary: List collection.
+      tags:
+        - collection
+      parameters:
+        - name: MAOS_VECTOR_DATABASE_NAME
+          description: The name of the database to be accessed.
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: string
+                    description: The list of collections.
+              examples:
+                collection:
+                  value:
+                    data:
+                      - name: "collection1"
+                      - name: "collection2"
+                      - name: "collection3"
+    post:
+      summary: Create a collection.
+      tags:
+        - collection
+      parameters:
+        - name: MAOS_VECTOR_DATABASE_NAME
+          description: The name of the database to be accessed.
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: The name of the collection.
+                fields:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/collection_field"
+                indexes: 
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/collection_index"
+              required:
+                - name
+                - fields
+            examples:
+              collection:
+                value:
+                  name: "collection1"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: string
+                    description: The name of the collection.
+              examples:
+                collection:
+                  value:
+                    data:
+                      name: "collection1"
+  /{api-version}/collection/{name}:
+    post:
+      summary: Upsert data into a collection.
+      tags:
+        - collection
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+          description: The name of the collection.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              description: The data to be upserted. The key and value must be able to match with the collection scheme.
+                
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+    get:
+      summary: query data from a collection.
+      tags:
+        - collection
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+          description: The name of the collection.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+    trace:
+      type: apiKey
+      in: header
+      name: MAOS-TRACE-ID
+      description: The unique trace id.
+  schemas:
+    collection_field:
+      type: object 
+      properties:
+        name:
+          type: string
+        data_type:
+          $ref: "#/components/schemas/collection_data_type"
+        max_length:
+          type: integer
+          minimum: 1
+          maximum: 65535
+          description: The maximum length of the field. It's mandatory for VARCHAR data type.
+        is_primary:
+          type: boolean
+    collection_index:
+      type: object
+      properties:
+        index_name:
+          type: string
+        field_name:
+          type: string
+        index_type:
+          type: string
+          enum:
+            - "FLAT"
+            - "IVF_FLAT"
+            - "IVF_SQ8"
+            - "IVF_PQ"
+            - "GPU_IVF_FLAT"
+            - "GPU_IVF_PQ"
+            - "HNSW"
+            - "DISKANN"
+            - "BIN_FLAT"
+            - "BIN_IVF_FLAT"
+            - "SPARSE_INVERTED_INDEX"
+            - "SPARSE_WAND"
+        metric_type:
+          type: string
+          enum:
+            - "L2"
+            - "IP"
+            - "COSINE"
+            - "JACCARD"
+            - "HAMMING"
+        parameter:
+          type: object
+          properties:
+            nlist:
+              type: integer
+              description: Number of cluster units
+            m:
+              type: integer
+              description: Number of factors of product quantization
+            M:
+              type: integer
+              description:
+                M defines tha maximum number of outgoing connections in the graph.
+                Higher M leads to higher accuracy/run_time at fixed ef/efConstruction. Required when index type is *HNSW*.
+            efConstruction:
+              type: integer
+              description:
+                ef_construction controls index search speed/build speed tradeoff. Increasing the efConstruction parameter
+                may enhance index quality, but it also tends to lengthen the indexing time.
+                Required when index type is *HNSW*.
+            drop_ratio_build:
+              type: number
+              minimum: 0
+              maximum: 1
+              description:
+                The proportion of small vector values that are excluded during the indexing process.
+                This option allows fine-tuning of the indexing process, making a trade-off between efficiency
+                and accuracy by disregarding small values when building the index.
+                It's required when index type is *SPARSE_INVERTED_INDEX* or *SPARSE_WAND*.
+
+    collection_data_type:
+      type: string
+      enum:
+        - "INT64"
+        - "VARCHAR"
+        - "BOOL"
+        - "INT8"
+        - "INT16"
+        - "INT32"
+        - "INT64"
+        - "FLOAT"
+        - "JSON"
+        - "ARRAY"
+        - "BINARY_VECTOR"
+        - "FLOAT_VECTOR"
+        - "FLOAT16_VECTOR"
+        - "BFLOAT16_VECTOR"
+        - "SPARSE_FLOAT_VECTOR"

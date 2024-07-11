@@ -1,0 +1,122 @@
+openapi: 3.0.0
+info:
+  title: Embedding Service Interface
+  version: 0.0.1
+servers:
+  - url: https://api.example.com/{api-version}
+    variables:
+      api-version:
+        default: v1
+security:
+  - bearerAuth: []
+  - trace: []
+
+paths:
+  /{api-version}/models:
+    get:
+      summary: List models.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        provider:
+                          type: string
+                        name:
+                          type: string
+                        dimension:
+                          type: integer
+                          description: The dimension of the output vector.
+              examples:
+                model_list:
+                  value:
+                    - id: 9fadfda1-dcdf-4e4d-a42a-e158e54b4c4b
+                      provider: "voyage"
+                      name: "voyage-large-2"
+                      dimension: 1536
+                    - id: bd4f6262-a3b7-4dd1-9582-3ac182605cfb
+                      provider: "openai"
+                      name: "text-embedding-ada-002"
+                      dimension: 1536
+
+  /{api-version}/embedding:
+    post:
+      summary: Create embedding of text.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                model_id:
+                  type: string
+                  description: The model id.
+                input:
+                  type: array
+                  items:
+                    type: string
+                  description: The text to embedded.
+              required:
+                - model_id
+                - input
+            examples:
+              embedding:
+                value:
+                  model_id: "bert-base-uncased"
+                  input:
+                    - "The capital of France is Paris."
+                    - "The capital of Italy is Rome."
+                    - "The capital of Spain is Madrid."
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/embedding"
+                    description: The embeddings of the text.
+              examples:
+                embedding:
+                  value: 
+                    data:
+                      - embedding: [0.1, 0.2, 0.3]
+                        index: 0
+                      - embedding: [0.4, 0.5, 0.6]
+                        index: 1
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+    trace:
+      type: apiKey
+      in: header
+      name: MAOS-TRACE-ID
+      description: The unique trace id.
+  schemas:
+    embedding:
+      type: object
+      properties:
+        embedding:
+          type: array
+          items:
+            type: number
+          description: The embedding of the text.
+        index:
+          type: integer
+          description: The index of the text in the original list.

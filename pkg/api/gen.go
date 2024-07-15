@@ -16,18 +16,16 @@ import (
 
 const (
 	BearerAuthScopes = "bearerAuth.Scopes"
+	TraceScopes      = "trace.Scopes"
 )
 
-// Configuration A key-value structure representing the caller's configuration
-type Configuration map[string]string
+// CreateEmbeddingJSONBody defines parameters for CreateEmbedding.
+type CreateEmbeddingJSONBody struct {
+	// Input The text to embedded.
+	Input []string `json:"input"`
 
-// InvocationJob defines model for InvocationJob.
-type InvocationJob struct {
-	// Id The unique identifier for the invocation job
-	Id *string `json:"id,omitempty"`
-
-	// Payload The payload for the invocation job
-	Payload *map[string]interface{} `json:"payload,omitempty"`
+	// ModelId The model id.
+	ModelId string `json:"model_id"`
 }
 
 // ReturnInvocationErrorJSONBody defines parameters for ReturnInvocationError.
@@ -42,6 +40,9 @@ type ReturnInvocationResponseJSONBody struct {
 	Result *map[string]interface{} `json:"result,omitempty"`
 }
 
+// CreateEmbeddingJSONRequestBody defines body for CreateEmbedding for application/json ContentType.
+type CreateEmbeddingJSONRequestBody CreateEmbeddingJSONBody
+
 // ReturnInvocationErrorJSONRequestBody defines body for ReturnInvocationError for application/json ContentType.
 type ReturnInvocationErrorJSONRequestBody ReturnInvocationErrorJSONBody
 
@@ -53,14 +54,20 @@ type ServerInterface interface {
 	// Get configuration of the caller
 	// (GET /v1/config)
 	GetCallerConfig(w http.ResponseWriter, r *http.Request)
+	// Create embedding of text.
+	// (POST /v1/embedding)
+	CreateEmbedding(w http.ResponseWriter, r *http.Request)
+	// List embedding models.
+	// (GET /v1/embedding/models)
+	ListEmbeddingModels(w http.ResponseWriter, r *http.Request)
 	// Get next invocation job
-	// (GET /v1/invocation/next)
+	// (GET /v1/invocations/next)
 	GetNextInvocation(w http.ResponseWriter, r *http.Request)
 	// Return invocation error
-	// (POST /v1/invocation/{invoke_id}/error)
+	// (POST /v1/invocations/{invoke_id}/error)
 	ReturnInvocationError(w http.ResponseWriter, r *http.Request, invokeId string)
 	// Return invocation result
-	// (POST /v1/invocation/{invoke_id}/response)
+	// (POST /v1/invocations/{invoke_id}/response)
 	ReturnInvocationResponse(w http.ResponseWriter, r *http.Request, invokeId string)
 }
 
@@ -79,8 +86,48 @@ func (siw *ServerInterfaceWrapper) GetCallerConfig(w http.ResponseWriter, r *htt
 
 	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
 
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetCallerConfig(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// CreateEmbedding operation middleware
+func (siw *ServerInterfaceWrapper) CreateEmbedding(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateEmbedding(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// ListEmbeddingModels operation middleware
+func (siw *ServerInterfaceWrapper) ListEmbeddingModels(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListEmbeddingModels(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -95,6 +142,8 @@ func (siw *ServerInterfaceWrapper) GetNextInvocation(w http.ResponseWriter, r *h
 	ctx := r.Context()
 
 	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetNextInvocation(w, r)
@@ -124,6 +173,8 @@ func (siw *ServerInterfaceWrapper) ReturnInvocationError(w http.ResponseWriter, 
 
 	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
 
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReturnInvocationError(w, r, invokeId)
 	}))
@@ -151,6 +202,8 @@ func (siw *ServerInterfaceWrapper) ReturnInvocationResponse(w http.ResponseWrite
 	}
 
 	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReturnInvocationResponse(w, r, invokeId)
@@ -278,11 +331,15 @@ func HandlerWithOptions(si ServerInterface, options GorillaServerOptions) http.H
 
 	r.HandleFunc(options.BaseURL+"/v1/config", wrapper.GetCallerConfig).Methods("GET")
 
-	r.HandleFunc(options.BaseURL+"/v1/invocation/next", wrapper.GetNextInvocation).Methods("GET")
+	r.HandleFunc(options.BaseURL+"/v1/embedding", wrapper.CreateEmbedding).Methods("POST")
 
-	r.HandleFunc(options.BaseURL+"/v1/invocation/{invoke_id}/error", wrapper.ReturnInvocationError).Methods("POST")
+	r.HandleFunc(options.BaseURL+"/v1/embedding/models", wrapper.ListEmbeddingModels).Methods("GET")
 
-	r.HandleFunc(options.BaseURL+"/v1/invocation/{invoke_id}/response", wrapper.ReturnInvocationResponse).Methods("POST")
+	r.HandleFunc(options.BaseURL+"/v1/invocations/next", wrapper.GetNextInvocation).Methods("GET")
+
+	r.HandleFunc(options.BaseURL+"/v1/invocations/{invoke_id}/error", wrapper.ReturnInvocationError).Methods("POST")
+
+	r.HandleFunc(options.BaseURL+"/v1/invocations/{invoke_id}/response", wrapper.ReturnInvocationResponse).Methods("POST")
 
 	return r
 }
@@ -294,7 +351,7 @@ type GetCallerConfigResponseObject interface {
 	VisitGetCallerConfigResponse(w http.ResponseWriter) error
 }
 
-type GetCallerConfig200JSONResponse Configuration
+type GetCallerConfig200JSONResponse map[string]string
 
 func (response GetCallerConfig200JSONResponse) VisitGetCallerConfigResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
@@ -311,6 +368,56 @@ func (response GetCallerConfig401Response) VisitGetCallerConfigResponse(w http.R
 	return nil
 }
 
+type CreateEmbeddingRequestObject struct {
+	Body *CreateEmbeddingJSONRequestBody
+}
+
+type CreateEmbeddingResponseObject interface {
+	VisitCreateEmbeddingResponse(w http.ResponseWriter) error
+}
+
+type CreateEmbedding200JSONResponse struct {
+	// Data The embeddings of the text.
+	Data *[]struct {
+		// Embedding The embedding of the text.
+		Embedding *[]float32 `json:"embedding,omitempty"`
+
+		// Index The index of the text in the original list.
+		Index *int `json:"index,omitempty"`
+	} `json:"data,omitempty"`
+}
+
+func (response CreateEmbedding200JSONResponse) VisitCreateEmbeddingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListEmbeddingModelsRequestObject struct {
+}
+
+type ListEmbeddingModelsResponseObject interface {
+	VisitListEmbeddingModelsResponse(w http.ResponseWriter) error
+}
+
+type ListEmbeddingModels200JSONResponse struct {
+	Data *[]struct {
+		// Dimension The dimension of the output vector.
+		Dimension *int    `json:"dimension,omitempty"`
+		Id        *string `json:"id,omitempty"`
+		Name      *string `json:"name,omitempty"`
+		Provider  *string `json:"provider,omitempty"`
+	} `json:"data,omitempty"`
+}
+
+func (response ListEmbeddingModels200JSONResponse) VisitListEmbeddingModelsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetNextInvocationRequestObject struct {
 }
 
@@ -318,7 +425,13 @@ type GetNextInvocationResponseObject interface {
 	VisitGetNextInvocationResponse(w http.ResponseWriter) error
 }
 
-type GetNextInvocation200JSONResponse InvocationJob
+type GetNextInvocation200JSONResponse struct {
+	// Id The unique identifier for the invocation job
+	Id *string `json:"id,omitempty"`
+
+	// Payload The payload for the invocation job
+	Payload *map[string]interface{} `json:"payload,omitempty"`
+}
 
 func (response GetNextInvocation200JSONResponse) VisitGetNextInvocationResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
@@ -414,14 +527,20 @@ type StrictServerInterface interface {
 	// Get configuration of the caller
 	// (GET /v1/config)
 	GetCallerConfig(ctx context.Context, request GetCallerConfigRequestObject) (GetCallerConfigResponseObject, error)
+	// Create embedding of text.
+	// (POST /v1/embedding)
+	CreateEmbedding(ctx context.Context, request CreateEmbeddingRequestObject) (CreateEmbeddingResponseObject, error)
+	// List embedding models.
+	// (GET /v1/embedding/models)
+	ListEmbeddingModels(ctx context.Context, request ListEmbeddingModelsRequestObject) (ListEmbeddingModelsResponseObject, error)
 	// Get next invocation job
-	// (GET /v1/invocation/next)
+	// (GET /v1/invocations/next)
 	GetNextInvocation(ctx context.Context, request GetNextInvocationRequestObject) (GetNextInvocationResponseObject, error)
 	// Return invocation error
-	// (POST /v1/invocation/{invoke_id}/error)
+	// (POST /v1/invocations/{invoke_id}/error)
 	ReturnInvocationError(ctx context.Context, request ReturnInvocationErrorRequestObject) (ReturnInvocationErrorResponseObject, error)
 	// Return invocation result
-	// (POST /v1/invocation/{invoke_id}/response)
+	// (POST /v1/invocations/{invoke_id}/response)
 	ReturnInvocationResponse(ctx context.Context, request ReturnInvocationResponseRequestObject) (ReturnInvocationResponseResponseObject, error)
 }
 
@@ -471,6 +590,61 @@ func (sh *strictHandler) GetCallerConfig(w http.ResponseWriter, r *http.Request)
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetCallerConfigResponseObject); ok {
 		if err := validResponse.VisitGetCallerConfigResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateEmbedding operation middleware
+func (sh *strictHandler) CreateEmbedding(w http.ResponseWriter, r *http.Request) {
+	var request CreateEmbeddingRequestObject
+
+	var body CreateEmbeddingJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateEmbedding(ctx, request.(CreateEmbeddingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateEmbedding")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateEmbeddingResponseObject); ok {
+		if err := validResponse.VisitCreateEmbeddingResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListEmbeddingModels operation middleware
+func (sh *strictHandler) ListEmbeddingModels(w http.ResponseWriter, r *http.Request) {
+	var request ListEmbeddingModelsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListEmbeddingModels(ctx, request.(ListEmbeddingModelsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListEmbeddingModels")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListEmbeddingModelsResponseObject); ok {
+		if err := validResponse.VisitListEmbeddingModelsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

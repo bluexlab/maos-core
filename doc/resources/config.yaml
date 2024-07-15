@@ -1,0 +1,15 @@
+get:
+  summary: Get configuration of the caller
+  operationId: getCallerConfig
+  tags:
+    - Configuration
+  responses:
+    '200':
+      description: Successful response
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Configuration.yaml'
+    '401':
+      description: Unauthorized
+

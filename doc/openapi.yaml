@@ -1,0 +1,61 @@
+openapi: 3.0.0
+info:
+  title: MAOS Core API
+  version: 1.0.0
+  description: API for managing invocation jobs and configurations in the MAOS system
+
+servers:
+  - url: https://api.example.com/v1
+
+security:
+  - bearerAuth: []
+  - trace: []
+
+paths:
+  /v1/config:
+    $ref: "./resources/config.yaml"
+
+  /v1/invocations/next:
+    $ref: "./resources/invocation/next.yaml"
+
+  /v1/invocations/{invoke_id}/response:
+    $ref: "./resources/invocation/response.yaml"
+
+  /v1/invocations/{invoke_id}/error:
+    $ref: "./resources/invocation/error.yaml"
+
+  /v1/embedding/models:
+    $ref: "./resources/embedding/models.yaml"
+
+  /v1/embedding:
+    $ref: "./resources/embedding/index.yaml"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Enter the pre-assigned API key as a bearer token
+    trace:
+      type: apiKey
+      in: header
+      name: MAOS-TRACE-ID
+      description: The unique trace id.
+  schemas:
+    Configuration:
+      $ref: "./schemas/Configuration.yaml"
+    Embedding:
+      $ref: "./schemas/Embedding.yaml"
+    InvocationJob:
+      $ref: "./schemas/InvocationJob.yaml"
+
+tags:
+  - name: Configuration
+    description: Operations related to caller configuration
+  - name: Invocation
+    description: Operations related to invocation jobs
+  - name: Embedding
+    description: Operations involving embedding models and texts
+
+x-namespaces:
+  - Maos

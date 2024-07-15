@@ -1,0 +1,16 @@
+get:
+  summary: Get next invocation job
+  operationId: getNextInvocation
+  tags:
+    - Invocation
+  responses:
+    '200':
+      description: Successful response
+      content:
+        application/json:
+          schema:
+            $ref: '../../schemas/InvocationJob.yaml'
+    '404':
+      description: No invocation job available
+    '401':
+      description: Unauthorized

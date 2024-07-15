@@ -1,0 +1,8 @@
+type: object
+properties:
+  id:
+    type: string
+    description: The unique identifier for the invocation job
+  payload:
+    type: object
+    description: The payload for the invocation job

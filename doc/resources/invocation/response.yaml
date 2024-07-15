@@ -1,0 +1,28 @@
+post:
+  summary: Return invocation result
+  operationId: returnInvocationResponse
+  tags:
+    - Invocation
+  parameters:
+    - name: invoke_id
+      in: path
+      required: true
+      schema:
+        type: string
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            result:
+              type: object
+              description: The result of the invocation
+  responses:
+    '200':
+      description: Successful response
+    '404':
+      description: Invocation job not found
+    '401':
+      description: Unauthorized

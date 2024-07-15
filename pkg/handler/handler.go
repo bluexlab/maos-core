@@ -12,11 +12,11 @@ type APIHandler struct{}
 
 // GetCallerConfig implements the GET /v1/config endpoint
 func (s *APIHandler) GetCallerConfig(ctx context.Context, request api.GetCallerConfigRequestObject) (api.GetCallerConfigResponseObject, error) {
-	config := api.Configuration{
+	config := api.GetCallerConfig200JSONResponse{
 		"key1": "value1",
 		"key2": "value2",
 	}
-	return api.GetCallerConfig200JSONResponse(config), nil
+	return config, nil
 }
 
 // GetNextInvocation implements the GET /v1/invocation/next endpoint
@@ -26,11 +26,11 @@ func (s *APIHandler) GetNextInvocation(ctx context.Context, request api.GetNextI
 		"task": "example_task",
 		"data": "example_data",
 	}
-	job := api.InvocationJob{
+	job := api.GetNextInvocation200JSONResponse{
 		Id:      &jobId,
 		Payload: &payload,
 	}
-	return api.GetNextInvocation200JSONResponse(job), nil
+	return job, nil
 }
 
 // ReturnInvocationResponse implements the POST /v1/invocation/{invoke_id}/response endpoint
@@ -61,4 +61,12 @@ func (s *APIHandler) ReturnInvocationError(ctx context.Context, request api.Retu
 	logrus.Infof("Received error for invocation: %s: %s", invokeID, string(errorJSON))
 
 	return api.ReturnInvocationError200Response{}, nil
+}
+
+func (s *APIHandler) ListEmbeddingModels(ctx context.Context, request api.ListEmbeddingModelsRequestObject) (api.ListEmbeddingModelsResponseObject, error) {
+	panic("not implemented")
+}
+
+func (s *APIHandler) CreateEmbedding(ctx context.Context, request api.CreateEmbeddingRequestObject) (api.CreateEmbeddingResponseObject, error) {
+	panic("not implemented")
 }

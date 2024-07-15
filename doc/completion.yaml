@@ -12,7 +12,7 @@ security:
   - trace: []
 
 paths:
-  /{api-version}/model:
+  /{api-version}/models:
     get:
       summary: Get model list.
       responses:
@@ -126,12 +126,14 @@ components:
       properties:
         role:
           type: string
+          enum:
+            - system
+            - assistant
+            - user
         content:
-          oneOf: 
-            - type: string
-            - type: array
-              items:
-                $ref: "#/components/schemas/message_content"
+          type: array
+          items:
+            $ref: "#/components/schemas/message_content"
     message_content:
       oneOf:
         - type: object
@@ -142,3 +144,4 @@ components:
           properties:
             image:
               type: string
+              description: The based64 encoded image file. Only "jpeg" and "png" are supported by all providers.

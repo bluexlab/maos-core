@@ -5,16 +5,13 @@ info:
   description: API for managing invocation jobs and configurations in the MAOS system
 
 servers:
-  - url: https://api.example.com/{api-version}
-    variables:
-      api-version:
-        default: v1
+  - url: https://api.example.com/v1
 
 security:
   - bearerAuth: []
 
 paths:
-  /{api-version}/config:
+  /v1/config:
     get:
       summary: Get configuration of the caller
       operationId: getCallerConfig
@@ -30,7 +27,7 @@ paths:
         '401':
           description: Unauthorized
 
-  /{api-version}/invocation/next:
+  /v1/invocation/next:
     get:
       summary: Get next invocation job
       operationId: getNextInvocation
@@ -48,7 +45,7 @@ paths:
         '401':
           description: Unauthorized
 
-  /{api-version}/invocation/{invoke_id}/response:
+  /v1/invocation/{invoke_id}/response:
     post:
       summary: Return invocation result
       operationId: returnInvocationResponse
@@ -78,7 +75,7 @@ paths:
         '401':
           description: Unauthorized
 
-  /{api-version}/invocation/{invoke_id}/error:
+  /v1/invocation/{invoke_id}/error:
     post:
       summary: Return invocation error
       operationId: returnInvocationError

@@ -143,6 +143,14 @@ func ToChatRequestMessageContent(content llm.Content) azopenai.ChatCompletionReq
 		}
 	}
 
+	if content.ImageURL != "" {
+		return &azopenai.ChatCompletionRequestMessageContentPartImage{
+			ImageURL: &azopenai.ChatCompletionRequestMessageContentPartImageURL{
+				URL: to.Ptr(content.ImageURL),
+			},
+		}
+	}
+
 	// Text Context
 	return &azopenai.ChatCompletionRequestMessageContentPartText{
 		Text: to.Ptr(content.Text),

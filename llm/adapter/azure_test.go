@@ -82,3 +82,38 @@ func TestAzureOpenAIWithImage(t *testing.T) {
 	}
 	_ = result
 }
+
+func TestAzureOpenAIWithImageURL(t *testing.T) {
+	t.Skip()
+	client, err := adapter.NewAzureAdapter(
+		os.Getenv("AOAI_ENDPOINT"),
+		os.Getenv("AOAI_API_KEY"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := llm.CompletionRequest{
+		ModelID: "5a265146-4e05-4cd7-a0a9-9adda7bf7a38-azure-gpt4o",
+		Messages: []llm.Message{
+			{
+				Role: "system",
+				Content: []llm.Content{
+					{Text: "A chatbot that helps you with your daily tasks."},
+				},
+			},
+			{
+				Role: "user",
+				Content: []llm.Content{
+					{Text: "Describe what you see in this image."},
+					{ImageURL: "https://gw.alicdn.com/imgextra/O1CN01AZsz9a1nzKZ6LmwMX_!!6000000005160-2-yinhe.png_468x468Q75.jpg_.webp"},
+				},
+			},
+		},
+	}
+	result, err := client.GetCompletion(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = result
+}

@@ -19,8 +19,9 @@ type Message struct {
 
 // Content represents the content within a message
 type Content struct {
-	Text  string `json:"text,omitempty"`
-	Image []byte `json:"image,omitempty"`
+	Text     string `json:"text,omitempty"`
+	Image    []byte `json:"image,omitempty"`
+	ImageURL string `json:"image_url,omitempty"`
 }
 
 // CompletionRequest represents the request body for the completion endpoint

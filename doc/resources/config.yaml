@@ -4,12 +4,12 @@ get:
   tags:
     - Configuration
   responses:
-    '200':
+    200:
       description: Successful response
       content:
         application/json:
           schema:
             $ref: '../schemas/Configuration.yaml'
-    '401':
+    401:
       description: Unauthorized
 

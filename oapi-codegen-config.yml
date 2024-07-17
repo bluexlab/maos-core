@@ -1,7 +1,0 @@
-# yaml-language-server: ...
-package: api
-generate:
-  gorilla-server: true
-  models: true
-  strict-server: true
-output: pkg/api/gen.go

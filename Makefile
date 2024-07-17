@@ -1,6 +1,5 @@
 OPENAPI_FILE = ./doc/openapi.yaml
-OAPI_CODEGEN_CONFIG = oapi-codegen-config.yml
-GENERATED_API_SERVER = pkg/api/gen.go
+GENERATED_API_SERVER = api/server.gen.go
 
 TOPDIR := $(strip $(dir $(realpath $(lastword $(MAKEFILE_LIST)))))
 
@@ -41,7 +40,7 @@ GOFILES := $(shell find . -type f -name '*.go' -not -path '*/\.*' -not -path './
 $(foreach app,$(APPS),\
 	$(eval GOFILES_$(app) := $(shell find ./app/$(app) -type f -name '*.go' -not -path '*/\.*')))
 
-DOCFILES := $(shell find doc -type f -name '*.yaml')
+DOCFILES := $(shell find doc -type f -name '*.yaml' -not -name '*.gen.yaml')
 
 .DEFAULT: all
 
@@ -64,7 +63,8 @@ gosec: ## Run the golang security checker
 .PHONY: generate
 generate: $(GENERATED_API_SERVER)
 
-$(GENERATED_API_SERVER): $(DOCFILES) $(OAPI_CODEGEN_CONFIG)
+$(GENERATED_API_SERVER): $(DOCFILES)
 	@echo "Generating server code from $(OPENAPI_FILE)..."
 	@mkdir -p $(@D)
-	go run github.com/deepmap/oapi-codegen/cmd/oapi-codegen@latest --config=$(OAPI_CODEGEN_CONFIG) $(OPENAPI_FILE)
+	@npx -y @redocly/openapi-cli@latest bundle ./doc/openapi.yaml -o ./doc/bundled.gen.yaml
+	@go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest --config=./api/server.cfg.yaml ./doc/bundled.gen.yaml

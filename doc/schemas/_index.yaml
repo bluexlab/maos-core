@@ -1,6 +1,0 @@
-Configuration:
-  $ref: "./Configuration.yaml"
-Embedding:
-  $ref: "./Embedding.yaml"
-InvocationJob:
-  $ref: "./InvocationJob.yaml"

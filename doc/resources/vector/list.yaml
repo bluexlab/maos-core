@@ -1,0 +1,27 @@
+get:
+  summary: List database.
+  OperationId: listVectoreStores
+  tags:
+    - VectorStore
+  responses:
+    200:
+      description: OK
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                type: array
+                items:
+                  type: string
+                description: The list of databases.
+          examples:
+            db:
+              value:
+                data:
+                  - name: "db1"
+                  - name: "db2"
+                  - name: "db3"
+    401:
+      description: Unauthorized

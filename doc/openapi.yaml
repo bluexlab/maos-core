@@ -24,11 +24,32 @@ paths:
   /v1/invocations/{invoke_id}/error:
     $ref: "./resources/invocation/error.yaml"
 
+  /v1/completion/models:
+    $ref: "./resources/completion/models.yaml"
+
+  /v1/completion:
+    $ref: "./resources/completion/index.yaml"
+
   /v1/embedding/models:
     $ref: "./resources/embedding/models.yaml"
 
   /v1/embedding:
     $ref: "./resources/embedding/index.yaml"
+
+  /v1/vector/list:
+    $ref: "./resources/vector/list.yaml"
+
+  /v1/vector/collection:
+    $ref: "./resources/vector/collections.yaml"
+
+  /v1/vector/collection/{name}:
+    $ref: "./resources/vector/collection.yaml"
+
+  /v1/rerank/models:
+    $ref: "./resources/rerank/models.yaml"
+
+  /v1/rerank:
+    $ref: "./resources/rerank/index.yaml"
 
 components:
   securitySchemes:
@@ -41,21 +62,20 @@ components:
       in: header
       name: MAOS-TRACE-ID
       description: The unique trace id.
-  schemas:
-    Configuration:
-      $ref: "./schemas/Configuration.yaml"
-    Embedding:
-      $ref: "./schemas/Embedding.yaml"
-    InvocationJob:
-      $ref: "./schemas/InvocationJob.yaml"
 
 tags:
   - name: Configuration
     description: Operations related to caller configuration
   - name: Invocation
     description: Operations related to invocation jobs
+  - name: Completion
+    description: Operations involving LLM completion models
   - name: Embedding
     description: Operations involving embedding models and texts
+  - name: VectorStore
+    description: Operations involving vector store
+  - name: Rerank
+    description: Operations involving rerank models and texts
 
 x-namespaces:
   - Maos

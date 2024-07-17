@@ -10,8 +10,8 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/sirupsen/logrus"
-	"gitlab.com/navyx/ai/maos/maos-core/pkg/api"
-	"gitlab.com/navyx/ai/maos/maos-core/pkg/handler"
+	"gitlab.com/navyx/ai/maos/maos-core/api"
+	"gitlab.com/navyx/ai/maos/maos-core/handler"
 )
 
 const appName string = "maos-core-server"

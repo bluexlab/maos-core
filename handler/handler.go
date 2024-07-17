@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/sirupsen/logrus"
-	"gitlab.com/navyx/ai/maos/maos-core/pkg/api"
+	"gitlab.com/navyx/ai/maos/maos-core/api"
 )
 
 type APIHandler struct{}
@@ -68,5 +68,41 @@ func (s *APIHandler) ListEmbeddingModels(ctx context.Context, request api.ListEm
 }
 
 func (s *APIHandler) CreateEmbedding(ctx context.Context, request api.CreateEmbeddingRequestObject) (api.CreateEmbeddingResponseObject, error) {
+	panic("not implemented")
+}
+
+func (s *APIHandler) CreateCompletion(ctx context.Context, request api.CreateCompletionRequestObject) (api.CreateCompletionResponseObject, error) {
+	panic("not implemented")
+}
+
+func (s *APIHandler) ListCompletionModels(ctx context.Context, request api.ListCompletionModelsRequestObject) (api.ListCompletionModelsResponseObject, error) {
+	panic("not implemented")
+}
+
+func (s *APIHandler) CreateRerank(ctx context.Context, request api.CreateRerankRequestObject) (api.CreateRerankResponseObject, error) {
+	panic("not implemented")
+}
+
+func (s *APIHandler) ListRerankModels(ctx context.Context, request api.ListRerankModelsRequestObject) (api.ListRerankModelsResponseObject, error) {
+	panic("not implemented")
+}
+
+func (s *APIHandler) ListCollection(ctx context.Context, request api.ListCollectionRequestObject) (api.ListCollectionResponseObject, error) {
+	panic("not implemented")
+}
+
+func (s *APIHandler) CreateCollection(ctx context.Context, request api.CreateCollectionRequestObject) (api.CreateCollectionResponseObject, error) {
+	panic("not implemented")
+}
+
+func (s *APIHandler) QueryCollection(ctx context.Context, request api.QueryCollectionRequestObject) (api.QueryCollectionResponseObject, error) {
+	panic("not implemented")
+}
+
+func (s *APIHandler) UpsertCollection(ctx context.Context, request api.UpsertCollectionRequestObject) (api.UpsertCollectionResponseObject, error) {
+	panic("not implemented")
+}
+
+func (s *APIHandler) ListVectoreStores(ctx context.Context, request api.ListVectoreStoresRequestObject) (api.ListVectoreStoresResponseObject, error) {
 	panic("not implemented")
 }

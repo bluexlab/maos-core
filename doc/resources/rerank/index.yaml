@@ -1,0 +1,65 @@
+post:
+  summary: Measure the relevance of a list of documents to a query.
+  operationId: createRerank
+  tags:
+    - Rerank
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            model_id:
+              type: string
+              description: The model id.
+            documents:
+              type: array
+              items:
+                type: string
+              description: The list of documents.
+            query:
+              type: string
+              description: The query.
+          required:
+            - model_id
+            - documents
+            - query
+        examples:
+          rerank:
+            summary: Rerank documents with a query.
+            value:
+              model_id: "bert-base-uncased"
+              documents:
+                - "The capital of France is Paris."
+                - "The capital of Italy is Rome."
+                - "The capital of Spain is Madrid."
+              query: "What is the capital of France?"
+  responses:
+    201:
+      description: The result of the rerank.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                type: array
+                items:
+                  $ref: "../../schemas/RerankResult.yaml"
+          examples:
+            rerank:
+              summary: Rerank documents with a query.
+              value:
+                data:
+                  - text: "The capital of France is Paris."
+                    score: 0.9
+                    index: 0
+                  - text: "The capital of Italy is Rome."
+                    score: 0.8
+                    index: 1
+                  - text: "The capital of Spain is Madrid."
+                    score: 0.7
+                    index: 2
+    401:
+      description: Unauthorized

@@ -7,8 +7,6 @@ package dbsqlc
 import (
 	"database/sql/driver"
 	"fmt"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type InvocationState string
@@ -61,14 +59,14 @@ type Agents struct {
 	Name      string
 	CreatedAt int64
 	Metadata  []byte
-	UpdatedAt pgtype.Int8
+	UpdatedAt *int64
 }
 
 type Invocations struct {
 	ID          int64
 	State       InvocationState
 	CreatedAt   int64
-	FinalizedAt pgtype.Int8
+	FinalizedAt *int64
 	Priority    int16
 	Name        string
 	Args        []byte
@@ -88,6 +86,6 @@ type Queues struct {
 	Name      string
 	CreatedAt int64
 	Metadata  []byte
-	PausedAt  pgtype.Int8
+	PausedAt  *int64
 	UpdatedAt int64
 }

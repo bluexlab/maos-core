@@ -63,8 +63,20 @@ bin/%: $$(GOFILES) $$(GOFILES_$$(@F)) $$(ASSET_FILES) $(GENERATED_API_SERVER) $(
 gosec: ## Run the golang security checker
 	@gosec -exclude-dir test/mock ./...
 
+.PHONY: test
+test: ## Run unit test
+	@go clean -testcache
+	@go test ./...
+
+.PHONY: coverage
+coverage:
+	@go clean -testcache
+	@go test -p 1 -v -cover -covermode=count -coverprofile=coverage.out ./...
+	@go tool cover -html coverage.out -o coverage.html
+	@go tool cover -func coverage.out | tail -n 1
+
 .PHONY: generate
-generate: $(GENERATED_API_SERVER)
+generate: $(GENERATED_API_SERVER) $(GENERATED_SQLCFILES)
 
 $(GENERATED_API_SERVER): $(DOCFILES)
 	@echo "Generating server code from $(OPENAPI_FILE)..."

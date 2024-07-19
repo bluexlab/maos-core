@@ -1,0 +1,59 @@
+default:
+  retry:
+    max: 2
+    when: runner_system_failure
+
+stages:
+  - test
+
+include:
+  - template: Security/SAST.gitlab-ci.yml
+  - template: Security/Secret-Detection.gitlab-ci.yml
+  - template: Security/SAST-IaC.latest.gitlab-ci.yml
+
+variables:
+  DOCKER_DRIVER: overlay2
+  REPOSITORY_NAME: maos-core
+  MASTER_REPO_NAMESPACE: 'navyx/ai/maos'
+
+workflow:
+  rules:
+    - if: '$CI_COMMIT_BRANCH =~ /^./ && $CI_PIPELINE_SOURCE =~ /push|merge_request_event/'
+
+.base_db:
+  image: golang:1.22.2-alpine3.19
+  services:
+    - postgres:14.11-alpine
+  variables:
+    GIT_DEPTH: "5"
+    DB_HOST: postgres
+    POSTGRES_DB: test
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD: 12345678
+    RAILS_ENV: test
+  before_script:
+    - export GO111MODULE=on CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOPROXY=https://proxy.golang.org,direct
+    - export TEST_DATABASE_URL=postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@$DB_HOST:5432/$POSTGRES_DB?sslmode=disable
+    - apk add --no-cache bash binutils ca-certificates curl git tzdata
+
+test:golang:
+  extends: .base_db
+  stage: test
+  script:
+    - go mod download
+    - go test ./...
+
+depscan:
+  stage: test
+  image:
+    name: shiftleft/sast-scan
+  rules:
+    - when: always
+  script:
+    - scan --src ${CI_PROJECT_DIR} --type yaml,bash,depscan --out_dir ${CI_PROJECT_DIR}/reports
+    - cd ${CI_PROJECT_DIR}/reports && zip -m9 all-reports.zip *
+  artifacts:
+    name: "$CI_JOB_NAME-$CI_COMMIT_REF_NAME"
+    paths:
+      - $CI_PROJECT_DIR/reports/
+    when: always

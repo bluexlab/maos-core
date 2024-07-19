@@ -41,6 +41,9 @@ $(foreach app,$(APPS),\
 	$(eval GOFILES_$(app) := $(shell find ./app/$(app) -type f -name '*.go' -not -path '*/\.*')))
 
 DOCFILES := $(shell find doc -type f -name '*.yaml' -not -name '*.gen.yaml')
+SQLCFILES := $(shell find ./dbaccess/dbsqlc -type f -name '*.sql')
+MIGRATIONFILES := $(shell find ./migrate/migration -type f -name '*.sql')
+GENERATED_SQLCFILES := $(SQLCFILES:.sql=.go)
 
 .DEFAULT: all
 
@@ -51,7 +54,7 @@ all: $(APPS)
 $(APPS): %: bin/%$(BIN_SUFFIX)
 
 .SECONDEXPANSION:
-bin/%: $$(GOFILES) $$(GOFILES_$$(@F)) $$(ASSET_FILES) $(GENERATED_API_SERVER)
+bin/%: $$(GOFILES) $$(GOFILES_$$(@F)) $$(ASSET_FILES) $(GENERATED_API_SERVER) $(GENERATED_SQLCFILES)
 	@printf "Building $(bold)$@$(sgr0) ... "
 	@go build -o ./bin/$(@F) ./app/$(@F:$(BIN_SUFFIX)=)
 	@printf "$(green)done$(sgr0)\n"
@@ -68,3 +71,7 @@ $(GENERATED_API_SERVER): $(DOCFILES)
 	@mkdir -p $(@D)
 	@npx -y @redocly/openapi-cli@latest bundle ./doc/openapi.yaml -o ./doc/bundled.gen.yaml
 	@go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest --config=./api/server.cfg.yaml ./doc/bundled.gen.yaml
+
+$(GENERATED_SQLCFILES): $(SQLCFILES) $(MIGRATIONFILES)
+	@echo "Generating SQLC code..."
+	@cd ./dbaccess/dbsqlc && go run github.com/sqlc-dev/sqlc/cmd/sqlc@latest generate

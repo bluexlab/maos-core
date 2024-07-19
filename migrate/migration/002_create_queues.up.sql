@@ -1,5 +1,6 @@
 CREATE TABLE queues(
-  name text PRIMARY KEY NOT NULL,
+  id bigint PRIMARY KEY NOT NULL,
+  name text NOT NULL,
   created_at bigint NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW()),
   metadata jsonb NOT NULL DEFAULT '{}' ::jsonb,
   paused_at bigint,

@@ -1,16 +1,19 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
 
 	"github.com/go-playground/validator"
 	"github.com/gorilla/mux"
+	"github.com/jackc/pgx/v5"
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/sirupsen/logrus"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
+	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 	"gitlab.com/navyx/ai/maos/maos-core/handler"
 )
 
@@ -23,7 +26,7 @@ func (a *App) Run() {
 }
 
 func (a *App) runServer() {
-	// ctx := context.Background()
+	ctx := context.Background()
 
 	// Load environment variables from .env file if exists
 	if _, err := os.Stat(".env"); err == nil {
@@ -34,23 +37,34 @@ func (a *App) runServer() {
 	}
 
 	// Load environment variables into the struct
-	var cfg Config
-	if err := envconfig.Process("", &cfg); err != nil {
+	var config Config
+	if err := envconfig.Process("", &config); err != nil {
 		logrus.Fatalf("Failed to process environment variables: %v", err)
 	}
 
 	// Validate the struct
 	validate := validator.New()
-	if err := validate.Struct(cfg); err != nil {
+	if err := validate.Struct(config); err != nil {
 		logrus.Fatalf("Validation failed: %v", err)
 	}
+
+	// Connect to the database and create a new accessor
+	db, err := pgx.Connect(ctx, config.DatabaseUrl)
+	if err != nil {
+		logrus.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer db.Close(ctx)
+
+	accessor := dbaccess.New(db)
+	logrus.Infof("Connected to database: %v", accessor)
 
 	// Init Mux router and API handler
 	router := mux.NewRouter()
 
-	handler := &handler.APIHandler{}
-	api.HandlerFromMux(api.NewStrictHandler(handler, nil), router)
+	middlewares := []api.StrictMiddlewareFunc{}
+	handler := handler.NewAPIHandler(accessor)
+	api.HandlerFromMux(api.NewStrictHandler(handler, middlewares), router)
 
-	logrus.Infof("Starting %s server on pot %d", appName, cfg.Port)
-	logrus.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", cfg.Port), router))
+	logrus.Infof("Starting %s server on pot %d", appName, config.Port)
+	logrus.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", config.Port), router))
 }

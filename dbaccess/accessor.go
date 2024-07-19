@@ -53,6 +53,14 @@ func (e *PgAccessor) Exec(ctx context.Context, sql string) (struct{}, error) {
 	return struct{}{}, interpretError(err)
 }
 
+func (e *PgAccessor) ApiTokenFindByID(ctx context.Context, id string) (*dbsqlc.ApiTokenFindByIDRow, error) {
+	token, err := e.queries.ApiTokenFindByID(ctx, e.source, id)
+	if err != nil {
+		return nil, interpretError(err)
+	}
+	return token, nil
+}
+
 func (e *PgAccessor) MigrationDeleteByVersionMany(ctx context.Context, versions []int) ([]*Migration, error) {
 	migrations, err := e.queries.MigrationDeleteByVersionMany(ctx, e.source,
 		util.MapSlice(versions, func(v int) int64 { return int64(v) }))

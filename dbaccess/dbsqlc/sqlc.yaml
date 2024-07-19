@@ -4,6 +4,7 @@ sql:
     schema: "../../migrate/migration"
     queries:
       - migration.sql
+      - api_token.sql
     gen:
       go:
         package: "dbsqlc"

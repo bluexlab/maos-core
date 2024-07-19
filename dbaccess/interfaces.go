@@ -2,6 +2,8 @@ package dbaccess
 
 import (
 	"context"
+
+	"gitlab.com/navyx/ai/maos/maos-core/dbaccess/dbsqlc"
 )
 
 type Accessor interface {
@@ -12,6 +14,9 @@ type Accessor interface {
 
 	// Exec executes raw SQL. Used for migrations.
 	Exec(ctx context.Context, sql string) (struct{}, error)
+
+	// ApiTokenFindByID gets an API token by its ID.
+	ApiTokenFindByID(ctx context.Context, id string) (*ApiToken, error)
 
 	// MigrationDeleteByVersionMany deletes many migration versions.
 	MigrationDeleteByVersionMany(ctx context.Context, versions []int) ([]*Migration, error)
@@ -48,3 +53,5 @@ type Migration struct {
 	// API is not stable. DO NOT USE.
 	Version int
 }
+
+type ApiToken = dbsqlc.ApiTokenFindByIDRow

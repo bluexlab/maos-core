@@ -6,9 +6,18 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
+	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 )
 
-type APIHandler struct{}
+func NewAPIHandler(accessor dbaccess.Accessor) *APIHandler {
+	return &APIHandler{
+		accessor: accessor,
+	}
+}
+
+type APIHandler struct {
+	accessor dbaccess.Accessor
+}
 
 // GetCallerConfig implements the GET /v1/config endpoint
 func (s *APIHandler) GetCallerConfig(ctx context.Context, request api.GetCallerConfigRequestObject) (api.GetCallerConfigResponseObject, error) {

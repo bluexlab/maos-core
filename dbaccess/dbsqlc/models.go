@@ -57,9 +57,19 @@ func (ns NullInvocationState) Value() (driver.Value, error) {
 type Agents struct {
 	ID        int64
 	Name      string
+	QueueID   int64
 	CreatedAt int64
 	Metadata  []byte
 	UpdatedAt *int64
+}
+
+type ApiTokens struct {
+	ID          string
+	AgentID     int64
+	ExpireAt    int64
+	CreatedBy   string
+	CreatedAt   int64
+	Permissions []string
 }
 
 type Invocations struct {
@@ -72,7 +82,7 @@ type Invocations struct {
 	Args        []byte
 	Errors      [][]byte
 	Metadata    []byte
-	Queue       string
+	QueueID     int64
 	Tags        []string
 }
 
@@ -83,6 +93,7 @@ type Migration struct {
 }
 
 type Queues struct {
+	ID        int64
 	Name      string
 	CreatedAt int64
 	Metadata  []byte

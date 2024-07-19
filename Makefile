@@ -43,7 +43,7 @@ $(foreach app,$(APPS),\
 DOCFILES := $(shell find doc -type f -name '*.yaml' -not -name '*.gen.yaml')
 SQLCFILES := $(shell find ./dbaccess/dbsqlc -type f -name '*.sql')
 MIGRATIONFILES := $(shell find ./migrate/migration -type f -name '*.sql')
-GENERATED_SQLCFILES := $(SQLCFILES:.sql=.go)
+GENERATED_SQLCFILES := $(SQLCFILES:.sql=.sql.go)
 
 .DEFAULT: all
 

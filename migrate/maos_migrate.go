@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/samber/lo"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
+	"gitlab.com/navyx/ai/maos/maos-core/dbaccess/dbsqlc"
 	"gitlab.com/navyx/ai/maos/maos-core/util"
 )
 
@@ -52,11 +52,11 @@ type Config struct {
 // Migrator is a database migration tool which can run up or down migrations in order to establish the schema.
 type Migrator struct {
 	logger     *slog.Logger
-	executor   dbaccess.Accessor
+	accessor   dbaccess.Accessor
 	migrations map[int]*Migration // allows us to inject test migrations
 }
 
-func New(executor dbaccess.Accessor, config *Config) *Migrator {
+func New(accessor dbaccess.Accessor, config *Config) *Migrator {
 	if config == nil {
 		config = &Config{}
 	}
@@ -70,7 +70,7 @@ func New(executor dbaccess.Accessor, config *Config) *Migrator {
 
 	return &Migrator{
 		logger:     logger,
-		executor:   executor,
+		accessor:   accessor,
 		migrations: migrationsMap,
 	}
 }
@@ -154,41 +154,24 @@ func (m *Migrator) GetVersion(version int) (Migration, error) {
 //
 //	res, err := migrator.Migrate(ctx, migrate.DirectionUp, nil)
 func (m *Migrator) Migrate(ctx context.Context, direction Direction, opts *MigrateOpts) (*MigrateResult, error) {
-	return dbaccess.WithTxV(ctx, m.executor, func(ctx context.Context, exec dbaccess.TxAccessor) (*MigrateResult, error) {
-		switch direction {
-		case DirectionDown:
-			return m.migrateDown(ctx, exec, direction, opts)
-		case DirectionUp:
-			return m.migrateUp(ctx, exec, direction, opts)
-		}
-
-		panic("invalid direction: " + direction)
-	})
-}
-
-// MigrateTx updates the database up or down within a transaction.
-// In Postgres, changes are visible after commit and rolled back if the transaction fails.
-// The opts parameter is optional and the same as in Migrate.
-func (m *Migrator) MigrateTx(ctx context.Context, tx pgx.Tx, direction Direction, opts *MigrateOpts) (*MigrateResult, error) {
-	executor := dbaccess.New(tx)
 	switch direction {
 	case DirectionDown:
-		return m.migrateDown(ctx, executor, direction, opts)
+		return m.migrateDown(ctx, direction, opts)
 	case DirectionUp:
-		return m.migrateUp(ctx, executor, direction, opts)
+		return m.migrateUp(ctx, direction, opts)
 	}
 
 	panic("invalid direction: " + direction)
 }
 
 // migrateDown runs down migrations.
-func (m *Migrator) migrateDown(ctx context.Context, exec dbaccess.Accessor, direction Direction, opts *MigrateOpts) (*MigrateResult, error) {
-	existingMigrations, err := m.existingMigrations(ctx, exec)
+func (m *Migrator) migrateDown(ctx context.Context, direction Direction, opts *MigrateOpts) (*MigrateResult, error) {
+	existingMigrations, err := m.existingMigrations(ctx)
 	if err != nil {
 		return nil, err
 	}
 	existingMigrationsMap := lo.Associate(existingMigrations,
-		func(m *dbaccess.Migration) (int, struct{}) { return m.Version, struct{}{} })
+		func(m *dbsqlc.Migration) (int, struct{}) { return int(m.Version), struct{}{} })
 
 	targetMigrations := maps.Clone(m.migrations)
 	for version := range targetMigrations {
@@ -200,7 +183,7 @@ func (m *Migrator) migrateDown(ctx context.Context, exec dbaccess.Accessor, dire
 	sortedTargetMigrations := lo.Values(targetMigrations)
 	slices.SortFunc(sortedTargetMigrations, func(a, b *Migration) int { return b.Version - a.Version }) // reverse order
 
-	res, err := m.applyMigrations(ctx, exec, direction, opts, sortedTargetMigrations)
+	res, err := m.applyMigrations(ctx, direction, opts, sortedTargetMigrations)
 	if err != nil {
 		return nil, err
 	}
@@ -218,7 +201,7 @@ func (m *Migrator) migrateDown(ctx context.Context, exec dbaccess.Accessor, dire
 	}
 
 	if !opts.DryRun {
-		if _, err := exec.MigrationDeleteByVersionMany(ctx, util.MapSlice(res.Versions, migrateVersionToInt)); err != nil {
+		if _, err := m.accessor.Querier().MigrationDeleteByVersionMany(ctx, m.accessor.Source(), util.MapSlice(res.Versions, migrateVersionToInt64)); err != nil {
 			return nil, fmt.Errorf("error deleting migration rows for versions %+v: %w", res.Versions, err)
 		}
 	}
@@ -227,27 +210,27 @@ func (m *Migrator) migrateDown(ctx context.Context, exec dbaccess.Accessor, dire
 }
 
 // migrateUp runs up migrations.
-func (m *Migrator) migrateUp(ctx context.Context, exec dbaccess.Accessor, direction Direction, opts *MigrateOpts) (*MigrateResult, error) {
-	existingMigrations, err := m.existingMigrations(ctx, exec)
+func (m *Migrator) migrateUp(ctx context.Context, direction Direction, opts *MigrateOpts) (*MigrateResult, error) {
+	existingMigrations, err := m.existingMigrations(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	targetMigrations := maps.Clone(m.migrations)
 	for _, migrateRow := range existingMigrations {
-		delete(targetMigrations, migrateRow.Version)
+		delete(targetMigrations, int(migrateRow.Version))
 	}
 
 	sortedTargetMigrations := lo.Values(targetMigrations)
 	slices.SortFunc(sortedTargetMigrations, func(a, b *Migration) int { return a.Version - b.Version })
 
-	res, err := m.applyMigrations(ctx, exec, direction, opts, sortedTargetMigrations)
+	res, err := m.applyMigrations(ctx, direction, opts, sortedTargetMigrations)
 	if err != nil {
 		return nil, err
 	}
 
 	if opts == nil || !opts.DryRun {
-		if _, err := exec.MigrationInsertMany(ctx, util.MapSlice(res.Versions, migrateVersionToInt)); err != nil {
+		if _, err := m.accessor.Querier().MigrationInsertMany(ctx, m.accessor.Source(), util.MapSlice(res.Versions, migrateVersionToInt64)); err != nil {
 			return nil, fmt.Errorf("error inserting migration rows for versions %+v: %w", res.Versions, err)
 		}
 	}
@@ -256,7 +239,7 @@ func (m *Migrator) migrateUp(ctx context.Context, exec dbaccess.Accessor, direct
 }
 
 // Applies migration directions, walking through and applying each target migration.
-func (m *Migrator) applyMigrations(ctx context.Context, exec dbaccess.Accessor, direction Direction, opts *MigrateOpts, sortedTargetMigrations []*Migration) (*MigrateResult, error) {
+func (m *Migrator) applyMigrations(ctx context.Context, direction Direction, opts *MigrateOpts, sortedTargetMigrations []*Migration) (*MigrateResult, error) {
 	if opts == nil {
 		opts = &MigrateOpts{}
 	}
@@ -317,7 +300,7 @@ func (m *Migrator) applyMigrations(ctx context.Context, exec dbaccess.Accessor, 
 
 		if !opts.DryRun {
 			start := time.Now()
-			_, err := exec.Exec(ctx, sql)
+			_, err := m.accessor.Exec(ctx, sql)
 			if err != nil {
 				return nil, fmt.Errorf("error applying version %03d [%s]: %w",
 					versionBundle.Version, strings.ToUpper(string(direction)), err)
@@ -341,8 +324,8 @@ func (m *Migrator) applyMigrations(ctx context.Context, exec dbaccess.Accessor, 
 // Get migrations already run in the database.
 // Uses a subtransaction to handle the case when the `_migration` table doesn't exist.
 // This prevents the main transaction from being aborted on an unsuccessful check.
-func (m *Migrator) existingMigrations(ctx context.Context, exec dbaccess.Accessor) ([]*dbaccess.Migration, error) {
-	exists, err := exec.TableExists(ctx, "_migration")
+func (m *Migrator) existingMigrations(ctx context.Context) ([]*dbsqlc.Migration, error) {
+	exists, err := m.accessor.Querier().TableExists(ctx, m.accessor.Source(), "_migration")
 	if err != nil {
 		return nil, fmt.Errorf("error checking if `%s` exists: %w", "_migration", err)
 	}
@@ -350,7 +333,7 @@ func (m *Migrator) existingMigrations(ctx context.Context, exec dbaccess.Accesso
 		return nil, nil
 	}
 
-	migrations, err := exec.MigrationGetAll(ctx)
+	migrations, err := m.accessor.Querier().MigrationGetAll(ctx, m.accessor.Source())
 	if err != nil {
 		return nil, fmt.Errorf("error getting existing migrations: %w", err)
 	}
@@ -468,4 +451,4 @@ func ValidateAndInit(versions []*Migration) map[int]*Migration {
 	return migrations
 }
 
-func migrateVersionToInt(version MigrateVersion) int { return version.Version }
+func migrateVersionToInt64(version MigrateVersion) int64 { return int64(version.Version) }

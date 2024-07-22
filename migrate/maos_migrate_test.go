@@ -8,11 +8,11 @@ import (
 	"testing"
 
 	"github.com/jackc/pgerrcode"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
+	"gitlab.com/navyx/ai/maos/maos-core/dbaccess/dbsqlc"
 	"gitlab.com/navyx/ai/maos/maos-core/internal/testhelper"
 	"gitlab.com/navyx/ai/maos/maos-core/migrate"
 	"gitlab.com/navyx/ai/maos/maos-core/util"
@@ -59,7 +59,6 @@ func TestMigrator(t *testing.T) {
 		dbPool   *pgxpool.Pool
 		accessor dbaccess.Accessor
 		logger   *slog.Logger
-		tx       pgx.Tx
 	}
 
 	setup := func(t *testing.T) (*migrate.Migrator, *testBundle) {
@@ -68,17 +67,10 @@ func TestMigrator(t *testing.T) {
 		// Test suite uses test DBs instead of test transactions to avoid deadlocks due to schema changes.
 		// Test transactions could be used if tests were run non-parallel.
 		dbPool := testhelper.TestDB(ctx, t)
-
-		// Start a transaction even in an isolated database to avoid persisting schema changes.
-		tx, err := dbPool.Begin(ctx)
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = tx.Rollback(ctx) })
-
 		bundle := &testBundle{
 			dbPool:   dbPool,
 			accessor: dbaccess.New(dbPool),
 			logger:   testhelper.Logger(t),
-			tx:       tx,
 		}
 
 		migrator := migrate.New(bundle.accessor, &migrate.Config{Logger: bundle.logger})
@@ -104,24 +96,24 @@ func TestMigrator(t *testing.T) {
 		// Run twice initially to reach the version before `invocations` are dropped.
 		// Defaults to one step when migrating down.
 		for i := 0; i < 2; i++ {
-			res, err := migrator.MigrateTx(ctx, bundle.tx, DirectionDown, &MigrateOpts{})
+			res, err := migrator.Migrate(ctx, DirectionDown, &MigrateOpts{})
 			require.NoError(t, err)
 			require.Equal(t, DirectionDown, res.Direction)
 			t.Logf("versions: %v", res.Versions)
 			require.Equal(t, []int{migrationsMaxVersion - i}, util.MapSlice(res.Versions, migrateVersionToInt))
 
-			err = dbExecError(ctx, bundle.tx, "SELECT * FROM invocations")
+			_, err = bundle.accessor.Exec(ctx, "SELECT * FROM invocations")
 			require.NoError(t, err)
 		}
 
 		// Run once more to go down one more step
 		{
-			res, err := migrator.MigrateTx(ctx, bundle.tx, DirectionDown, &MigrateOpts{})
+			res, err := migrator.Migrate(ctx, DirectionDown, &MigrateOpts{})
 			require.NoError(t, err)
 			require.Equal(t, DirectionDown, res.Direction)
 			require.Equal(t, []int{migrationsMaxVersion - 2}, util.MapSlice(res.Versions, migrateVersionToInt))
 
-			err = dbExecError(ctx, bundle.tx, "SELECT * FROM invocations")
+			_, err = bundle.accessor.Exec(ctx, "SELECT * FROM invocations")
 			require.Error(t, err)
 		}
 	})
@@ -129,12 +121,12 @@ func TestMigrator(t *testing.T) {
 	t.Run("MigrateDownAfterUp", func(t *testing.T) {
 		t.Parallel()
 
-		migrator, bundle := setup(t)
+		migrator, _ := setup(t)
 
-		_, err := migrator.MigrateTx(ctx, bundle.tx, DirectionUp, &MigrateOpts{})
+		_, err := migrator.Migrate(ctx, DirectionUp, &MigrateOpts{})
 		require.NoError(t, err)
 
-		res, err := migrator.MigrateTx(ctx, bundle.tx, DirectionDown, &MigrateOpts{})
+		res, err := migrator.Migrate(ctx, DirectionDown, &MigrateOpts{})
 		require.NoError(t, err)
 		require.Equal(t, []int{migrationsWithTestVersionsMaxVersion}, util.MapSlice(res.Versions, migrateVersionToInt))
 	})
@@ -144,20 +136,20 @@ func TestMigrator(t *testing.T) {
 
 		migrator, bundle := setup(t)
 
-		_, err := migrator.MigrateTx(ctx, bundle.tx, DirectionUp, &MigrateOpts{})
+		_, err := migrator.Migrate(ctx, DirectionUp, &MigrateOpts{})
 		require.NoError(t, err)
 
-		res, err := migrator.MigrateTx(ctx, bundle.tx, DirectionDown, &MigrateOpts{MaxSteps: 2})
+		res, err := migrator.Migrate(ctx, DirectionDown, &MigrateOpts{MaxSteps: 2})
 		require.NoError(t, err)
 		require.Equal(t, []int{migrationsWithTestVersionsMaxVersion, migrationsWithTestVersionsMaxVersion - 1},
 			util.MapSlice(res.Versions, migrateVersionToInt))
 
-		migrations, err := dbaccess.New(bundle.tx).MigrationGetAll(ctx)
+		migrations, err := bundle.accessor.Querier().MigrationGetAll(ctx, bundle.accessor.Source())
 		require.NoError(t, err)
 		require.Equal(t, seqOneTo(migrationsWithTestVersionsMaxVersion-2),
 			util.MapSlice(migrations, driverMigrationToInt))
 
-		err = dbExecError(ctx, bundle.tx, "SELECT name FROM test_table")
+		_, err = bundle.accessor.Exec(ctx, "SELECT name FROM test_table")
 		require.Error(t, err)
 	})
 
@@ -173,7 +165,7 @@ func TestMigrator(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, []int{}, util.MapSlice(res.Versions, migrateVersionToInt))
 
-		migrations, err := dbaccess.New(bundle.tx).MigrationGetAll(ctx)
+		migrations, err := bundle.accessor.Querier().MigrationGetAll(ctx, bundle.accessor.Source())
 		require.NoError(t, err)
 		require.Equal(t, seqOneTo(migrationsMaxVersion),
 			util.MapSlice(migrations, driverMigrationToInt))
@@ -184,21 +176,21 @@ func TestMigrator(t *testing.T) {
 
 		migrator, bundle := setup(t)
 
-		_, err := migrator.MigrateTx(ctx, bundle.tx, DirectionUp, &MigrateOpts{})
+		_, err := migrator.Migrate(ctx, DirectionUp, &MigrateOpts{})
 		require.NoError(t, err)
 
-		res, err := migrator.MigrateTx(ctx, bundle.tx, DirectionDown, &MigrateOpts{TargetVersion: 4})
+		res, err := migrator.Migrate(ctx, DirectionDown, &MigrateOpts{TargetVersion: 4})
 		require.NoError(t, err)
 		require.Equal(t,
 			seqBetween(migrationsWithTestVersionsMaxVersion, 4+1),
 			util.MapSlice(res.Versions, migrateVersionToInt))
 
-		migrations, err := dbaccess.New(bundle.tx).MigrationGetAll(ctx)
+		migrations, err := bundle.accessor.Querier().MigrationGetAll(ctx, bundle.accessor.Source())
 		require.NoError(t, err)
 		require.Equal(t, seqOneTo(4),
 			util.MapSlice(migrations, driverMigrationToInt))
 
-		err = dbExecError(ctx, bundle.tx, "SELECT name FROM test_table")
+		_, err = bundle.accessor.Exec(ctx, "SELECT name FROM test_table")
 		require.Error(t, err)
 	})
 
@@ -207,32 +199,32 @@ func TestMigrator(t *testing.T) {
 
 		migrator, bundle := setup(t)
 
-		_, err := migrator.MigrateTx(ctx, bundle.tx, DirectionUp, &MigrateOpts{})
+		_, err := migrator.Migrate(ctx, DirectionUp, &MigrateOpts{})
 		require.NoError(t, err)
 
-		res, err := migrator.MigrateTx(ctx, bundle.tx, DirectionDown, &MigrateOpts{TargetVersion: -1})
+		res, err := migrator.Migrate(ctx, DirectionDown, &MigrateOpts{TargetVersion: -1})
 		require.NoError(t, err)
 		require.Equal(t, seqToOne(migrationsWithTestVersionsMaxVersion),
 			util.MapSlice(res.Versions, migrateVersionToInt))
 
-		err = dbExecError(ctx, bundle.tx, "SELECT name FROM _migrate")
+		_, err = bundle.accessor.Exec(ctx, "SELECT name FROM _migrate")
 		require.Error(t, err)
 	})
 
 	t.Run("MigrateDownWithTargetVersionInvalid", func(t *testing.T) {
 		t.Parallel()
 
-		migrator, bundle := setup(t)
+		migrator, _ := setup(t)
 
 		// migration doesn't exist
 		{
-			_, err := migrator.MigrateTx(ctx, bundle.tx, DirectionDown, &MigrateOpts{TargetVersion: 77})
+			_, err := migrator.Migrate(ctx, DirectionDown, &MigrateOpts{TargetVersion: 77})
 			require.EqualError(t, err, "version 77 is not a valid migration version")
 		}
 
 		// migration exists but already applied
 		{
-			_, err := migrator.MigrateTx(ctx, bundle.tx, DirectionUp, &MigrateOpts{TargetVersion: 3})
+			_, err := migrator.Migrate(ctx, DirectionUp, &MigrateOpts{TargetVersion: 3})
 			require.EqualError(t, err, "version 3 is not in target list of valid migrations to apply")
 		}
 	})
@@ -242,17 +234,18 @@ func TestMigrator(t *testing.T) {
 
 		migrator, bundle := setup(t)
 
-		_, err := migrator.MigrateTx(ctx, bundle.tx, DirectionUp, &MigrateOpts{})
+		_, err := migrator.Migrate(ctx, DirectionUp, &MigrateOpts{})
 		require.NoError(t, err)
 
-		res, err := migrator.MigrateTx(ctx, bundle.tx, DirectionDown, &MigrateOpts{DryRun: true})
+		res, err := migrator.Migrate(ctx, DirectionDown, &MigrateOpts{DryRun: true})
 		require.NoError(t, err)
 		require.Equal(t, []int{migrationsWithTestVersionsMaxVersion}, util.MapSlice(res.Versions, migrateVersionToInt))
 
 		// Migrate down returned a result above for a migration that was
 		// removed, but because we're in a dry run, the database still shows
 		// this version.
-		migrations, err := dbaccess.New(bundle.tx).MigrationGetAll(ctx)
+		migrations, err := bundle.accessor.Querier().MigrationGetAll(ctx, bundle.accessor.Source())
+
 		require.NoError(t, err)
 		require.Equal(t,
 			seqOneTo(migrationsWithTestVersionsMaxVersion),
@@ -280,9 +273,9 @@ func TestMigrator(t *testing.T) {
 	t.Run("MigrateNilOpts", func(t *testing.T) {
 		t.Parallel()
 
-		migrator, bundle := setup(t)
+		migrator, _ := setup(t)
 
-		res, err := migrator.MigrateTx(ctx, bundle.tx, DirectionUp, nil)
+		res, err := migrator.Migrate(ctx, DirectionUp, nil)
 		require.NoError(t, err)
 		require.Equal(t,
 			seqBetween(migrationsMaxVersion+1, migrationsWithTestVersionsMaxVersion),
@@ -296,34 +289,35 @@ func TestMigrator(t *testing.T) {
 
 		// Run an initial time
 		{
-			res, err := migrator.MigrateTx(ctx, bundle.tx, DirectionUp, &MigrateOpts{})
+			res, err := migrator.Migrate(ctx, DirectionUp, &MigrateOpts{})
 			require.NoError(t, err)
 			require.Equal(t, DirectionUp, res.Direction)
 			require.Equal(t, []int{migrationsWithTestVersionsMaxVersion - 1, migrationsWithTestVersionsMaxVersion},
 				util.MapSlice(res.Versions, migrateVersionToInt))
 
-			migrations, err := dbaccess.New(bundle.tx).MigrationGetAll(ctx)
+			migrations, err := bundle.accessor.Querier().MigrationGetAll(ctx, bundle.accessor.Source())
+
 			require.NoError(t, err)
 			require.Equal(t, seqOneTo(migrationsWithTestVersionsMaxVersion),
 				util.MapSlice(migrations, driverMigrationToInt))
 
-			_, err = bundle.tx.Exec(ctx, "SELECT * FROM test_table")
+			_, err = bundle.accessor.Exec(ctx, "SELECT * FROM test_table")
 			require.NoError(t, err)
 		}
 
 		// Run once more to verify idempotency
 		{
-			res, err := migrator.MigrateTx(ctx, bundle.tx, DirectionUp, &MigrateOpts{})
+			res, err := migrator.Migrate(ctx, DirectionUp, &MigrateOpts{})
 			require.NoError(t, err)
 			require.Equal(t, DirectionUp, res.Direction)
 			require.Equal(t, []int{}, util.MapSlice(res.Versions, migrateVersionToInt))
 
-			migrations, err := dbaccess.New(bundle.tx).MigrationGetAll(ctx)
+			migrations, err := bundle.accessor.Querier().MigrationGetAll(ctx, bundle.accessor.Source())
 			require.NoError(t, err)
 			require.Equal(t, seqOneTo(migrationsWithTestVersionsMaxVersion),
 				util.MapSlice(migrations, driverMigrationToInt))
 
-			_, err = bundle.tx.Exec(ctx, "SELECT * FROM test_table")
+			_, err = bundle.accessor.Exec(ctx, "SELECT * FROM test_table")
 			require.NoError(t, err)
 		}
 	})
@@ -333,18 +327,18 @@ func TestMigrator(t *testing.T) {
 
 		migrator, bundle := setup(t)
 
-		res, err := migrator.MigrateTx(ctx, bundle.tx, DirectionUp, &MigrateOpts{MaxSteps: 1})
+		res, err := migrator.Migrate(ctx, DirectionUp, &MigrateOpts{MaxSteps: 1})
 		require.NoError(t, err)
 		require.Equal(t, []int{migrationsWithTestVersionsMaxVersion - 1},
 			util.MapSlice(res.Versions, migrateVersionToInt))
 
-		migrations, err := dbaccess.New(bundle.tx).MigrationGetAll(ctx)
+		migrations, err := bundle.accessor.Querier().MigrationGetAll(ctx, bundle.accessor.Source())
 		require.NoError(t, err)
 		require.Equal(t, seqOneTo(migrationsWithTestVersionsMaxVersion-1),
 			util.MapSlice(migrations, driverMigrationToInt))
 
 		// Column `name` is only added in the second test version.
-		err = dbExecError(ctx, bundle.tx, "SELECT name FROM test_table")
+		_, err = bundle.accessor.Exec(ctx, "SELECT name FROM test_table")
 		require.Error(t, err)
 
 		var pgErr *pgconn.PgError
@@ -364,7 +358,8 @@ func TestMigrator(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, []int{}, util.MapSlice(res.Versions, migrateVersionToInt))
 
-		migrations, err := dbaccess.New(bundle.tx).MigrationGetAll(ctx)
+		migrations, err := bundle.accessor.Querier().MigrationGetAll(ctx, bundle.accessor.Source())
+
 		require.NoError(t, err)
 		require.Equal(t, seqOneTo(migrationsMaxVersion),
 			util.MapSlice(migrations, driverMigrationToInt))
@@ -375,13 +370,14 @@ func TestMigrator(t *testing.T) {
 
 		migrator, bundle := setup(t)
 
-		res, err := migrator.MigrateTx(ctx, bundle.tx, DirectionUp, &MigrateOpts{TargetVersion: migrationsWithTestVersionsMaxVersion})
+		res, err := migrator.Migrate(ctx, DirectionUp, &MigrateOpts{TargetVersion: migrationsWithTestVersionsMaxVersion})
 		require.NoError(t, err)
 		require.Equal(t,
 			seqBetween(migrationsMaxVersion+1, migrationsWithTestVersionsMaxVersion),
 			util.MapSlice(res.Versions, migrateVersionToInt))
 
-		migrations, err := dbaccess.New(bundle.tx).MigrationGetAll(ctx)
+		migrations, err := bundle.accessor.Querier().MigrationGetAll(ctx, bundle.accessor.Source())
+
 		require.NoError(t, err)
 		require.Equal(t, seqOneTo(migrationsWithTestVersionsMaxVersion), util.MapSlice(migrations, driverMigrationToInt))
 	})
@@ -389,17 +385,17 @@ func TestMigrator(t *testing.T) {
 	t.Run("MigrateUpWithTargetVersionInvalid", func(t *testing.T) {
 		t.Parallel()
 
-		migrator, bundle := setup(t)
+		migrator, _ := setup(t)
 
 		// migration doesn't exist
 		{
-			_, err := migrator.MigrateTx(ctx, bundle.tx, DirectionUp, &MigrateOpts{TargetVersion: 77})
+			_, err := migrator.Migrate(ctx, DirectionUp, &MigrateOpts{TargetVersion: 77})
 			require.EqualError(t, err, "version 77 is not a valid migration version")
 		}
 
 		// migration exists but already applied
 		{
-			_, err := migrator.MigrateTx(ctx, bundle.tx, DirectionUp, &MigrateOpts{TargetVersion: 3})
+			_, err := migrator.Migrate(ctx, DirectionUp, &MigrateOpts{TargetVersion: 3})
 			require.EqualError(t, err, "version 3 is not in target list of valid migrations to apply")
 		}
 	})
@@ -409,7 +405,7 @@ func TestMigrator(t *testing.T) {
 
 		migrator, bundle := setup(t)
 
-		res, err := migrator.MigrateTx(ctx, bundle.tx, DirectionUp, &MigrateOpts{DryRun: true})
+		res, err := migrator.Migrate(ctx, DirectionUp, &MigrateOpts{DryRun: true})
 		require.NoError(t, err)
 		require.Equal(t, DirectionUp, res.Direction)
 		require.Equal(t, []int{migrationsWithTestVersionsMaxVersion - 1, migrationsWithTestVersionsMaxVersion},
@@ -418,7 +414,7 @@ func TestMigrator(t *testing.T) {
 		// Migrate up returned a result above for migrations that were applied,
 		// but because we're in a dry run, the database still shows the test
 		// migration versions not applied.
-		migrations, err := dbaccess.New(bundle.tx).MigrationGetAll(ctx)
+		migrations, err := bundle.accessor.Querier().MigrationGetAll(ctx, bundle.accessor.Source())
 		require.NoError(t, err)
 		require.Equal(t, seqOneTo(migrationsMaxVersion),
 			util.MapSlice(migrations, driverMigrationToInt))
@@ -428,15 +424,15 @@ func TestMigrator(t *testing.T) {
 // A command returning an error aborts the transaction. This is a shortcut to
 // execute a command in a subtransaction so that we can verify an error, but
 // continue to use the original transaction.
-func dbExecError(ctx context.Context, tx pgx.Tx, sql string) error {
-	return dbaccess.WithTx(ctx, dbaccess.New(tx), func(ctx context.Context, exec dbaccess.TxAccessor) error {
-		_, err := exec.Exec(ctx, sql)
-		return err
-	})
-}
+// func dbExecError(ctx context.Context, tx pgx.Tx, sql string) error {
+// 	return dbaccess.WithTx(ctx, dbaccess.New(tx), func(ctx context.Context, exec dbaccess.TxAccessor) error {
+// 		_, err := exec.Exec(ctx, sql)
+// 		return err
+// 	})
+// }
 
 func migrateVersionToInt(version migrate.MigrateVersion) int { return version.Version }
-func driverMigrationToInt(r *dbaccess.Migration) int         { return r.Version }
+func driverMigrationToInt(r *dbsqlc.Migration) int           { return int(r.Version) }
 func migrationToInt(migration migrate.Migration) int         { return migration.Version }
 
 func seqBetween(from int, to int) []int {

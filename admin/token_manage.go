@@ -6,6 +6,7 @@ import (
 	"github.com/samber/lo"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
+	"gitlab.com/navyx/ai/maos/maos-core/dbaccess/dbsqlc"
 	"gitlab.com/navyx/ai/maos/maos-core/util"
 )
 
@@ -17,7 +18,7 @@ var (
 func ListApiTokens(ctx context.Context, accessor dbaccess.Accessor, request api.AdminListApiTokensRequestObject) (api.AdminListApiTokensResponseObject, error) {
 	page, _ := lo.Coalesce[*int](request.Params.Page, &defaultPage)
 	pageSize, _ := lo.Coalesce[*int](request.Params.PageSize, &defaultPageSize)
-	res, err := accessor.ApiTokenListByPage(ctx, dbaccess.ApiTokenListByPageParams{
+	res, err := accessor.Querier().ApiTokenListByPage(ctx, accessor.Source(), &dbsqlc.ApiTokenListByPageParams{
 		Page:     int64(*page),
 		PageSize: int64(*pageSize),
 	})
@@ -27,7 +28,7 @@ func ListApiTokens(ctx context.Context, accessor dbaccess.Accessor, request api.
 
 	data := util.MapSlice(
 		res,
-		func(row *dbaccess.ApiTokenListRow) api.ApiToken {
+		func(row *dbsqlc.ApiTokenListByPageRow) api.ApiToken {
 			return api.ApiToken{
 				Id:          row.ID,
 				AgentId:     row.AgentID,

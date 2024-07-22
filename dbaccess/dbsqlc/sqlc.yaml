@@ -4,6 +4,8 @@ sql:
     schema: "../../migrate/migration"
     queries:
       - migration.sql
+      - queue.sql
+      - agent.sql
       - api_token.sql
     gen:
       go:

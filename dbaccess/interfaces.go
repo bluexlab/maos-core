@@ -6,6 +6,9 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess/dbsqlc"
 )
 
+type ApiTokenListRow = dbsqlc.ApiTokenListByPageRow
+type ApiTokenListByPageParams = dbsqlc.ApiTokenListByPageParams
+
 type Accessor interface {
 	// Begin begins a new subtransaction. ErrSubTxNotSupported may be returned
 	// if the executor is a transaction and the driver doesn't support
@@ -17,6 +20,8 @@ type Accessor interface {
 
 	// ApiTokenFindByID gets an API token by its ID.
 	ApiTokenFindByID(ctx context.Context, id string) (*ApiToken, error)
+
+	ApiTokenListByPage(ctx context.Context, arg ApiTokenListByPageParams) ([]*ApiTokenListRow, error)
 
 	// MigrationDeleteByVersionMany deletes many migration versions.
 	MigrationDeleteByVersionMany(ctx context.Context, versions []int) ([]*Migration, error)

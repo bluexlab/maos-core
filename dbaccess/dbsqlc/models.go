@@ -98,5 +98,5 @@ type Queues struct {
 	CreatedAt int64
 	Metadata  []byte
 	PausedAt  *int64
-	UpdatedAt int64
+	UpdatedAt *int64
 }

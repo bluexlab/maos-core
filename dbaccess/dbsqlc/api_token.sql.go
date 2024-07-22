@@ -10,7 +10,7 @@ import (
 )
 
 const apiTokenFindByID = `-- name: ApiTokenFindByID :one
-SELECT t.id, a.id as agent_id, a.queue_id, t.permissions, t.expire_at
+SELECT t.id, a.id as agent_id, a.queue_id, t.permissions, t.expire_at, t.created_by
 FROM api_tokens t
 JOIN agents a ON t.agent_id = a.id
 WHERE t.id = $1
@@ -23,6 +23,7 @@ type ApiTokenFindByIDRow struct {
 	QueueID     int64
 	Permissions []string
 	ExpireAt    int64
+	CreatedBy   string
 }
 
 func (q *Queries) ApiTokenFindByID(ctx context.Context, db DBTX, id string) (*ApiTokenFindByIDRow, error) {
@@ -34,6 +35,114 @@ func (q *Queries) ApiTokenFindByID(ctx context.Context, db DBTX, id string) (*Ap
 		&i.QueueID,
 		&i.Permissions,
 		&i.ExpireAt,
+		&i.CreatedBy,
 	)
 	return &i, err
+}
+
+const apiTokenInsert = `-- name: ApiTokenInsert :one
+INSERT INTO api_tokens(
+    id,
+    agent_id,
+    expire_at,
+    created_by,
+    permissions,
+    created_at
+) VALUES (
+    $1::text,
+    $2::bigint,
+    $3::bigint,
+    $4::text,
+    $5::varchar(255)[],
+    coalesce($6::bigint, EXTRACT(EPOCH FROM NOW()))
+) RETURNING id, agent_id, expire_at, created_by, created_at, permissions
+`
+
+type ApiTokenInsertParams struct {
+	ID          string
+	AgentID     int64
+	ExpireAt    int64
+	CreatedBy   string
+	Permissions []string
+	CreatedAt   int64
+}
+
+func (q *Queries) ApiTokenInsert(ctx context.Context, db DBTX, arg *ApiTokenInsertParams) (*ApiTokens, error) {
+	row := db.QueryRow(ctx, apiTokenInsert,
+		arg.ID,
+		arg.AgentID,
+		arg.ExpireAt,
+		arg.CreatedBy,
+		arg.Permissions,
+		arg.CreatedAt,
+	)
+	var i ApiTokens
+	err := row.Scan(
+		&i.ID,
+		&i.AgentID,
+		&i.ExpireAt,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.Permissions,
+	)
+	return &i, err
+}
+
+const apiTokenListByPage = `-- name: ApiTokenListByPage :many
+SELECT
+  t.id,
+  a.id as agent_id,
+  a.queue_id,
+  t.permissions,
+  t.expire_at,
+  t.created_by,
+  COUNT(*) OVER() AS total_count
+FROM api_tokens t
+JOIN agents a ON t.agent_id = a.id
+ORDER BY t.created_at DESC, t.id
+LIMIT $1::bigint
+OFFSET $1 * ($2::bigint - 1)
+`
+
+type ApiTokenListByPageParams struct {
+	PageSize interface{}
+	Page     int64
+}
+
+type ApiTokenListByPageRow struct {
+	ID          string
+	AgentID     int64
+	QueueID     int64
+	Permissions []string
+	ExpireAt    int64
+	CreatedBy   string
+	TotalCount  int64
+}
+
+func (q *Queries) ApiTokenListByPage(ctx context.Context, db DBTX, arg *ApiTokenListByPageParams) ([]*ApiTokenListByPageRow, error) {
+	rows, err := db.Query(ctx, apiTokenListByPage, arg.PageSize, arg.Page)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*ApiTokenListByPageRow
+	for rows.Next() {
+		var i ApiTokenListByPageRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AgentID,
+			&i.QueueID,
+			&i.Permissions,
+			&i.ExpireAt,
+			&i.CreatedBy,
+			&i.TotalCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

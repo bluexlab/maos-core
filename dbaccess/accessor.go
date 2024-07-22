@@ -55,10 +55,12 @@ func (e *PgAccessor) Exec(ctx context.Context, sql string) (struct{}, error) {
 
 func (e *PgAccessor) ApiTokenFindByID(ctx context.Context, id string) (*dbsqlc.ApiTokenFindByIDRow, error) {
 	token, err := e.queries.ApiTokenFindByID(ctx, e.source, id)
-	if err != nil {
-		return nil, interpretError(err)
-	}
-	return token, nil
+	return token, interpretError(err)
+}
+
+func (e *PgAccessor) ApiTokenListByPage(ctx context.Context, arg ApiTokenListByPageParams) ([]*ApiTokenListRow, error) {
+	rows, err := e.queries.ApiTokenListByPage(ctx, e.source, &arg)
+	return rows, interpretError(err)
 }
 
 func (e *PgAccessor) MigrationDeleteByVersionMany(ctx context.Context, versions []int) ([]*Migration, error) {
@@ -101,6 +103,10 @@ func migrationFromInternal(internal *dbsqlc.Migration) *Migration {
 }
 
 func interpretError(err error) error {
+	if err == nil {
+		return nil
+	}
+
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound
 	}

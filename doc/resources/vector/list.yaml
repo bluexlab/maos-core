@@ -1,6 +1,6 @@
 get:
   summary: List database.
-  OperationId: listVectoreStores
+  operationId: listVectoreStores
   tags:
     - VectorStore
   responses:

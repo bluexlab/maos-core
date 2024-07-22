@@ -1,6 +1,6 @@
 get:
   summary: List collection.
-  OperationId: listCollection
+  operationId: listCollection
   tags:
     - VectorStore
   parameters:
@@ -35,7 +35,7 @@ get:
 
 post:
   summary: Create a collection.
-  OperationId: createCollection
+  operationId: createCollection
   tags:
     - VectorStore
   parameters:

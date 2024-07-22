@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/sirupsen/logrus"
+	"gitlab.com/navyx/ai/maos/maos-core/admin"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 )
@@ -114,4 +115,18 @@ func (s *APIHandler) UpsertCollection(ctx context.Context, request api.UpsertCol
 
 func (s *APIHandler) ListVectoreStores(ctx context.Context, request api.ListVectoreStoresRequestObject) (api.ListVectoreStoresResponseObject, error) {
 	panic("not implemented")
+}
+
+func (s *APIHandler) AdminListApiTokens(ctx context.Context, request api.AdminListApiTokensRequestObject) (api.AdminListApiTokensResponseObject, error) {
+	if !ValidatePermissions(ctx, "AdminListApiTokens") {
+		return api.AdminListApiTokens401Response{}, nil
+	}
+	return admin.ListApiTokens(ctx, s.accessor, request)
+}
+
+func (s *APIHandler) AdminCreateApiToken(ctx context.Context, request api.AdminCreateApiTokenRequestObject) (api.AdminCreateApiTokenResponseObject, error) {
+	if !ValidatePermissions(ctx, "AdminCreateApiToken") {
+		return api.AdminCreateApiToken401Response{}, nil
+	}
+	return admin.CreateApiToken(ctx, s.accessor, request)
 }

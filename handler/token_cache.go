@@ -9,18 +9,6 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-type Token struct {
-	Id          string
-	AgentId     int64
-	QueueId     int64
-	ExpireAt    int64
-	Permissions []string
-}
-
-// TokenFetcher is a function that retrieves a token from the database.
-// It returns nil without an error if the token is not found.
-type TokenFetcher func(ctx context.Context, apiToken string) (*Token, error)
-
 type ApiTokenCache struct {
 	cache   *ristretto.Cache
 	group   singleflight.Group

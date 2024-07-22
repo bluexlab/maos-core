@@ -1,6 +1,6 @@
 post:
   summary: Upsert data into a collection.
-  OperationId: upsertCollection
+  operationId: upsertCollection
   tags:
     - VectorStore
   parameters:
@@ -29,7 +29,7 @@ post:
 
 get:
   summary: query data from a collection.
-  OperationId: queryCollection
+  operationId: queryCollection
   tags:
     - VectorStore
   parameters:

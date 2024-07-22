@@ -2,17 +2,30 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"gitlab.com/navyx/ai/maos/maos-core/api"
 )
 
-type TokenValidator func(ctx context.Context, token string) (context.Context, error)
+const TokenContextKey = "ContextToken"
 
-func NewBearerAuthMiddleware(validator TokenValidator) api.StrictMiddlewareFunc {
+type Token struct {
+	Id          string
+	AgentId     int64
+	QueueId     int64
+	ExpireAt    int64
+	Permissions []string
+}
+
+// TokenFetcher is a function that retrieves a token from the database.
+// It returns nil without an error if the token is not found.
+type TokenFetcher func(ctx context.Context, apiToken string) (*Token, error)
+
+func NewBearerAuthMiddleware(fetcher TokenFetcher, cacheTtl time.Duration) api.StrictMiddlewareFunc {
+	tokenCache := NewApiTokenCache(fetcher, cacheTtl)
+
 	return func(f api.StrictHandlerFunc, operationID string) api.StrictHandlerFunc {
 		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, args interface{}) (interface{}, error) {
 			auth := r.Header.Get("Authorization")
@@ -27,13 +40,14 @@ func NewBearerAuthMiddleware(validator TokenValidator) api.StrictMiddlewareFunc 
 				return nil, nil
 			}
 
-			token := auth[len(prefix):]
-			newContext, err := validator(ctx, token)
-			if err != nil {
-				errorMessage, _ := json.Marshal(err.Error())
-				http.Error(w, fmt.Sprintf(`{"error":%s}`, errorMessage), http.StatusUnauthorized)
+			tokenString := auth[len(prefix):]
+			token := tokenCache.GetToken(ctx, tokenString)
+			if token == nil {
+				http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
 				return nil, nil
 			}
+
+			newContext := context.WithValue(ctx, TokenContextKey, token)
 
 			// Token is valid, call the next handler
 			return f(newContext, w, r, args)

@@ -69,6 +69,34 @@ const (
 	User      MessageRole = "user"
 )
 
+// Defines values for Permission.
+const (
+	Admin             Permission = "admin"
+	ConfigRead        Permission = "config:read"
+	InvocationCreate  Permission = "invocation:create"
+	InvocationRead    Permission = "invocation:read"
+	InvocationRespond Permission = "invocation:respond"
+)
+
+// ApiToken defines model for ApiToken.
+type ApiToken struct {
+	AgentId     int64        `json:"agent_id"`
+	CreatedAt   int64        `json:"created_at"`
+	CreatedBy   string       `json:"created_by"`
+	ExpireAt    int64        `json:"expire_at"`
+	Id          string       `json:"id"`
+	Permissions []Permission `json:"permissions"`
+}
+
+// ApiTokenCreate defines model for ApiTokenCreate.
+type ApiTokenCreate struct {
+	AgentId     int64    `json:"agent_id"`
+	CreatedBy   string   `json:"created_by"`
+	ExpireAt    int64    `json:"expire_at"`
+	Id          string   `json:"id"`
+	Permissions []string `json:"permissions"`
+}
+
 // CollectionDataType defines model for CollectionDataType.
 type CollectionDataType string
 
@@ -164,6 +192,9 @@ type MessageContent2 struct {
 	ImageUrl *string `json:"image_url,omitempty"`
 }
 
+// Permission defines model for Permission.
+type Permission string
+
 // RerankResult defines model for RerankResult.
 type RerankResult struct {
 	// Index The index of the document in the original list.
@@ -174,6 +205,21 @@ type RerankResult struct {
 
 	// Text The document.
 	Text *string `json:"text,omitempty"`
+}
+
+// AdminListApiTokensParams defines parameters for AdminListApiTokens.
+type AdminListApiTokensParams struct {
+	// Page Page number (default 1)
+	Page *int `form:"page,omitempty" json:"page,omitempty"`
+
+	// PageSize Page number (default 10)
+	PageSize *int `form:"page_size,omitempty" json:"page_size,omitempty"`
+
+	// AgentId Filter by agent ID
+	AgentId *int `form:"agent_id,omitempty" json:"agent_id,omitempty"`
+
+	// CreatedBy Filter by creator
+	CreatedBy *string `form:"created_by,omitempty" json:"created_by,omitempty"`
 }
 
 // CreateCompletionJSONBody defines parameters for CreateCompletion.
@@ -245,6 +291,9 @@ type CreateCollectionParams struct {
 
 // UpsertCollectionJSONBody defines parameters for UpsertCollection.
 type UpsertCollectionJSONBody = map[string]interface{}
+
+// AdminCreateApiTokenJSONRequestBody defines body for AdminCreateApiToken for application/json ContentType.
+type AdminCreateApiTokenJSONRequestBody = ApiTokenCreate
 
 // CreateCompletionJSONRequestBody defines body for CreateCompletion for application/json ContentType.
 type CreateCompletionJSONRequestBody CreateCompletionJSONBody
@@ -357,6 +406,12 @@ func (t *MessageContent) UnmarshalJSON(b []byte) error {
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// List API tokens
+	// (GET /v1/admin/api_tokens)
+	AdminListApiTokens(w http.ResponseWriter, r *http.Request, params AdminListApiTokensParams)
+	// Create a new API token
+	// (POST /v1/admin/api_tokens)
+	AdminCreateApiToken(w http.ResponseWriter, r *http.Request)
 	// Generate text completion.
 	// (POST /v1/completion)
 	CreateCompletion(w http.ResponseWriter, r *http.Request)
@@ -412,6 +467,81 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// AdminListApiTokens operation middleware
+func (siw *ServerInterfaceWrapper) AdminListApiTokens(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var err error
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AdminListApiTokensParams
+
+	// ------------- Optional query parameter "page" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "page", r.URL.Query(), &params.Page)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "page_size" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "page_size", r.URL.Query(), &params.PageSize)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page_size", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "agent_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "agent_id", r.URL.Query(), &params.AgentId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "created_by" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "created_by", r.URL.Query(), &params.CreatedBy)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "created_by", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminListApiTokens(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// AdminCreateApiToken operation middleware
+func (siw *ServerInterfaceWrapper) AdminCreateApiToken(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminCreateApiToken(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
 
 // CreateCompletion operation middleware
 func (siw *ServerInterfaceWrapper) CreateCompletion(w http.ResponseWriter, r *http.Request) {
@@ -915,6 +1045,10 @@ func HandlerWithOptions(si ServerInterface, options GorillaServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	r.HandleFunc(options.BaseURL+"/v1/admin/api_tokens", wrapper.AdminListApiTokens).Methods("GET")
+
+	r.HandleFunc(options.BaseURL+"/v1/admin/api_tokens", wrapper.AdminCreateApiToken).Methods("POST")
+
 	r.HandleFunc(options.BaseURL+"/v1/completion", wrapper.CreateCompletion).Methods("POST")
 
 	r.HandleFunc(options.BaseURL+"/v1/completion/models", wrapper.ListCompletionModels).Methods("GET")
@@ -946,6 +1080,77 @@ func HandlerWithOptions(si ServerInterface, options GorillaServerOptions) http.H
 	r.HandleFunc(options.BaseURL+"/v1/vector/list", wrapper.ListVectoreStores).Methods("GET")
 
 	return r
+}
+
+type AdminListApiTokensRequestObject struct {
+	Params AdminListApiTokensParams
+}
+
+type AdminListApiTokensResponseObject interface {
+	VisitAdminListApiTokensResponse(w http.ResponseWriter) error
+}
+
+type AdminListApiTokens200JSONResponse struct {
+	Data []ApiToken `json:"data"`
+	Meta struct {
+		TotalPages int `json:"total_pages"`
+	} `json:"meta"`
+}
+
+func (response AdminListApiTokens200JSONResponse) VisitAdminListApiTokensResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminListApiTokens401Response struct {
+}
+
+func (response AdminListApiTokens401Response) VisitAdminListApiTokensResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type AdminListApiTokens500Response struct {
+}
+
+func (response AdminListApiTokens500Response) VisitAdminListApiTokensResponse(w http.ResponseWriter) error {
+	w.WriteHeader(500)
+	return nil
+}
+
+type AdminCreateApiTokenRequestObject struct {
+	Body *AdminCreateApiTokenJSONRequestBody
+}
+
+type AdminCreateApiTokenResponseObject interface {
+	VisitAdminCreateApiTokenResponse(w http.ResponseWriter) error
+}
+
+type AdminCreateApiToken201JSONResponse ApiToken
+
+func (response AdminCreateApiToken201JSONResponse) VisitAdminCreateApiTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminCreateApiToken401Response struct {
+}
+
+func (response AdminCreateApiToken401Response) VisitAdminCreateApiTokenResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type AdminCreateApiToken500Response struct {
+}
+
+func (response AdminCreateApiToken500Response) VisitAdminCreateApiTokenResponse(w http.ResponseWriter) error {
+	w.WriteHeader(500)
+	return nil
 }
 
 type CreateCompletionRequestObject struct {
@@ -1381,6 +1586,12 @@ func (response ListVectoreStores401Response) VisitListVectoreStoresResponse(w ht
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// List API tokens
+	// (GET /v1/admin/api_tokens)
+	AdminListApiTokens(ctx context.Context, request AdminListApiTokensRequestObject) (AdminListApiTokensResponseObject, error)
+	// Create a new API token
+	// (POST /v1/admin/api_tokens)
+	AdminCreateApiToken(ctx context.Context, request AdminCreateApiTokenRequestObject) (AdminCreateApiTokenResponseObject, error)
 	// Generate text completion.
 	// (POST /v1/completion)
 	CreateCompletion(ctx context.Context, request CreateCompletionRequestObject) (CreateCompletionResponseObject, error)
@@ -1455,6 +1666,63 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// AdminListApiTokens operation middleware
+func (sh *strictHandler) AdminListApiTokens(w http.ResponseWriter, r *http.Request, params AdminListApiTokensParams) {
+	var request AdminListApiTokensRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminListApiTokens(ctx, request.(AdminListApiTokensRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminListApiTokens")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminListApiTokensResponseObject); ok {
+		if err := validResponse.VisitAdminListApiTokensResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminCreateApiToken operation middleware
+func (sh *strictHandler) AdminCreateApiToken(w http.ResponseWriter, r *http.Request) {
+	var request AdminCreateApiTokenRequestObject
+
+	var body AdminCreateApiTokenJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminCreateApiToken(ctx, request.(AdminCreateApiTokenRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminCreateApiToken")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminCreateApiTokenResponseObject); ok {
+		if err := validResponse.VisitAdminCreateApiTokenResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // CreateCompletion operation middleware

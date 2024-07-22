@@ -2,172 +2,113 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
-	"github.com/gorilla/mux"
-	"github.com/stretchr/testify/require"
-	"gitlab.com/navyx/ai/maos/maos-core/api"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
-type TestAPIHandler struct {
-	APIHandler
-
-	NewContext context.Context
+// MockAuthTokenFetcher is a mock implementation of TokenFetcher
+type MockAuthTokenFetcher struct {
+	mock.Mock
 }
 
-// GetCallerConfig implements the GET /v1/config endpoint
-func (s *TestAPIHandler) GetCallerConfig(ctx context.Context, request api.GetCallerConfigRequestObject) (api.GetCallerConfigResponseObject, error) {
-	s.NewContext = ctx
-	config := api.GetCallerConfig200JSONResponse{
-		"config1": "value1",
-		"config2": "value2",
+func (m *MockAuthTokenFetcher) FetchToken(ctx context.Context, apiToken string) (*Token, error) {
+	args := m.Called(ctx, apiToken)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
 	}
-	return config, nil
+	return args.Get(0).(*Token), args.Error(1)
 }
 
-func TestBearerAuth(t *testing.T) {
-	t.Parallel()
+func TestNewBearerAuthMiddleware(t *testing.T) {
+	mockFetcher := new(MockAuthTokenFetcher)
+	cacheTTL := 5 * time.Minute
 
-	server := &TestAPIHandler{}
-	middlewares := []api.StrictMiddlewareFunc{NewBearerAuthMiddleware(
-		func(ctx context.Context, token string) (context.Context, error) {
-			if token == "valid_token" {
-				newContext := context.WithValue(ctx, "token", map[string]interface{}{"permissions": []string{"read"}})
-				return newContext, nil
-			}
-			return ctx, fmt.Errorf("invalid token")
-		})}
+	middleware := NewBearerAuthMiddleware(mockFetcher.FetchToken, cacheTTL)
 
-	handler := api.NewStrictHandler(server, middlewares)
+	t.Run("Missing Authorization Header", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/test", nil)
+		w := httptest.NewRecorder()
 
-	// Create a new router and register the handlers
-	r := mux.NewRouter()
-	api.HandlerWithOptions(handler, api.GorillaServerOptions{
-		BaseRouter: r,
+		handler := middleware(func(ctx context.Context, w http.ResponseWriter, r *http.Request, args interface{}) (interface{}, error) {
+			return nil, nil
+		}, "test")
+
+		result, err := handler(context.Background(), w, req, nil)
+
+		assert.Nil(t, result)
+		assert.Nil(t, err)
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		assert.Equal(t, `{"error":"missing authorization header"}`, strings.TrimSpace(w.Body.String()))
 	})
 
-	// Create a test server
-	ts := httptest.NewServer(r)
-	defer ts.Close()
+	t.Run("Invalid Authorization Header", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/test", nil)
+		req.Header.Set("Authorization", "Invalid Token")
+		w := httptest.NewRecorder()
 
-	// Test cases
-	testCases := []struct {
-		name           string
-		token          string
-		expectedStatus int
-		expectedBody   string
-	}{
-		{
-			name:           "Valid token",
-			token:          "valid_token",
-			expectedStatus: http.StatusOK,
-			expectedBody:   `{"config1":"value1","config2":"value2"}`,
-		},
-		{
-			name:           "Invalid token",
-			token:          "invalid_token",
-			expectedStatus: http.StatusUnauthorized,
-			expectedBody:   `{"error":"invalid token"}`,
-		},
-		{
-			name:           "Missing token",
-			token:          "",
-			expectedStatus: http.StatusUnauthorized,
-			expectedBody:   `{"error":"missing authorization header"}`,
-		},
-	}
+		handler := middleware(func(ctx context.Context, w http.ResponseWriter, r *http.Request, args interface{}) (interface{}, error) {
+			return nil, nil
+		}, "test")
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			req, err := http.NewRequest("GET", ts.URL+"/v1/config", nil)
-			if err != nil {
-				t.Fatalf("Error creating request: %v", err)
-			}
+		result, err := handler(context.Background(), w, req, nil)
 
-			if tc.token != "" {
-				req.Header.Set("Authorization", "Bearer "+tc.token)
-			}
-
-			resp, err := http.DefaultClient.Do(req)
-			if err != nil {
-				t.Fatalf("Error making request: %v", err)
-			}
-			defer resp.Body.Close()
-
-			if resp.StatusCode != tc.expectedStatus {
-				t.Errorf("Expected status %d, got %d", tc.expectedStatus, resp.StatusCode)
-			}
-
-			var body map[string]interface{}
-			if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-				t.Fatalf("Error decoding response body: %v", err)
-			}
-
-			expectedBody := make(map[string]interface{})
-			if err := json.Unmarshal([]byte(tc.expectedBody), &expectedBody); err != nil {
-				t.Fatalf("Error parsing expected body: %v", err)
-			}
-
-			if !compareJSON(body, expectedBody) {
-				t.Errorf("Expected body %v, got %v", expectedBody, body)
-			}
-		})
-	}
-}
-
-func TestBearerAuthWithValidator(t *testing.T) {
-	t.Parallel()
-
-	server := &TestAPIHandler{}
-	middlewares := []api.StrictMiddlewareFunc{NewBearerAuthMiddleware(
-		func(ctx context.Context, token string) (context.Context, error) {
-			if token == "valid_token" {
-				newContext := context.WithValue(ctx, "token", map[string]interface{}{"permissions": []string{"read"}})
-				return newContext, nil
-			}
-			return ctx, fmt.Errorf("invalid token")
-		})}
-
-	handler := api.NewStrictHandler(server, middlewares)
-	r := mux.NewRouter()
-	api.HandlerWithOptions(handler, api.GorillaServerOptions{
-		BaseRouter: r,
+		assert.Nil(t, result)
+		assert.Nil(t, err)
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		assert.Equal(t, `{"error":"invalid authorization header"}`, strings.TrimSpace(w.Body.String()))
 	})
 
-	ts := httptest.NewServer(r)
-	defer ts.Close()
+	t.Run("Invalid Token", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/test", nil)
+		req.Header.Set("Authorization", "Bearer invalidtoken")
+		w := httptest.NewRecorder()
 
-	req, err := http.NewRequest("GET", ts.URL+"/v1/config", nil)
-	if err != nil {
-		t.Fatalf("Error creating request: %v", err)
-	}
-	req.Header.Set("Authorization", "Bearer valid_token")
-	resp, err := http.DefaultClient.Do(req)
-	require.Nil(t, err)
+		mockFetcher.On("FetchToken", mock.Anything, "invalidtoken").Return(nil, nil)
 
-	defer resp.Body.Close()
+		handler := middleware(func(ctx context.Context, w http.ResponseWriter, r *http.Request, args interface{}) (interface{}, error) {
+			return nil, nil
+		}, "test")
 
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	require.Equal(t,
-		server.NewContext.Value("token"),
-		map[string]interface{}{"permissions": []string{"read"}},
-		"Expected token to be stored in the context")
-}
+		result, err := handler(context.Background(), w, req, nil)
 
-func compareJSON(a, b map[string]interface{}) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for k, v := range a {
-		if w, ok := b[k]; !ok || v != w {
-			return false
+		assert.Nil(t, result)
+		assert.Nil(t, err)
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		assert.Equal(t, `{"error":"invalid token"}`, strings.TrimSpace(w.Body.String()))
+	})
+
+	t.Run("Valid Token", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/test", nil)
+		req.Header.Set("Authorization", "Bearer validtoken")
+		w := httptest.NewRecorder()
+
+		validToken := &Token{
+			Id:          "valid-id",
+			AgentId:     123,
+			QueueId:     456,
+			ExpireAt:    time.Now().Add(1 * time.Hour).Unix(),
+			Permissions: []string{"read", "write"},
 		}
-	}
-	return true
-}
 
-// TestSwaggerEndpoints remains the same as in the previous example
+		mockFetcher.On("FetchToken", mock.Anything, "validtoken").Return(validToken, nil)
+
+		var capturedToken *Token
+		handler := middleware(func(ctx context.Context, w http.ResponseWriter, r *http.Request, args interface{}) (interface{}, error) {
+			capturedToken = ctx.Value(TokenContextKey).(*Token)
+			return "success", nil
+		}, "test")
+
+		result, err := handler(context.Background(), w, req, nil)
+
+		assert.Equal(t, "success", result)
+		assert.Nil(t, err)
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, validToken, capturedToken)
+	})
+}

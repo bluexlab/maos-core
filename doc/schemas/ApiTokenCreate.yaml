@@ -1,0 +1,28 @@
+type: object
+properties:
+  id:
+    type: string
+  agent_id:
+    type: integer
+    format: int64
+  expire_at:
+    type: integer
+    format: int64
+  created_by:
+    type: string
+  permissions:
+    type: array
+    items:
+      type: string
+required:
+  - id
+  - agent_id
+  - expire_at
+  - created_by
+  - permissions
+example:
+  id: "token123"
+  agent_id: 2
+  expire_at: 1704067200
+  created_by: admin@bluextrade.com
+  Permissions: ["config:read", "invocation:read"]

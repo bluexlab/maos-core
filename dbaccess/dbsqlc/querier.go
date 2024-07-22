@@ -9,15 +9,15 @@ import (
 )
 
 type Querier interface {
-	AgentInsert(ctx context.Context, db DBTX, arg *AgentInsertParams) (*Agents, error)
+	AgentInsert(ctx context.Context, db DBTX, arg *AgentInsertParams) (*Agent, error)
 	ApiTokenFindByID(ctx context.Context, db DBTX, id string) (*ApiTokenFindByIDRow, error)
-	ApiTokenInsert(ctx context.Context, db DBTX, arg *ApiTokenInsertParams) (*ApiTokens, error)
+	ApiTokenInsert(ctx context.Context, db DBTX, arg *ApiTokenInsertParams) (*ApiToken, error)
 	ApiTokenListByPage(ctx context.Context, db DBTX, arg *ApiTokenListByPageParams) ([]*ApiTokenListByPageRow, error)
 	MigrationDeleteByVersionMany(ctx context.Context, db DBTX, version []int64) ([]*Migration, error)
 	MigrationGetAll(ctx context.Context, db DBTX) ([]*Migration, error)
 	MigrationInsert(ctx context.Context, db DBTX, version int64) (*Migration, error)
 	MigrationInsertMany(ctx context.Context, db DBTX, version []int64) ([]*Migration, error)
-	QueueInsert(ctx context.Context, db DBTX, arg *QueueInsertParams) (*Queues, error)
+	QueueInsert(ctx context.Context, db DBTX, arg *QueueInsertParams) (*Queue, error)
 	TableExists(ctx context.Context, db DBTX, tableName string) (bool, error)
 }
 

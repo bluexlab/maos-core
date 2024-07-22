@@ -21,6 +21,10 @@ sql:
 
         rename:
           ttl: "TTL"
+          agents: "Agent"
+          queues: "Queue"
+          api_tokens: "ApiToken"
+          invocations: "Invocation"
 
         overrides:
           - db_type: "pg_catalog.interval"

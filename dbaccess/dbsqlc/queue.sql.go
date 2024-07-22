@@ -24,9 +24,9 @@ type QueueInsertParams struct {
 	Metadata []byte
 }
 
-func (q *Queries) QueueInsert(ctx context.Context, db DBTX, arg *QueueInsertParams) (*Queues, error) {
+func (q *Queries) QueueInsert(ctx context.Context, db DBTX, arg *QueueInsertParams) (*Queue, error) {
 	row := db.QueryRow(ctx, queueInsert, arg.Name, arg.Metadata)
-	var i Queues
+	var i Queue
 	err := row.Scan(
 		&i.ID,
 		&i.Name,

@@ -27,9 +27,9 @@ type AgentInsertParams struct {
 	Metadata []byte
 }
 
-func (q *Queries) AgentInsert(ctx context.Context, db DBTX, arg *AgentInsertParams) (*Agents, error) {
+func (q *Queries) AgentInsert(ctx context.Context, db DBTX, arg *AgentInsertParams) (*Agent, error) {
 	row := db.QueryRow(ctx, agentInsert, arg.Name, arg.QueueID, arg.Metadata)
-	var i Agents
+	var i Agent
 	err := row.Scan(
 		&i.ID,
 		&i.Name,

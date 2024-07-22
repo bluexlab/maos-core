@@ -67,7 +67,7 @@ type ApiTokenInsertParams struct {
 	CreatedAt   int64
 }
 
-func (q *Queries) ApiTokenInsert(ctx context.Context, db DBTX, arg *ApiTokenInsertParams) (*ApiTokens, error) {
+func (q *Queries) ApiTokenInsert(ctx context.Context, db DBTX, arg *ApiTokenInsertParams) (*ApiToken, error) {
 	row := db.QueryRow(ctx, apiTokenInsert,
 		arg.ID,
 		arg.AgentID,
@@ -76,7 +76,7 @@ func (q *Queries) ApiTokenInsert(ctx context.Context, db DBTX, arg *ApiTokenInse
 		arg.Permissions,
 		arg.CreatedAt,
 	)
-	var i ApiTokens
+	var i ApiToken
 	err := row.Scan(
 		&i.ID,
 		&i.AgentID,

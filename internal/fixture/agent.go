@@ -7,7 +7,7 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess/dbsqlc"
 )
 
-func InsertAgent(t *testing.T, ctx context.Context, ds DataSource, name string) *dbsqlc.Agents {
+func InsertAgent(t *testing.T, ctx context.Context, ds DataSource, name string) *dbsqlc.Agent {
 	query := dbsqlc.New()
 	queue, err := query.QueueInsert(ctx, ds, &dbsqlc.QueueInsertParams{Name: name})
 	if err != nil {

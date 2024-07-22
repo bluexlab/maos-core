@@ -118,14 +118,16 @@ func (s *APIHandler) ListVectoreStores(ctx context.Context, request api.ListVect
 }
 
 func (s *APIHandler) AdminListApiTokens(ctx context.Context, request api.AdminListApiTokensRequestObject) (api.AdminListApiTokensResponseObject, error) {
-	if !ValidatePermissions(ctx, "AdminListApiTokens") {
+	token := ValidatePermissions(ctx, "AdminListApiTokens")
+	if token == nil {
 		return api.AdminListApiTokens401Response{}, nil
 	}
 	return admin.ListApiTokens(ctx, s.accessor, request)
 }
 
 func (s *APIHandler) AdminCreateApiToken(ctx context.Context, request api.AdminCreateApiTokenRequestObject) (api.AdminCreateApiTokenResponseObject, error) {
-	if !ValidatePermissions(ctx, "AdminCreateApiToken") {
+	token := ValidatePermissions(ctx, "AdminCreateApiToken")
+	if token == nil {
 		return api.AdminCreateApiToken401Response{}, nil
 	}
 	return admin.CreateApiToken(ctx, s.accessor, request)

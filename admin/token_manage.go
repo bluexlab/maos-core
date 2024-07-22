@@ -2,6 +2,9 @@ package admin
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"fmt"
 
 	"github.com/samber/lo"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
@@ -13,6 +16,7 @@ import (
 var (
 	defaultPage     = 1
 	defaultPageSize = 10
+	tokenLength     = 32
 )
 
 func ListApiTokens(ctx context.Context, accessor dbaccess.Accessor, request api.AdminListApiTokensRequestObject) (api.AdminListApiTokensResponseObject, error) {
@@ -45,5 +49,46 @@ func ListApiTokens(ctx context.Context, accessor dbaccess.Accessor, request api.
 }
 
 func CreateApiToken(ctx context.Context, accessor dbaccess.Accessor, request api.AdminCreateApiTokenRequestObject) (api.AdminCreateApiTokenResponseObject, error) {
-	panic("not implemented")
+	params := dbsqlc.ApiTokenInsertParams{
+		ID:          GenerateAPIToken(),
+		AgentID:     request.Body.AgentId,
+		CreatedBy:   request.Body.CreatedBy,
+		Permissions: request.Body.Permissions,
+		ExpireAt:    request.Body.ExpireAt,
+	}
+
+	apiToken, err := accessor.Querier().ApiTokenInsert(ctx, accessor.Source(), &params)
+	if err != nil {
+		return api.AdminCreateApiToken500Response{}, err
+	}
+
+	return api.AdminCreateApiToken201JSONResponse{
+		Id:          apiToken.ID,
+		AgentId:     apiToken.AgentID,
+		CreatedAt:   apiToken.ExpireAt,
+		CreatedBy:   apiToken.CreatedBy,
+		ExpireAt:    apiToken.ExpireAt,
+		Permissions: util.MapSlice(apiToken.Permissions, func(p string) api.Permission { return api.Permission(p) }),
+	}, nil
+}
+
+func GenerateAPIToken() string {
+	// Calculate the number of random bytes needed
+	// We'll generate slightly more than needed to account for base64 encoding
+	numBytes := (tokenLength*3)/4 + 1
+
+	// Generate random bytes
+	randomBytes := make([]byte, numBytes)
+	_, err := rand.Read(randomBytes)
+	if err != nil {
+		panic(fmt.Errorf("failed to generate random bytes: %v", err))
+	}
+
+	// Encode to base64
+	encoded := base64.RawURLEncoding.EncodeToString(randomBytes)
+
+	// Trim to desired length and add prefix
+	token := "ma-" + encoded[:tokenLength]
+
+	return token
 }

@@ -14,22 +14,31 @@ var (
 	}
 )
 
-func ValidatePermissions(ctx context.Context, operationID string) bool {
-	token := ctx.Value(TokenContextKey).(*Token)
+func GetContextToken(ctx context.Context) *Token {
+	tokenValue := ctx.Value(TokenContextKey)
+	if tokenValue == nil {
+		return nil
+	}
+
+	return tokenValue.(*Token)
+}
+
+func ValidatePermissions(ctx context.Context, operationID string) *Token {
+	token := GetContextToken(ctx)
 	if token == nil {
-		return false
+		return nil
 	}
 
 	requiredPermissions, ok := Permissions[operationID]
 	if !ok {
-		return false
+		return nil
 	}
 
 	for _, requiredPermission := range requiredPermissions {
 		if !lo.Contains(token.Permissions, requiredPermission) {
-			return false
+			return nil
 		}
 	}
 
-	return true
+	return token
 }

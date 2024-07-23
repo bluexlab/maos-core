@@ -8,6 +8,7 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/admin"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
+	"gitlab.com/navyx/ai/maos/maos-core/invocation"
 )
 
 func NewAPIHandler(accessor dbaccess.Accessor) *APIHandler {
@@ -29,6 +30,23 @@ func (s *APIHandler) GetCallerConfig(ctx context.Context, request api.GetCallerC
 	return config, nil
 }
 
+// CreateInvocation implements POST /v1/invocations endpoint
+func (s *APIHandler) CreateInvocationAsync(ctx context.Context, request api.CreateInvocationAsyncRequestObject) (api.CreateInvocationAsyncResponseObject, error) {
+	token := ValidatePermissions(ctx, "CreateInvocationAsync")
+	if token == nil {
+		return api.CreateInvocationAsync401Response{}, nil
+	}
+	return invocation.InsertInvocation(ctx, s.accessor, token.AgentId, request)
+}
+
+func (s *APIHandler) CreateInvocationSync(ctx context.Context, request api.CreateInvocationSyncRequestObject) (api.CreateInvocationSyncResponseObject, error) {
+	panic("not implemented")
+}
+
+func (s *APIHandler) GetInvocationById(ctx context.Context, request api.GetInvocationByIdRequestObject) (api.GetInvocationByIdResponseObject, error) {
+	panic("not implemented")
+}
+
 // GetNextInvocation implements the GET /v1/invocation/next endpoint
 func (s *APIHandler) GetNextInvocation(ctx context.Context, request api.GetNextInvocationRequestObject) (api.GetNextInvocationResponseObject, error) {
 	jobId := "job-dummy"
@@ -37,8 +55,8 @@ func (s *APIHandler) GetNextInvocation(ctx context.Context, request api.GetNextI
 		"data": "example_data",
 	}
 	job := api.GetNextInvocation200JSONResponse{
-		Id:      &jobId,
-		Payload: &payload,
+		Id:      jobId,
+		Payload: payload,
 	}
 	return job, nil
 }

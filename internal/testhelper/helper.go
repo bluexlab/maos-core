@@ -66,6 +66,9 @@ var ignoredKnownGoroutineLeaks = []goleak.Option{ //nolint:gochecknoglobals
 
 	// Similar to the above, it may be in a sleep when the program finishes, and there's little we can do about it.
 	goleak.IgnoreAnyFunction("github.com/jackc/pgx/v5/pgxpool.(*Pool).triggerHealthCheck.func1"),
+
+	// This goroutine is started by the glog package and is not stopped by the time the test suite finishes.
+	goleak.IgnoreAnyFunction("github.com/golang/glog.(*loggingT).flushDaemon"),
 }
 
 // WrapTestMain performs common setup and teardown tasks for all packages.
@@ -79,6 +82,8 @@ func WrapTestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
+
+	// logrus.SetOutput(os.Stdout)
 
 	manager, err := testdb.NewManager(ctx)
 	if err != nil {

@@ -24,12 +24,229 @@ paths:
                 $ref: '#/components/schemas/Configuration'
         '401':
           description: Unauthorized
+  /v1/invocations/async:
+    post:
+      summary: Create a new asynchronous invocation job.
+      description: >
+        This endpoint allows an agent user to create a new asynchronous
+        invocation job.
+
+        The job is added to a queue and will be processed by the next available
+        agent.
+
+
+        Key features:
+
+        - Asynchronous execution: The endpoint returns immediately with an
+        invocation ID.
+
+        - Job queuing: The invocation is queued for processing by available
+        agents.
+
+        - Status tracking: The returned invocation ID can be used to query the
+        job's status and results.
+
+
+        Usage flow:
+
+        1. Submit the invocation job using this endpoint.
+
+        2. Receive an immediate response with the invocation ID.
+
+        3. Use the invocation ID to check the job's status and retrieve results
+        by calling:
+           GET /v1/invocations/{id}
+
+        Note:
+
+        - This endpoint is designed for non-blocking operations where immediate
+        results are not required.
+
+        - The status and results of the invocation can be queried using the
+        /v1/invocations/{id} endpoint,
+          where {id} is the invocation ID returned by this POST request.
+      operationId: createInvocationAsync
+      tags:
+        - Invocation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agent:
+                  type: string
+                  description: The name of the agent to process the invocation job
+                meta:
+                  type: object
+                  description: The metadata of the invocation job
+                payload:
+                  type: object
+                  description: The payload for the invocation job
+              required:
+                - agent
+                - meta
+                - payload
+      responses:
+        '201':
+          description: Async invocation created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    description: The unique identifier of the created invocation job
+                required:
+                  - id
+              example:
+                id: inv-16888
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          description: Unauthorized
+        '500':
+          $ref: '#/components/responses/500'
+  /v1/invocations/sync:
+    post:
+      summary: Create a new synchronous invocation job
+      description: >
+        This endpoint allows an agent user to create and execute a new
+        invocation job synchronously.
+
+        The request will wait for the job to complete before returning the
+        result.
+
+
+        Key features:
+
+        - Synchronous execution: The endpoint waits for the job to finish before
+        responding.
+
+        - Immediate results: The response includes the complete result of the
+        invocation.
+
+        - Blocking operation: This call may take some time to complete,
+        depending on the job's complexity.
+
+
+        Usage flow:
+
+        1. Submit the invocation job using this endpoint.
+
+        2. The agent retrieves and processes the job.
+
+        3. Once the job is completed, the endpoint returns with the full result.
+
+
+        Response includes:
+
+        - Invocation ID
+
+        - Job status (which should be 'completed' unless an error occurred)
+
+        - Full result data or error details
+
+
+        Note: This endpoint is suitable for operations where immediate results
+        are required and
+
+        the client can wait for the job to complete. For long-running tasks,
+        consider using
+
+        the asynchronous version of this endpoint to avoid timeout issues.
+
+
+        Caution: Depending on the nature of the invocation job, this endpoint
+        may have
+
+        longer response times. Set client timeouts accordingly.
+      operationId: createInvocationSync
+      tags:
+        - Invocation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agent:
+                  type: string
+                  description: The name of the agent to process the invocation job
+                meta:
+                  type: object
+                  description: The metadata of the invocation job
+                payload:
+                  type: object
+                  description: The payload for the invocation job
+              required:
+                - agent
+                - meta
+                - payload
+      responses:
+        '201':
+          description: Async invocation created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    description: The unique identifier of the created invocation job
+                required:
+                  - id
+              example:
+                id: inv-16888
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          description: Unauthorized
+        '500':
+          $ref: '#/components/responses/500'
   /v1/invocations/next:
     get:
-      summary: Get next invocation job
+      summary: Retrieve the next available invocation job for processing
+      description: >
+        This endpoint is used by agents to fetch the next available invocation
+        job.
+
+        It allows agents to retrieve jobs for processing.
+
+
+        Key features:
+
+        - State transition: Upon successful retrieval, the job state changes
+        from 'available' to 'running'.
+
+        - Exclusive access: Once a job is retrieved, it's locked for the
+        assigned agent to prevent duplicate processing.
+
+
+        Note:
+
+        - If no jobs are available, a 404 status is returned.
+
+        - Agents should implement appropriate error handling and retry
+        mechanisms.
       operationId: getNextInvocation
       tags:
         - Invocation
+      parameters:
+        - in: query
+          name: wait
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 60
+            default: 10
+          description: >-
+            Maximum time (in seconds) to wait for a job if none are immediately
+            available. Default is 10s.
       responses:
         '200':
           description: Successful response
@@ -41,6 +258,82 @@ paths:
           description: Unauthorized
         '404':
           description: No invocation job available
+        '500':
+          description: Internal Server Error
+  /v1/invocations/{id}:
+    get:
+      summary: Get the status and result of an invocation job by ID
+      description: >
+        Retrieves the current status and result (if available) of an invocation
+        job.
+
+        This endpoint is used by the caller to check the progress of an
+        asynchronous invocation.
+
+
+        Possible invocation states:
+
+        - available: The job is queued and waiting to be processed.
+
+        - running: The job is currently being executed.
+
+        - completed: The job has finished successfully.
+
+        - cancelled: The job was cancelled before completion.
+
+        - discarded: The job was discarded due to an error or system issue.
+      operationId: getInvocationById
+      tags:
+        - Invocation
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: The unique identifier of the invocation job.
+        - in: query
+          name: wait
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 60
+          description: >-
+            The maximum time (in seconds) to wait for job completion. If not
+            specified, returns immediately.
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvocationResult'
+              example:
+                id: inv_123456789
+                state: completed
+                attempted_at: 1737456000
+                finalized_at: 1737466000
+                result:
+                  key: value
+        '202':
+          description: Invocation is still in progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvocationJob'
+              example:
+                id: inv_123456789
+                state: running
+                attempted_at: 1737456000
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Invocation job not found
+        '500':
+          $ref: '#/components/responses/500'
   /v1/invocations/{invoke_id}/response:
     post:
       summary: Return invocation result
@@ -70,6 +363,8 @@ paths:
           description: Unauthorized
         '404':
           description: Invocation job not found
+        '500':
+          description: Internal Server Error
   /v1/invocations/{invoke_id}/error:
     post:
       summary: Return invocation error
@@ -99,6 +394,8 @@ paths:
           description: Unauthorized
         '404':
           description: Invocation job not found
+        '500':
+          description: Internal Server Error
   /v1/completion/models:
     get:
       summary: Get model list.
@@ -790,15 +1087,70 @@ components:
       additionalProperties:
         type: string
       description: A key-value structure representing the caller's configuration
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: The error message
     InvocationJob:
       type: object
       properties:
         id:
           type: string
           description: The unique identifier for the invocation job
+        meta:
+          type: object
+          description: The metadata of the invocation job
         payload:
           type: object
           description: The payload for the invocation job
+      required:
+        - id
+        - meta
+        - payload
+    InvocationState:
+      type: string
+      enum:
+        - available
+        - running
+        - completed
+        - cancelled
+        - discarded
+      description: |
+        The state of the invocation job
+        - available: The job is queued and waiting to be processed.
+        - running: The job is currently being executed.
+        - completed: The job has finished successfully.
+        - cancelled: The job was cancelled before completion.
+        - discarded: The job was discarded due to an error or system issue.
+    InvocationResult:
+      type: object
+      properties:
+        id:
+          type: string
+          description: The unique identifier for the invocation job
+        state:
+          $ref: '#/components/schemas/InvocationState'
+        attempted_at:
+          type: integer
+          format: int64
+          description: The timestamp when the job was retrieved and attempted by agent
+        finalized_at:
+          type: integer
+          format: int64
+          description: The timestamp when the job was finalized
+        result:
+          type: object
+          description: The result of the invocation job
+        errors:
+          type: object
+          description: The errors of the invocation job
+      required:
+        - id
+        - state
     MessageContent:
       oneOf:
         - type: object
@@ -1056,6 +1408,19 @@ components:
         - name
       example:
         name: agent-16888
+  responses:
+    '400':
+      description: Bad Request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    '500':
+      description: Internal Server Error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
 tags:
   - name: Configuration
     description: Operations related to caller configuration

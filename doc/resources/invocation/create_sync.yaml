@@ -1,0 +1,72 @@
+post:
+  summary: Create a new synchronous invocation job
+  description: |
+    This endpoint allows an agent user to create and execute a new invocation job synchronously.
+    The request will wait for the job to complete before returning the result.
+
+    Key features:
+    - Synchronous execution: The endpoint waits for the job to finish before responding.
+    - Immediate results: The response includes the complete result of the invocation.
+    - Blocking operation: This call may take some time to complete, depending on the job's complexity.
+
+    Usage flow:
+    1. Submit the invocation job using this endpoint.
+    2. The agent retrieves and processes the job.
+    3. Once the job is completed, the endpoint returns with the full result.
+
+    Response includes:
+    - Invocation ID
+    - Job status (which should be 'completed' unless an error occurred)
+    - Full result data or error details
+
+    Note: This endpoint is suitable for operations where immediate results are required and
+    the client can wait for the job to complete. For long-running tasks, consider using
+    the asynchronous version of this endpoint to avoid timeout issues.
+
+    Caution: Depending on the nature of the invocation job, this endpoint may have
+    longer response times. Set client timeouts accordingly.
+
+  operationId: createInvocationSync
+  tags:
+    - Invocation
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            agent:
+              type: string
+              description: The name of the agent to process the invocation job
+            meta:
+              type: object
+              description: The metadata of the invocation job
+            payload:
+              type: object
+              description: The payload for the invocation job
+          required:
+            - agent
+            - meta
+            - payload
+  responses:
+    '201':
+      description: Async invocation created
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              id:
+                type: string
+                description: The unique identifier of the created invocation job
+            required:
+              - id
+          example:
+            id: 'inv-16888'
+    '400':
+      $ref : "../../responses/400.yaml"
+    '401':
+      description: Unauthorized
+    '500':
+      $ref : "../../responses/500.yaml"

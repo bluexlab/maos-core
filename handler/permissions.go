@@ -4,28 +4,31 @@ import (
 	"context"
 
 	"github.com/samber/lo"
+	"gitlab.com/navyx/ai/maos/maos-core/middleware"
 )
 
 var (
 	// Permissions is a map of operation id to the permissions they require.
 	Permissions = map[string][]string{
-		"AdminListAgents":     {"admin"},
-		"AdminCreateAgent":    {"admin"},
-		"AdminListApiTokens":  {"admin"},
-		"AdminCreateApiToken": {"admin"},
+		"CreateInvocationAsync": {"create:invocation"},
+		"CreateInvocationSync":  {"create:invocation"},
+		"AdminListAgents":       {"admin"},
+		"AdminCreateAgent":      {"admin"},
+		"AdminListApiTokens":    {"admin"},
+		"AdminCreateApiToken":   {"admin"},
 	}
 )
 
-func GetContextToken(ctx context.Context) *Token {
-	tokenValue := ctx.Value(TokenContextKey)
+func GetContextToken(ctx context.Context) *middleware.Token {
+	tokenValue := ctx.Value(middleware.TokenContextKey)
 	if tokenValue == nil {
 		return nil
 	}
 
-	return tokenValue.(*Token)
+	return tokenValue.(*middleware.Token)
 }
 
-func ValidatePermissions(ctx context.Context, operationID string) *Token {
+func ValidatePermissions(ctx context.Context, operationID string) *middleware.Token {
 	token := GetContextToken(ctx)
 	if token == nil {
 		return nil

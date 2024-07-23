@@ -15,8 +15,17 @@ paths:
   /v1/config:
     $ref: "./resources/config.yaml"
 
+  /v1/invocations/async:
+    $ref: "./resources/invocation/create_async.yaml"
+
+  /v1/invocations/sync:
+    $ref: "./resources/invocation/create_sync.yaml"
+
   /v1/invocations/next:
     $ref: "./resources/invocation/next.yaml"
+
+  /v1/invocations/{id}:
+    $ref: "./resources/invocation/get.yaml"
 
   /v1/invocations/{invoke_id}/response:
     $ref: "./resources/invocation/response.yaml"

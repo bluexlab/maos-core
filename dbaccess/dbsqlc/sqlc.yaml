@@ -7,6 +7,7 @@ sql:
       - queue.sql
       - agent.sql
       - api_token.sql
+      - invocation.sql
     gen:
       go:
         package: "dbsqlc"

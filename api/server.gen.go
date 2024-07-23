@@ -62,6 +62,15 @@ const (
 	L2      CollectionIndexMetricType = "L2"
 )
 
+// Defines values for InvocationState.
+const (
+	Available InvocationState = "available"
+	Cancelled InvocationState = "cancelled"
+	Completed InvocationState = "completed"
+	Discarded InvocationState = "discarded"
+	Running   InvocationState = "running"
+)
+
 // Defines values for MessageRole.
 const (
 	Assistant MessageRole = "assistant"
@@ -164,14 +173,57 @@ type Embedding struct {
 	Index *int `json:"index,omitempty"`
 }
 
+// Error defines model for Error.
+type Error struct {
+	// Error The error message
+	Error string `json:"error"`
+}
+
 // InvocationJob defines model for InvocationJob.
 type InvocationJob struct {
 	// Id The unique identifier for the invocation job
-	Id *string `json:"id,omitempty"`
+	Id string `json:"id"`
+
+	// Meta The metadata of the invocation job
+	Meta map[string]interface{} `json:"meta"`
 
 	// Payload The payload for the invocation job
-	Payload *map[string]interface{} `json:"payload,omitempty"`
+	Payload map[string]interface{} `json:"payload"`
 }
+
+// InvocationResult defines model for InvocationResult.
+type InvocationResult struct {
+	// AttemptedAt The timestamp when the job was retrieved and attempted by agent
+	AttemptedAt *int64 `json:"attempted_at,omitempty"`
+
+	// Errors The errors of the invocation job
+	Errors *map[string]interface{} `json:"errors,omitempty"`
+
+	// FinalizedAt The timestamp when the job was finalized
+	FinalizedAt *int64 `json:"finalized_at,omitempty"`
+
+	// Id The unique identifier for the invocation job
+	Id string `json:"id"`
+
+	// Result The result of the invocation job
+	Result *map[string]interface{} `json:"result,omitempty"`
+
+	// State The state of the invocation job
+	// - available: The job is queued and waiting to be processed.
+	// - running: The job is currently being executed.
+	// - completed: The job has finished successfully.
+	// - cancelled: The job was cancelled before completion.
+	// - discarded: The job was discarded due to an error or system issue.
+	State InvocationState `json:"state"`
+}
+
+// InvocationState The state of the invocation job
+// - available: The job is queued and waiting to be processed.
+// - running: The job is currently being executed.
+// - completed: The job has finished successfully.
+// - cancelled: The job was cancelled before completion.
+// - discarded: The job was discarded due to an error or system issue.
+type InvocationState string
 
 // Message defines model for Message.
 type Message struct {
@@ -218,6 +270,12 @@ type RerankResult struct {
 	// Text The document.
 	Text *string `json:"text,omitempty"`
 }
+
+// N400 defines model for 400.
+type N400 = Error
+
+// N500 defines model for 500.
+type N500 = Error
 
 // AdminListAgentsParams defines parameters for AdminListAgents.
 type AdminListAgentsParams struct {
@@ -266,6 +324,42 @@ type CreateEmbeddingJSONBody struct {
 
 	// ModelId The model id.
 	ModelId string `json:"model_id"`
+}
+
+// CreateInvocationAsyncJSONBody defines parameters for CreateInvocationAsync.
+type CreateInvocationAsyncJSONBody struct {
+	// Agent The name of the agent to process the invocation job
+	Agent string `json:"agent"`
+
+	// Meta The metadata of the invocation job
+	Meta map[string]interface{} `json:"meta"`
+
+	// Payload The payload for the invocation job
+	Payload map[string]interface{} `json:"payload"`
+}
+
+// GetNextInvocationParams defines parameters for GetNextInvocation.
+type GetNextInvocationParams struct {
+	// Wait Maximum time (in seconds) to wait for a job if none are immediately available. Default is 10s.
+	Wait *int `form:"wait,omitempty" json:"wait,omitempty"`
+}
+
+// CreateInvocationSyncJSONBody defines parameters for CreateInvocationSync.
+type CreateInvocationSyncJSONBody struct {
+	// Agent The name of the agent to process the invocation job
+	Agent string `json:"agent"`
+
+	// Meta The metadata of the invocation job
+	Meta map[string]interface{} `json:"meta"`
+
+	// Payload The payload for the invocation job
+	Payload map[string]interface{} `json:"payload"`
+}
+
+// GetInvocationByIdParams defines parameters for GetInvocationById.
+type GetInvocationByIdParams struct {
+	// Wait The maximum time (in seconds) to wait for job completion. If not specified, returns immediately.
+	Wait *int `form:"wait,omitempty" json:"wait,omitempty"`
 }
 
 // ReturnInvocationErrorJSONBody defines parameters for ReturnInvocationError.
@@ -327,6 +421,12 @@ type CreateCompletionJSONRequestBody CreateCompletionJSONBody
 
 // CreateEmbeddingJSONRequestBody defines body for CreateEmbedding for application/json ContentType.
 type CreateEmbeddingJSONRequestBody CreateEmbeddingJSONBody
+
+// CreateInvocationAsyncJSONRequestBody defines body for CreateInvocationAsync for application/json ContentType.
+type CreateInvocationAsyncJSONRequestBody CreateInvocationAsyncJSONBody
+
+// CreateInvocationSyncJSONRequestBody defines body for CreateInvocationSync for application/json ContentType.
+type CreateInvocationSyncJSONRequestBody CreateInvocationSyncJSONBody
 
 // ReturnInvocationErrorJSONRequestBody defines body for ReturnInvocationError for application/json ContentType.
 type ReturnInvocationErrorJSONRequestBody ReturnInvocationErrorJSONBody
@@ -460,9 +560,18 @@ type ServerInterface interface {
 	// List embedding models.
 	// (GET /v1/embedding/models)
 	ListEmbeddingModels(w http.ResponseWriter, r *http.Request)
-	// Get next invocation job
+	// Create a new asynchronous invocation job.
+	// (POST /v1/invocations/async)
+	CreateInvocationAsync(w http.ResponseWriter, r *http.Request)
+	// Retrieve the next available invocation job for processing
 	// (GET /v1/invocations/next)
-	GetNextInvocation(w http.ResponseWriter, r *http.Request)
+	GetNextInvocation(w http.ResponseWriter, r *http.Request, params GetNextInvocationParams)
+	// Create a new synchronous invocation job
+	// (POST /v1/invocations/sync)
+	CreateInvocationSync(w http.ResponseWriter, r *http.Request)
+	// Get the status and result of an invocation job by ID
+	// (GET /v1/invocations/{id})
+	GetInvocationById(w http.ResponseWriter, r *http.Request, id string, params GetInvocationByIdParams)
 	// Return invocation error
 	// (POST /v1/invocations/{invoke_id}/error)
 	ReturnInvocationError(w http.ResponseWriter, r *http.Request, invokeId string)
@@ -738,8 +847,8 @@ func (siw *ServerInterfaceWrapper) ListEmbeddingModels(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
-// GetNextInvocation operation middleware
-func (siw *ServerInterfaceWrapper) GetNextInvocation(w http.ResponseWriter, r *http.Request) {
+// CreateInvocationAsync operation middleware
+func (siw *ServerInterfaceWrapper) CreateInvocationAsync(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
@@ -747,7 +856,99 @@ func (siw *ServerInterfaceWrapper) GetNextInvocation(w http.ResponseWriter, r *h
 	ctx = context.WithValue(ctx, TraceScopes, []string{})
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetNextInvocation(w, r)
+		siw.Handler.CreateInvocationAsync(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// GetNextInvocation operation middleware
+func (siw *ServerInterfaceWrapper) GetNextInvocation(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var err error
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetNextInvocationParams
+
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "wait", r.URL.Query(), &params.Wait)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetNextInvocation(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// CreateInvocationSync operation middleware
+func (siw *ServerInterfaceWrapper) CreateInvocationSync(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateInvocationSync(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// GetInvocationById operation middleware
+func (siw *ServerInterfaceWrapper) GetInvocationById(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetInvocationByIdParams
+
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "wait", r.URL.Query(), &params.Wait)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetInvocationById(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1163,7 +1364,13 @@ func HandlerWithOptions(si ServerInterface, options GorillaServerOptions) http.H
 
 	r.HandleFunc(options.BaseURL+"/v1/embedding/models", wrapper.ListEmbeddingModels).Methods("GET")
 
+	r.HandleFunc(options.BaseURL+"/v1/invocations/async", wrapper.CreateInvocationAsync).Methods("POST")
+
 	r.HandleFunc(options.BaseURL+"/v1/invocations/next", wrapper.GetNextInvocation).Methods("GET")
+
+	r.HandleFunc(options.BaseURL+"/v1/invocations/sync", wrapper.CreateInvocationSync).Methods("POST")
+
+	r.HandleFunc(options.BaseURL+"/v1/invocations/{id}", wrapper.GetInvocationById).Methods("GET")
 
 	r.HandleFunc(options.BaseURL+"/v1/invocations/{invoke_id}/error", wrapper.ReturnInvocationError).Methods("POST")
 
@@ -1185,6 +1392,10 @@ func HandlerWithOptions(si ServerInterface, options GorillaServerOptions) http.H
 
 	return r
 }
+
+type N400JSONResponse Error
+
+type N500JSONResponse Error
 
 type AdminListAgentsRequestObject struct {
 	Params AdminListAgentsParams
@@ -1469,7 +1680,54 @@ func (response ListEmbeddingModels401Response) VisitListEmbeddingModelsResponse(
 	return nil
 }
 
+type CreateInvocationAsyncRequestObject struct {
+	Body *CreateInvocationAsyncJSONRequestBody
+}
+
+type CreateInvocationAsyncResponseObject interface {
+	VisitCreateInvocationAsyncResponse(w http.ResponseWriter) error
+}
+
+type CreateInvocationAsync201JSONResponse struct {
+	// Id The unique identifier of the created invocation job
+	Id string `json:"id"`
+}
+
+func (response CreateInvocationAsync201JSONResponse) VisitCreateInvocationAsyncResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateInvocationAsync400JSONResponse struct{ N400JSONResponse }
+
+func (response CreateInvocationAsync400JSONResponse) VisitCreateInvocationAsyncResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateInvocationAsync401Response struct {
+}
+
+func (response CreateInvocationAsync401Response) VisitCreateInvocationAsyncResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type CreateInvocationAsync500JSONResponse struct{ N500JSONResponse }
+
+func (response CreateInvocationAsync500JSONResponse) VisitCreateInvocationAsyncResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetNextInvocationRequestObject struct {
+	Params GetNextInvocationParams
 }
 
 type GetNextInvocationResponseObject interface {
@@ -1499,6 +1757,121 @@ type GetNextInvocation404Response struct {
 func (response GetNextInvocation404Response) VisitGetNextInvocationResponse(w http.ResponseWriter) error {
 	w.WriteHeader(404)
 	return nil
+}
+
+type GetNextInvocation500Response struct {
+}
+
+func (response GetNextInvocation500Response) VisitGetNextInvocationResponse(w http.ResponseWriter) error {
+	w.WriteHeader(500)
+	return nil
+}
+
+type CreateInvocationSyncRequestObject struct {
+	Body *CreateInvocationSyncJSONRequestBody
+}
+
+type CreateInvocationSyncResponseObject interface {
+	VisitCreateInvocationSyncResponse(w http.ResponseWriter) error
+}
+
+type CreateInvocationSync201JSONResponse struct {
+	// Id The unique identifier of the created invocation job
+	Id string `json:"id"`
+}
+
+func (response CreateInvocationSync201JSONResponse) VisitCreateInvocationSyncResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateInvocationSync400JSONResponse struct{ N400JSONResponse }
+
+func (response CreateInvocationSync400JSONResponse) VisitCreateInvocationSyncResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateInvocationSync401Response struct {
+}
+
+func (response CreateInvocationSync401Response) VisitCreateInvocationSyncResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type CreateInvocationSync500JSONResponse struct{ N500JSONResponse }
+
+func (response CreateInvocationSync500JSONResponse) VisitCreateInvocationSyncResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetInvocationByIdRequestObject struct {
+	Id     string `json:"id"`
+	Params GetInvocationByIdParams
+}
+
+type GetInvocationByIdResponseObject interface {
+	VisitGetInvocationByIdResponse(w http.ResponseWriter) error
+}
+
+type GetInvocationById200JSONResponse InvocationResult
+
+func (response GetInvocationById200JSONResponse) VisitGetInvocationByIdResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetInvocationById202JSONResponse InvocationJob
+
+func (response GetInvocationById202JSONResponse) VisitGetInvocationByIdResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetInvocationById400JSONResponse struct{ N400JSONResponse }
+
+func (response GetInvocationById400JSONResponse) VisitGetInvocationByIdResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetInvocationById401Response struct {
+}
+
+func (response GetInvocationById401Response) VisitGetInvocationByIdResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type GetInvocationById404Response struct {
+}
+
+func (response GetInvocationById404Response) VisitGetInvocationByIdResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type GetInvocationById500JSONResponse struct{ N500JSONResponse }
+
+func (response GetInvocationById500JSONResponse) VisitGetInvocationByIdResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type ReturnInvocationErrorRequestObject struct {
@@ -1534,6 +1907,14 @@ func (response ReturnInvocationError404Response) VisitReturnInvocationErrorRespo
 	return nil
 }
 
+type ReturnInvocationError500Response struct {
+}
+
+func (response ReturnInvocationError500Response) VisitReturnInvocationErrorResponse(w http.ResponseWriter) error {
+	w.WriteHeader(500)
+	return nil
+}
+
 type ReturnInvocationResponseRequestObject struct {
 	InvokeId string `json:"invoke_id"`
 	Body     *ReturnInvocationResponseJSONRequestBody
@@ -1564,6 +1945,14 @@ type ReturnInvocationResponse404Response struct {
 
 func (response ReturnInvocationResponse404Response) VisitReturnInvocationResponseResponse(w http.ResponseWriter) error {
 	w.WriteHeader(404)
+	return nil
+}
+
+type ReturnInvocationResponse500Response struct {
+}
+
+func (response ReturnInvocationResponse500Response) VisitReturnInvocationResponseResponse(w http.ResponseWriter) error {
+	w.WriteHeader(500)
 	return nil
 }
 
@@ -1788,9 +2177,18 @@ type StrictServerInterface interface {
 	// List embedding models.
 	// (GET /v1/embedding/models)
 	ListEmbeddingModels(ctx context.Context, request ListEmbeddingModelsRequestObject) (ListEmbeddingModelsResponseObject, error)
-	// Get next invocation job
+	// Create a new asynchronous invocation job.
+	// (POST /v1/invocations/async)
+	CreateInvocationAsync(ctx context.Context, request CreateInvocationAsyncRequestObject) (CreateInvocationAsyncResponseObject, error)
+	// Retrieve the next available invocation job for processing
 	// (GET /v1/invocations/next)
 	GetNextInvocation(ctx context.Context, request GetNextInvocationRequestObject) (GetNextInvocationResponseObject, error)
+	// Create a new synchronous invocation job
+	// (POST /v1/invocations/sync)
+	CreateInvocationSync(ctx context.Context, request CreateInvocationSyncRequestObject) (CreateInvocationSyncResponseObject, error)
+	// Get the status and result of an invocation job by ID
+	// (GET /v1/invocations/{id})
+	GetInvocationById(ctx context.Context, request GetInvocationByIdRequestObject) (GetInvocationByIdResponseObject, error)
 	// Return invocation error
 	// (POST /v1/invocations/{invoke_id}/error)
 	ReturnInvocationError(ctx context.Context, request ReturnInvocationErrorRequestObject) (ReturnInvocationErrorResponseObject, error)
@@ -2097,9 +2495,42 @@ func (sh *strictHandler) ListEmbeddingModels(w http.ResponseWriter, r *http.Requ
 	}
 }
 
+// CreateInvocationAsync operation middleware
+func (sh *strictHandler) CreateInvocationAsync(w http.ResponseWriter, r *http.Request) {
+	var request CreateInvocationAsyncRequestObject
+
+	var body CreateInvocationAsyncJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateInvocationAsync(ctx, request.(CreateInvocationAsyncRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateInvocationAsync")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateInvocationAsyncResponseObject); ok {
+		if err := validResponse.VisitCreateInvocationAsyncResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetNextInvocation operation middleware
-func (sh *strictHandler) GetNextInvocation(w http.ResponseWriter, r *http.Request) {
+func (sh *strictHandler) GetNextInvocation(w http.ResponseWriter, r *http.Request, params GetNextInvocationParams) {
 	var request GetNextInvocationRequestObject
+
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetNextInvocation(ctx, request.(GetNextInvocationRequestObject))
@@ -2114,6 +2545,64 @@ func (sh *strictHandler) GetNextInvocation(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetNextInvocationResponseObject); ok {
 		if err := validResponse.VisitGetNextInvocationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateInvocationSync operation middleware
+func (sh *strictHandler) CreateInvocationSync(w http.ResponseWriter, r *http.Request) {
+	var request CreateInvocationSyncRequestObject
+
+	var body CreateInvocationSyncJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateInvocationSync(ctx, request.(CreateInvocationSyncRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateInvocationSync")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateInvocationSyncResponseObject); ok {
+		if err := validResponse.VisitCreateInvocationSyncResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetInvocationById operation middleware
+func (sh *strictHandler) GetInvocationById(w http.ResponseWriter, r *http.Request, id string, params GetInvocationByIdParams) {
+	var request GetInvocationByIdRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetInvocationById(ctx, request.(GetInvocationByIdRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetInvocationById")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetInvocationByIdResponseObject); ok {
+		if err := validResponse.VisitGetInvocationByIdResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

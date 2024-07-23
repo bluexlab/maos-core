@@ -1,0 +1,14 @@
+type: string
+enum:
+  - available
+  - running
+  - completed
+  - cancelled
+  - discarded
+description: |
+  The state of the invocation job
+  - available: The job is queued and waiting to be processed.
+  - running: The job is currently being executed.
+  - completed: The job has finished successfully.
+  - cancelled: The job was cancelled before completion.
+  - discarded: The job was discarded due to an error or system issue.

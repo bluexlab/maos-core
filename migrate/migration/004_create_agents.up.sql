@@ -7,4 +7,4 @@ CREATE TABLE agents(
   updated_at bigint
 );
 
-CREATE UNIQUE INDEX agents_name ON agents USING btree(name);
+CREATE UNIQUE INDEX agents_name ON agents USING btree(name, queue_id);

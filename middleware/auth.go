@@ -1,4 +1,4 @@
-package handler
+package middleware
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
 )
 
@@ -22,9 +23,13 @@ type Token struct {
 // TokenFetcher is a function that retrieves a token from the database.
 // It returns nil without an error if the token is not found.
 type TokenFetcher func(ctx context.Context, apiToken string) (*Token, error)
+type CacheCloser func()
 
-func NewBearerAuthMiddleware(fetcher TokenFetcher, cacheTtl time.Duration) api.StrictMiddlewareFunc {
+func NewBearerAuthMiddleware(fetcher TokenFetcher, cacheTtl time.Duration) (api.StrictMiddlewareFunc, CacheCloser) {
 	tokenCache := NewApiTokenCache(fetcher, cacheTtl)
+	closer := func() {
+		tokenCache.cache.Close()
+	}
 
 	return func(f api.StrictHandlerFunc, operationID string) api.StrictHandlerFunc {
 		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, args interface{}) (interface{}, error) {
@@ -40,6 +45,8 @@ func NewBearerAuthMiddleware(fetcher TokenFetcher, cacheTtl time.Duration) api.S
 				return nil, nil
 			}
 
+			logrus.Debugf("Authorization token: %s", auth[:6])
+
 			tokenString := auth[len(prefix):]
 			token := tokenCache.GetToken(ctx, tokenString)
 			if token == nil {
@@ -52,5 +59,5 @@ func NewBearerAuthMiddleware(fetcher TokenFetcher, cacheTtl time.Duration) api.S
 			// Token is valid, call the next handler
 			return f(newContext, w, r, args)
 		}
-	}
+	}, closer
 }

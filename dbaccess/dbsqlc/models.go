@@ -75,15 +75,17 @@ type ApiToken struct {
 type Invocation struct {
 	ID          int64
 	State       InvocationState
+	QueueID     int64
+	AttemptedAt *int64
 	CreatedAt   int64
 	FinalizedAt *int64
 	Priority    int16
-	Name        string
-	Args        []byte
-	Errors      [][]byte
+	Payload     []byte
+	Errors      []byte
+	Result      []byte
 	Metadata    []byte
-	QueueID     int64
 	Tags        []string
+	AttemptedBy []int64
 }
 
 type Migration struct {

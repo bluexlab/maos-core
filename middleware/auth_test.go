@@ -1,4 +1,4 @@
-package handler
+package middleware
 
 import (
 	"context"
@@ -29,11 +29,12 @@ func TestNewBearerAuthMiddleware(t *testing.T) {
 	mockFetcher := new(MockAuthTokenFetcher)
 	cacheTTL := 5 * time.Minute
 
-	middleware := NewBearerAuthMiddleware(mockFetcher.FetchToken, cacheTTL)
-
 	t.Run("Missing Authorization Header", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/test", nil)
 		w := httptest.NewRecorder()
+
+		middleware, closer := NewBearerAuthMiddleware(mockFetcher.FetchToken, cacheTTL)
+		defer closer()
 
 		handler := middleware(func(ctx context.Context, w http.ResponseWriter, r *http.Request, args interface{}) (interface{}, error) {
 			return nil, nil
@@ -51,6 +52,9 @@ func TestNewBearerAuthMiddleware(t *testing.T) {
 		req := httptest.NewRequest("GET", "/test", nil)
 		req.Header.Set("Authorization", "Invalid Token")
 		w := httptest.NewRecorder()
+
+		middleware, closer := NewBearerAuthMiddleware(mockFetcher.FetchToken, cacheTTL)
+		defer closer()
 
 		handler := middleware(func(ctx context.Context, w http.ResponseWriter, r *http.Request, args interface{}) (interface{}, error) {
 			return nil, nil
@@ -70,6 +74,9 @@ func TestNewBearerAuthMiddleware(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		mockFetcher.On("FetchToken", mock.Anything, "invalidtoken").Return(nil, nil)
+
+		middleware, closer := NewBearerAuthMiddleware(mockFetcher.FetchToken, cacheTTL)
+		defer closer()
 
 		handler := middleware(func(ctx context.Context, w http.ResponseWriter, r *http.Request, args interface{}) (interface{}, error) {
 			return nil, nil
@@ -97,6 +104,9 @@ func TestNewBearerAuthMiddleware(t *testing.T) {
 		}
 
 		mockFetcher.On("FetchToken", mock.Anything, "validtoken").Return(validToken, nil)
+
+		middleware, closer := NewBearerAuthMiddleware(mockFetcher.FetchToken, cacheTTL)
+		defer closer()
 
 		var capturedToken *Token
 		handler := middleware(func(ctx context.Context, w http.ResponseWriter, r *http.Request, args interface{}) (interface{}, error) {

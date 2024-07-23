@@ -63,7 +63,7 @@ get:
     '401':
       description: Unauthorized
     '500':
-      description: Server Internal Error
+      $ref : "../../responses/500.yaml"
 
 post:
   summary: Create a new API token
@@ -94,7 +94,9 @@ post:
             CreatedBy: "system"
             CreatedAt: 1641168000
             Permissions: ["config:read", "invocation:read"]
+    '400':
+      $ref : "../../responses/400.yaml"
     '401':
       description: Unauthorized
     '500':
-      description: Server Internal Error
+      $ref : "../../responses/500.yaml"

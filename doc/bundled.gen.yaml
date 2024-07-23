@@ -948,7 +948,7 @@ paths:
         '401':
           description: Unauthorized
         '500':
-          description: Server Internal Error
+          $ref: '#/components/responses/500'
     post:
       summary: Create a new API token
       operationId: adminCreateApiToken
@@ -982,10 +982,12 @@ paths:
                 Permissions:
                   - config:read
                   - invocation:read
+        '400':
+          $ref: '#/components/responses/400'
         '401':
           description: Unauthorized
         '500':
-          description: Server Internal Error
+          $ref: '#/components/responses/500'
   /v1/admin/agents:
     get:
       summary: List Agents

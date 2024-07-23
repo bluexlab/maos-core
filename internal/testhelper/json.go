@@ -19,3 +19,13 @@ func SerializeToJson(t *testing.T, value interface{}) string {
 
 	return string(jsonBytes)
 }
+
+func JsonToMap(t *testing.T, value string) map[string]interface{} {
+	t.Helper()
+
+	var result map[string]interface{}
+	err := json.Unmarshal([]byte(value), &result)
+	require.NoError(t, err)
+
+	return result
+}

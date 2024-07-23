@@ -121,9 +121,12 @@ func TestListApiTokensWithDB(t *testing.T) {
 
 		response, err := ListApiTokens(ctx, accessor, request)
 
-		assert.Error(t, err)
-		assert.Equal(t, "closed pool", err.Error())
-		assert.IsType(t, api.AdminListApiTokens500Response{}, response)
+		assert.NoError(t, err)
+		assert.EqualValues(t,
+			api.AdminListApiTokens500JSONResponse{
+				N500JSONResponse: api.N500JSONResponse{Error: "Cannot list API tokens: closed pool"},
+			},
+			response)
 	})
 }
 
@@ -195,8 +198,11 @@ func TestCreateApiTokenWithDB(t *testing.T) {
 		dbPool.Close()
 		response, err := CreateApiToken(ctx, accessor, request)
 
-		assert.Error(t, err)
-		assert.Equal(t, "closed pool", err.Error())
-		assert.IsType(t, api.AdminCreateApiToken500Response{}, response)
+		assert.NoError(t, err)
+		assert.EqualValues(t,
+			api.AdminCreateApiToken500JSONResponse{
+				N500JSONResponse: api.N500JSONResponse{Error: "Cannot insert API tokens: closed pool"},
+			},
+			response)
 	})
 }

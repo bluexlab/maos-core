@@ -45,7 +45,7 @@ func TestNewBearerAuthMiddleware(t *testing.T) {
 		assert.Nil(t, result)
 		assert.Nil(t, err)
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
-		assert.Equal(t, `{"error":"missing authorization header"}`, strings.TrimSpace(w.Body.String()))
+		assert.JSONEq(t, `{"error":"Missing authorization header"}`, w.Body.String())
 	})
 
 	t.Run("Invalid Authorization Header", func(t *testing.T) {
@@ -65,7 +65,7 @@ func TestNewBearerAuthMiddleware(t *testing.T) {
 		assert.Nil(t, result)
 		assert.Nil(t, err)
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
-		assert.Equal(t, `{"error":"invalid authorization header"}`, strings.TrimSpace(w.Body.String()))
+		assert.Equal(t, `{"error":"Invalid authorization header"}`, strings.TrimSpace(w.Body.String()))
 	})
 
 	t.Run("Invalid Token", func(t *testing.T) {
@@ -87,7 +87,7 @@ func TestNewBearerAuthMiddleware(t *testing.T) {
 		assert.Nil(t, result)
 		assert.Nil(t, err)
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
-		assert.Equal(t, `{"error":"invalid token"}`, strings.TrimSpace(w.Body.String()))
+		assert.Equal(t, `{"error":"Invalid token"}`, strings.TrimSpace(w.Body.String()))
 	})
 
 	t.Run("Valid Token", func(t *testing.T) {

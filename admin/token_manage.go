@@ -17,11 +17,13 @@ func ListApiTokens(ctx context.Context, accessor dbaccess.Accessor, request api.
 	page, _ := lo.Coalesce[*int](request.Params.Page, &defaultPage)
 	pageSize, _ := lo.Coalesce[*int](request.Params.PageSize, &defaultPageSize)
 	res, err := accessor.Querier().ApiTokenListByPage(ctx, accessor.Source(), &dbsqlc.ApiTokenListByPageParams{
-		Page:     int64(*page),
-		PageSize: int64(*pageSize),
+		Page:     max(int64(*page), 1),
+		PageSize: min(max(int64(*pageSize), 1), 100),
 	})
 	if err != nil {
-		return api.AdminListApiTokens500Response{}, err
+		return api.AdminListApiTokens500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot list API tokens: %s", err.Error())},
+		}, nil
 	}
 
 	data := util.MapSlice(
@@ -43,6 +45,14 @@ func ListApiTokens(ctx context.Context, accessor dbaccess.Accessor, request api.
 }
 
 func CreateApiToken(ctx context.Context, accessor dbaccess.Accessor, request api.AdminCreateApiTokenRequestObject) (api.AdminCreateApiTokenResponseObject, error) {
+	if request.Body.AgentId == 0 ||
+		request.Body.CreatedBy == "" ||
+		request.Body.ExpireAt == 0 {
+		return api.AdminCreateApiToken400JSONResponse{
+			N400JSONResponse: api.N400JSONResponse{Error: "Missing required fields"},
+		}, nil
+	}
+
 	params := dbsqlc.ApiTokenInsertParams{
 		ID:          GenerateAPIToken(),
 		AgentID:     request.Body.AgentId,
@@ -53,7 +63,9 @@ func CreateApiToken(ctx context.Context, accessor dbaccess.Accessor, request api
 
 	apiToken, err := accessor.Querier().ApiTokenInsert(ctx, accessor.Source(), &params)
 	if err != nil {
-		return api.AdminCreateApiToken500Response{}, err
+		return api.AdminCreateApiToken500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot insert API tokens: %s", err.Error())},
+		}, nil
 	}
 
 	return api.AdminCreateApiToken201JSONResponse{

@@ -27,15 +27,8 @@ func TestInsertInvocation(t *testing.T) {
 
 		agent := fixture.InsertAgent(t, ctx, dbPool, "agent1")
 
-		metadata := map[string]interface{}{
-			"kind": "test",
-		}
-		payload := map[string]interface{}{
-			"key1": 16888,
-			"key2": map[string]interface{}{
-				"key3": "value3",
-			},
-		}
+		metadata := map[string]interface{}{"kind": "test"}
+		payload := map[string]interface{}{"key1": 16888, "key2": map[string]interface{}{"key3": "value3"}}
 
 		request := api.CreateInvocationAsyncRequestObject{
 			Body: &api.CreateInvocationAsyncJSONRequestBody{
@@ -91,15 +84,16 @@ func TestInsertInvocation(t *testing.T) {
 
 		request := api.CreateInvocationAsyncRequestObject{
 			Body: &api.CreateInvocationAsyncJSONRequestBody{
+				Meta:    map[string]interface{}{"kind": "test"},
 				Payload: invalidPayload,
 			},
 		}
 
 		response, err := InsertInvocation(ctx, accessor, callerAgentID, request)
 
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "unsupported type")
+		assert.NoError(t, err)
 		assert.IsType(t, api.CreateInvocationAsync500JSONResponse{}, response)
+		assert.Contains(t, response.(api.CreateInvocationAsync500JSONResponse).Error, "Failed to marshal payload")
 	})
 
 	// Test case 3: Invalid agent name
@@ -113,7 +107,7 @@ func TestInsertInvocation(t *testing.T) {
 		request := api.CreateInvocationAsyncRequestObject{
 			Body: &api.CreateInvocationAsyncJSONRequestBody{
 				Agent:   "invalid-agent",
-				Meta:    map[string]interface{}{},
+				Meta:    map[string]interface{}{"kind": "test"},
 				Payload: map[string]interface{}{},
 			},
 		}
@@ -134,16 +128,15 @@ func TestInsertInvocation(t *testing.T) {
 
 		request := api.CreateInvocationAsyncRequestObject{
 			Body: &api.CreateInvocationAsyncJSONRequestBody{
+				Meta:    map[string]interface{}{"kind": "test"},
 				Payload: map[string]interface{}{"key": "value"},
 			},
 		}
 
 		dbPool.Close() // Simulate a database error by closing the connection
-		response, err := InsertInvocation(ctx, accessor, callerAgentID, request)
+		_, err := InsertInvocation(ctx, accessor, callerAgentID, request)
 
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "closed")
-		// assert.IsType(t, api.CreateInvocationAsync500JSONResponse{}, response)
-		assert.Nil(t, response)
+		assert.Contains(t, err.Error(), "closed pool")
 	})
 }

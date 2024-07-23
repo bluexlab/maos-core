@@ -35,13 +35,13 @@ func NewBearerAuthMiddleware(fetcher TokenFetcher, cacheTtl time.Duration) (api.
 		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, args interface{}) (interface{}, error) {
 			auth := r.Header.Get("Authorization")
 			if auth == "" {
-				http.Error(w, `{"error":"missing authorization header"}`, http.StatusUnauthorized)
+				http.Error(w, `{"error":"Missing authorization header"}`, http.StatusUnauthorized)
 				return nil, nil
 			}
 
 			const prefix = "Bearer "
 			if !strings.HasPrefix(auth, prefix) {
-				http.Error(w, `{"error":"invalid authorization header"}`, http.StatusUnauthorized)
+				http.Error(w, `{"error":"Invalid authorization header"}`, http.StatusUnauthorized)
 				return nil, nil
 			}
 
@@ -50,7 +50,7 @@ func NewBearerAuthMiddleware(fetcher TokenFetcher, cacheTtl time.Duration) (api.
 			tokenString := auth[len(prefix):]
 			token := tokenCache.GetToken(ctx, tokenString)
 			if token == nil {
-				http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
+				http.Error(w, `{"error":"Invalid token"}`, http.StatusUnauthorized)
 				return nil, nil
 			}
 

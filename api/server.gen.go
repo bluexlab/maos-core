@@ -1498,12 +1498,13 @@ func (response AdminListApiTokens401Response) VisitAdminListApiTokensResponse(w 
 	return nil
 }
 
-type AdminListApiTokens500Response struct {
-}
+type AdminListApiTokens500JSONResponse struct{ N500JSONResponse }
 
-func (response AdminListApiTokens500Response) VisitAdminListApiTokensResponse(w http.ResponseWriter) error {
+func (response AdminListApiTokens500JSONResponse) VisitAdminListApiTokensResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
-	return nil
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type AdminCreateApiTokenRequestObject struct {
@@ -1523,6 +1524,15 @@ func (response AdminCreateApiToken201JSONResponse) VisitAdminCreateApiTokenRespo
 	return json.NewEncoder(w).Encode(response)
 }
 
+type AdminCreateApiToken400JSONResponse struct{ N400JSONResponse }
+
+func (response AdminCreateApiToken400JSONResponse) VisitAdminCreateApiTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type AdminCreateApiToken401Response struct {
 }
 
@@ -1531,12 +1541,13 @@ func (response AdminCreateApiToken401Response) VisitAdminCreateApiTokenResponse(
 	return nil
 }
 
-type AdminCreateApiToken500Response struct {
-}
+type AdminCreateApiToken500JSONResponse struct{ N500JSONResponse }
 
-func (response AdminCreateApiToken500Response) VisitAdminCreateApiTokenResponse(w http.ResponseWriter) error {
+func (response AdminCreateApiToken500JSONResponse) VisitAdminCreateApiTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
-	return nil
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type CreateCompletionRequestObject struct {

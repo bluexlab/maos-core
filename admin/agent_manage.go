@@ -37,7 +37,6 @@ func ListAgents(ctx context.Context, accessor dbaccess.Accessor, request api.Adm
 }
 
 func CreateaAgent(ctx context.Context, accessor dbaccess.Accessor, request api.AdminCreateAgentRequestObject) (api.AdminCreateAgentResponseObject, error) {
-
 	queue, err := accessor.Querier().QueueInsert(ctx, accessor.Source(), &dbsqlc.QueueInsertParams{
 		Name:     request.Body.Name,
 		Metadata: []byte(`{"type":"agent"}`),

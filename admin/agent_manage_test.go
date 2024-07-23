@@ -80,6 +80,8 @@ func TestListAgentsWithDB(t *testing.T) {
 			t.Parallel()
 			ctx := context.Background()
 			dbPool := testhelper.TestDB(ctx, t)
+			defer dbPool.Close()
+
 			accessor := dbaccess.New(dbPool)
 
 			_ = tt.setupAgents(ctx, dbPool)
@@ -120,6 +122,7 @@ func TestCreateAgentWithDB(t *testing.T) {
 	// Test case 1: Successful agent creation
 	t.Run("Successful agent creation", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
+		defer dbPool.Close()
 		accessor := dbaccess.New(dbPool)
 
 		request := api.AdminCreateAgentRequestObject{
@@ -154,6 +157,7 @@ func TestCreateAgentWithDB(t *testing.T) {
 	// Test case 2: Database error
 	t.Run("Database error", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
+		defer dbPool.Close()
 		accessor := dbaccess.New(dbPool)
 
 		request := api.AdminCreateAgentRequestObject{
@@ -173,6 +177,7 @@ func TestCreateAgentWithDB(t *testing.T) {
 	// Test case 3: Duplicate agent name
 	t.Run("Duplicate agent name", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
+		defer dbPool.Close()
 		accessor := dbaccess.New(dbPool)
 
 		// Insert an agent first

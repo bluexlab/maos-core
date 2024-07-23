@@ -27,6 +27,7 @@ func TestListApiTokensWithDB(t *testing.T) {
 	t.Run("Successful listing", func(t *testing.T) {
 		ctx := context.Background()
 		dbPool := testhelper.TestDB(ctx, t)
+		defer dbPool.Close()
 		accessor := dbaccess.New(dbPool)
 		agent1 := fixture.InsertAgent(t, ctx, dbPool, "agent1")
 		agent2 := fixture.InsertAgent(t, ctx, dbPool, "agent2")
@@ -75,6 +76,7 @@ func TestListApiTokensWithDB(t *testing.T) {
 	t.Run("Custom page and page size", func(t *testing.T) {
 		ctx := context.Background()
 		dbPool := testhelper.TestDB(ctx, t)
+		defer dbPool.Close()
 		page := 2
 		pageSize := 10
 		request := api.AdminListApiTokensRequestObject{
@@ -114,6 +116,7 @@ func TestListApiTokensWithDB(t *testing.T) {
 	t.Run("Database error", func(t *testing.T) {
 		ctx := context.Background()
 		dbPool := testhelper.TestDB(ctx, t)
+		defer dbPool.Close()
 		request := api.AdminListApiTokensRequestObject{}
 
 		accessor := dbaccess.New(dbPool)
@@ -139,6 +142,7 @@ func TestCreateApiTokenWithDB(t *testing.T) {
 	// Test case 1: Successful API token creation
 	t.Run("Successful API token creation", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
+		defer dbPool.Close()
 		accessor := dbaccess.New(dbPool)
 		agent1 := fixture.InsertAgent(t, ctx, dbPool, "agent1")
 
@@ -184,6 +188,7 @@ func TestCreateApiTokenWithDB(t *testing.T) {
 	// Test case 2: Database error
 	t.Run("Database error", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
+		defer dbPool.Close()
 		accessor := dbaccess.New(dbPool)
 		agent1 := fixture.InsertAgent(t, ctx, dbPool, "agent1")
 		request := api.AdminCreateApiTokenRequestObject{

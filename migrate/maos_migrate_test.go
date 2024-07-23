@@ -82,7 +82,8 @@ func TestMigrator(t *testing.T) {
 	t.Run("AllVersions", func(t *testing.T) {
 		t.Parallel()
 
-		migrator, _ := setup(t)
+		migrator, bundle := setup(t)
+		defer bundle.dbPool.Close()
 
 		migrations := migrator.AllVersions()
 		require.Equal(t, seqOneTo(migrationsWithTestVersionsMaxVersion), util.MapSlice(migrations, migrationToInt))
@@ -92,6 +93,7 @@ func TestMigrator(t *testing.T) {
 		t.Parallel()
 
 		migrator, bundle := setup(t)
+		defer bundle.dbPool.Close()
 
 		// Run twice initially to reach the version before `invocations` are dropped.
 		// Defaults to one step when migrating down.
@@ -121,7 +123,8 @@ func TestMigrator(t *testing.T) {
 	t.Run("MigrateDownAfterUp", func(t *testing.T) {
 		t.Parallel()
 
-		migrator, _ := setup(t)
+		migrator, bundle := setup(t)
+		defer bundle.dbPool.Close()
 
 		_, err := migrator.Migrate(ctx, DirectionUp, &MigrateOpts{})
 		require.NoError(t, err)
@@ -135,6 +138,7 @@ func TestMigrator(t *testing.T) {
 		t.Parallel()
 
 		migrator, bundle := setup(t)
+		defer bundle.dbPool.Close()
 
 		_, err := migrator.Migrate(ctx, DirectionUp, &MigrateOpts{})
 		require.NoError(t, err)
@@ -157,6 +161,7 @@ func TestMigrator(t *testing.T) {
 		t.Parallel()
 
 		migrator, bundle := setup(t)
+		defer bundle.dbPool.Close()
 
 		// We don't actually migrate anything (max steps = -1) because doing so
 		// would mess with the test database, but this still runs most code to
@@ -175,6 +180,7 @@ func TestMigrator(t *testing.T) {
 		t.Parallel()
 
 		migrator, bundle := setup(t)
+		defer bundle.dbPool.Close()
 
 		_, err := migrator.Migrate(ctx, DirectionUp, &MigrateOpts{})
 		require.NoError(t, err)
@@ -198,6 +204,7 @@ func TestMigrator(t *testing.T) {
 		t.Parallel()
 
 		migrator, bundle := setup(t)
+		defer bundle.dbPool.Close()
 
 		_, err := migrator.Migrate(ctx, DirectionUp, &MigrateOpts{})
 		require.NoError(t, err)
@@ -214,7 +221,8 @@ func TestMigrator(t *testing.T) {
 	t.Run("MigrateDownWithTargetVersionInvalid", func(t *testing.T) {
 		t.Parallel()
 
-		migrator, _ := setup(t)
+		migrator, bundle := setup(t)
+		defer bundle.dbPool.Close()
 
 		// migration doesn't exist
 		{
@@ -233,6 +241,7 @@ func TestMigrator(t *testing.T) {
 		t.Parallel()
 
 		migrator, bundle := setup(t)
+		defer bundle.dbPool.Close()
 
 		_, err := migrator.Migrate(ctx, DirectionUp, &MigrateOpts{})
 		require.NoError(t, err)
@@ -255,7 +264,8 @@ func TestMigrator(t *testing.T) {
 	t.Run("GetVersion", func(t *testing.T) {
 		t.Parallel()
 
-		migrator, _ := setup(t)
+		migrator, bundle := setup(t)
+		defer bundle.dbPool.Close()
 
 		{
 			migrateVersion, err := migrator.GetVersion(migrationsWithTestVersionsMaxVersion)
@@ -273,7 +283,8 @@ func TestMigrator(t *testing.T) {
 	t.Run("MigrateNilOpts", func(t *testing.T) {
 		t.Parallel()
 
-		migrator, _ := setup(t)
+		migrator, bundle := setup(t)
+		defer bundle.dbPool.Close()
 
 		res, err := migrator.Migrate(ctx, DirectionUp, nil)
 		require.NoError(t, err)
@@ -286,6 +297,7 @@ func TestMigrator(t *testing.T) {
 		t.Parallel()
 
 		migrator, bundle := setup(t)
+		defer bundle.dbPool.Close()
 
 		// Run an initial time
 		{
@@ -326,6 +338,7 @@ func TestMigrator(t *testing.T) {
 		t.Parallel()
 
 		migrator, bundle := setup(t)
+		defer bundle.dbPool.Close()
 
 		res, err := migrator.Migrate(ctx, DirectionUp, &MigrateOpts{MaxSteps: 1})
 		require.NoError(t, err)
@@ -369,6 +382,7 @@ func TestMigrator(t *testing.T) {
 		t.Parallel()
 
 		migrator, bundle := setup(t)
+		defer bundle.dbPool.Close()
 
 		res, err := migrator.Migrate(ctx, DirectionUp, &MigrateOpts{TargetVersion: migrationsWithTestVersionsMaxVersion})
 		require.NoError(t, err)
@@ -385,7 +399,8 @@ func TestMigrator(t *testing.T) {
 	t.Run("MigrateUpWithTargetVersionInvalid", func(t *testing.T) {
 		t.Parallel()
 
-		migrator, _ := setup(t)
+		migrator, bundle := setup(t)
+		defer bundle.dbPool.Close()
 
 		// migration doesn't exist
 		{
@@ -404,6 +419,7 @@ func TestMigrator(t *testing.T) {
 		t.Parallel()
 
 		migrator, bundle := setup(t)
+		defer bundle.dbPool.Close()
 
 		res, err := migrator.Migrate(ctx, DirectionUp, &MigrateOpts{DryRun: true})
 		require.NoError(t, err)

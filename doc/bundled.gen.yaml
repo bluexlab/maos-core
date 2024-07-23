@@ -689,6 +689,90 @@ paths:
           description: Unauthorized
         '500':
           description: Server Internal Error
+  /v1/admin/agents:
+    get:
+      summary: List Agents
+      operationId: adminListAgents
+      tags:
+        - Admin
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+          description: Page number (default 1)
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+          description: Page number (default 10)
+        - in: query
+          name: name
+          schema:
+            type: string
+          description: Filter by agent ID
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Agent'
+                  meta:
+                    type: object
+                    properties:
+                      total_pages:
+                        type: integer
+                    required:
+                      - total_pages
+                required:
+                  - data
+                  - meta
+              example:
+                data:
+                  - id: 16888
+                    name: agent-16888
+                    created_at: 1640995200
+                  - id: 16889
+                    name: agent-16889
+                    created_at: 1640999200
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server Internal Error
+    post:
+      summary: Create a new Agent
+      operationId: adminCreateAgent
+      tags:
+        - Admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentCreate'
+            example:
+              name: agent-16888
+      responses:
+        '201':
+          description: Successfully created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+              example:
+                id: 16888
+                name: agent-16888
+                created_at: 1640995200
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server Internal Error
 components:
   securitySchemes:
     bearerAuth:
@@ -944,6 +1028,34 @@ components:
         Permissions:
           - config:read
           - invocation:read
+    Agent:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        created_at:
+          type: integer
+          format: int64
+      required:
+        - id
+        - name
+        - created_at
+      example:
+        id: 16888
+        name: agent-16888
+        created_at: 1640995200
+    AgentCreate:
+      type: object
+      properties:
+        name:
+          type: string
+      required:
+        - name
+      example:
+        name: agent-16888
 tags:
   - name: Configuration
     description: Operations related to caller configuration

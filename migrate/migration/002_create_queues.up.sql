@@ -8,3 +8,5 @@ CREATE TABLE queues(
 
   CONSTRAINT name_length CHECK (char_length(name) > 0 AND char_length(name) < 128)
 );
+
+CREATE UNIQUE INDEX queues_name ON queues USING btree(name);

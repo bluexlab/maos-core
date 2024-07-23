@@ -94,6 +94,7 @@ SELECT
   a.id as agent_id,
   a.queue_id,
   t.permissions,
+  t.created_at,
   t.expire_at,
   t.created_by,
   COUNT(*) OVER() AS total_count
@@ -114,6 +115,7 @@ type ApiTokenListByPageRow struct {
 	AgentID     int64
 	QueueID     int64
 	Permissions []string
+	CreatedAt   int64
 	ExpireAt    int64
 	CreatedBy   string
 	TotalCount  int64
@@ -133,6 +135,7 @@ func (q *Queries) ApiTokenListByPage(ctx context.Context, db DBTX, arg *ApiToken
 			&i.AgentID,
 			&i.QueueID,
 			&i.Permissions,
+			&i.CreatedAt,
 			&i.ExpireAt,
 			&i.CreatedBy,
 			&i.TotalCount,

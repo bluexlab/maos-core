@@ -9,6 +9,26 @@ import (
 	"context"
 )
 
+const agentFindById = `-- name: AgentFindById :one
+SELECT id, name, queue_id, created_at, metadata, updated_at
+FROM agents
+WHERE id = $1
+`
+
+func (q *Queries) AgentFindById(ctx context.Context, db DBTX, id int64) (*Agent, error) {
+	row := db.QueryRow(ctx, agentFindById, id)
+	var i Agent
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.QueueID,
+		&i.CreatedAt,
+		&i.Metadata,
+		&i.UpdatedAt,
+	)
+	return &i, err
+}
+
 const agentInsert = `-- name: AgentInsert :one
 INSERT INTO agents(
     name,
@@ -39,4 +59,56 @@ func (q *Queries) AgentInsert(ctx context.Context, db DBTX, arg *AgentInsertPara
 		&i.UpdatedAt,
 	)
 	return &i, err
+}
+
+const agentListPagenated = `-- name: AgentListPagenated :many
+SELECT
+  id,
+  name,
+  queue_id,
+  created_at,
+  COUNT(*) OVER() AS total_count
+FROM agents
+ORDER BY name
+LIMIT $1::bigint
+OFFSET $1 * ($2::bigint - 1)
+`
+
+type AgentListPagenatedParams struct {
+	PageSize interface{}
+	Page     int64
+}
+
+type AgentListPagenatedRow struct {
+	ID         int64
+	Name       string
+	QueueID    int64
+	CreatedAt  int64
+	TotalCount int64
+}
+
+func (q *Queries) AgentListPagenated(ctx context.Context, db DBTX, arg *AgentListPagenatedParams) ([]*AgentListPagenatedRow, error) {
+	rows, err := db.Query(ctx, agentListPagenated, arg.PageSize, arg.Page)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*AgentListPagenatedRow
+	for rows.Next() {
+		var i AgentListPagenatedRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.QueueID,
+			&i.CreatedAt,
+			&i.TotalCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

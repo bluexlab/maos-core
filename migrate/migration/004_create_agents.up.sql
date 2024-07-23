@@ -6,3 +6,5 @@ CREATE TABLE agents(
   metadata jsonb NOT NULL DEFAULT '{}' ::jsonb,
   updated_at bigint
 );
+
+CREATE UNIQUE INDEX agents_name ON agents USING btree(name);

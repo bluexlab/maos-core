@@ -9,6 +9,26 @@ import (
 	"context"
 )
 
+const queueFindById = `-- name: QueueFindById :one
+SELECT id, name, created_at, metadata, paused_at, updated_at
+FROM queues
+WHERE id = $1
+`
+
+func (q *Queries) QueueFindById(ctx context.Context, db DBTX, id int64) (*Queue, error) {
+	row := db.QueryRow(ctx, queueFindById, id)
+	var i Queue
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.Metadata,
+		&i.PausedAt,
+		&i.UpdatedAt,
+	)
+	return &i, err
+}
+
 const queueInsert = `-- name: QueueInsert :one
 INSERT INTO queues(
     name,

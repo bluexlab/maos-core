@@ -9,6 +9,8 @@ import (
 var (
 	// Permissions is a map of operation id to the permissions they require.
 	Permissions = map[string][]string{
+		"AdminListAgents":     {"admin"},
+		"AdminCreateAgent":    {"admin"},
 		"AdminListApiTokens":  {"admin"},
 		"AdminCreateApiToken": {"admin"},
 	}

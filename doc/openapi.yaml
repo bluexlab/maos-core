@@ -54,6 +54,9 @@ paths:
   /v1/admin/api_tokens:
     $ref: "./resources/admin/api_tokens.yaml"
 
+  /v1/admin/agents:
+    $ref: "./resources/admin/agents.yaml"
+
 components:
   securitySchemes:
     bearerAuth:

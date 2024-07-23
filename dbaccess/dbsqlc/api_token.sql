@@ -4,6 +4,7 @@ SELECT
   a.id as agent_id,
   a.queue_id,
   t.permissions,
+  t.created_at,
   t.expire_at,
   t.created_by,
   COUNT(*) OVER() AS total_count

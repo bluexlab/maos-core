@@ -117,6 +117,22 @@ func (s *APIHandler) ListVectoreStores(ctx context.Context, request api.ListVect
 	panic("not implemented")
 }
 
+func (s *APIHandler) AdminListAgents(ctx context.Context, request api.AdminListAgentsRequestObject) (api.AdminListAgentsResponseObject, error) {
+	token := ValidatePermissions(ctx, "AdminListAgents")
+	if token == nil {
+		return api.AdminListAgents401Response{}, nil
+	}
+	return admin.ListAgents(ctx, s.accessor, request)
+}
+
+func (s *APIHandler) AdminCreateAgent(ctx context.Context, request api.AdminCreateAgentRequestObject) (api.AdminCreateAgentResponseObject, error) {
+	token := ValidatePermissions(ctx, "AdminCreateAgent")
+	if token == nil {
+		return api.AdminCreateAgent401Response{}, nil
+	}
+	panic("not implemented")
+}
+
 func (s *APIHandler) AdminListApiTokens(ctx context.Context, request api.AdminListApiTokensRequestObject) (api.AdminListApiTokensResponseObject, error) {
 	token := ValidatePermissions(ctx, "AdminListApiTokens")
 	if token == nil {

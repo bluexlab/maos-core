@@ -13,12 +13,6 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/util"
 )
 
-var (
-	defaultPage     = 1
-	defaultPageSize = 10
-	tokenLength     = 32
-)
-
 func ListApiTokens(ctx context.Context, accessor dbaccess.Accessor, request api.AdminListApiTokensRequestObject) (api.AdminListApiTokensResponseObject, error) {
 	page, _ := lo.Coalesce[*int](request.Params.Page, &defaultPage)
 	pageSize, _ := lo.Coalesce[*int](request.Params.PageSize, &defaultPageSize)
@@ -36,7 +30,7 @@ func ListApiTokens(ctx context.Context, accessor dbaccess.Accessor, request api.
 			return api.ApiToken{
 				Id:          row.ID,
 				AgentId:     row.AgentID,
-				CreatedAt:   row.ExpireAt,
+				CreatedAt:   row.CreatedAt,
 				CreatedBy:   row.CreatedBy,
 				ExpireAt:    row.ExpireAt,
 				Permissions: util.MapSlice(row.Permissions, func(p string) api.Permission { return api.Permission(p) }),

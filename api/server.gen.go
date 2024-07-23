@@ -78,6 +78,18 @@ const (
 	InvocationRespond Permission = "invocation:respond"
 )
 
+// Agent defines model for Agent.
+type Agent struct {
+	CreatedAt int64  `json:"created_at"`
+	Id        int64  `json:"id"`
+	Name      string `json:"name"`
+}
+
+// AgentCreate defines model for AgentCreate.
+type AgentCreate struct {
+	Name string `json:"name"`
+}
+
 // ApiToken defines model for ApiToken.
 type ApiToken struct {
 	AgentId     int64        `json:"agent_id"`
@@ -207,6 +219,18 @@ type RerankResult struct {
 	Text *string `json:"text,omitempty"`
 }
 
+// AdminListAgentsParams defines parameters for AdminListAgents.
+type AdminListAgentsParams struct {
+	// Page Page number (default 1)
+	Page *int `form:"page,omitempty" json:"page,omitempty"`
+
+	// PageSize Page number (default 10)
+	PageSize *int `form:"page_size,omitempty" json:"page_size,omitempty"`
+
+	// Name Filter by agent ID
+	Name *string `form:"name,omitempty" json:"name,omitempty"`
+}
+
 // AdminListApiTokensParams defines parameters for AdminListApiTokens.
 type AdminListApiTokensParams struct {
 	// Page Page number (default 1)
@@ -291,6 +315,9 @@ type CreateCollectionParams struct {
 
 // UpsertCollectionJSONBody defines parameters for UpsertCollection.
 type UpsertCollectionJSONBody = map[string]interface{}
+
+// AdminCreateAgentJSONRequestBody defines body for AdminCreateAgent for application/json ContentType.
+type AdminCreateAgentJSONRequestBody = AgentCreate
 
 // AdminCreateApiTokenJSONRequestBody defines body for AdminCreateApiToken for application/json ContentType.
 type AdminCreateApiTokenJSONRequestBody = ApiTokenCreate
@@ -406,6 +433,12 @@ func (t *MessageContent) UnmarshalJSON(b []byte) error {
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// List Agents
+	// (GET /v1/admin/agents)
+	AdminListAgents(w http.ResponseWriter, r *http.Request, params AdminListAgentsParams)
+	// Create a new Agent
+	// (POST /v1/admin/agents)
+	AdminCreateAgent(w http.ResponseWriter, r *http.Request)
 	// List API tokens
 	// (GET /v1/admin/api_tokens)
 	AdminListApiTokens(w http.ResponseWriter, r *http.Request, params AdminListApiTokensParams)
@@ -467,6 +500,73 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// AdminListAgents operation middleware
+func (siw *ServerInterfaceWrapper) AdminListAgents(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var err error
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AdminListAgentsParams
+
+	// ------------- Optional query parameter "page" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "page", r.URL.Query(), &params.Page)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "page_size" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "page_size", r.URL.Query(), &params.PageSize)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page_size", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "name" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "name", r.URL.Query(), &params.Name)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminListAgents(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// AdminCreateAgent operation middleware
+func (siw *ServerInterfaceWrapper) AdminCreateAgent(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminCreateAgent(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
 
 // AdminListApiTokens operation middleware
 func (siw *ServerInterfaceWrapper) AdminListApiTokens(w http.ResponseWriter, r *http.Request) {
@@ -1045,6 +1145,10 @@ func HandlerWithOptions(si ServerInterface, options GorillaServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	r.HandleFunc(options.BaseURL+"/v1/admin/agents", wrapper.AdminListAgents).Methods("GET")
+
+	r.HandleFunc(options.BaseURL+"/v1/admin/agents", wrapper.AdminCreateAgent).Methods("POST")
+
 	r.HandleFunc(options.BaseURL+"/v1/admin/api_tokens", wrapper.AdminListApiTokens).Methods("GET")
 
 	r.HandleFunc(options.BaseURL+"/v1/admin/api_tokens", wrapper.AdminCreateApiToken).Methods("POST")
@@ -1080,6 +1184,77 @@ func HandlerWithOptions(si ServerInterface, options GorillaServerOptions) http.H
 	r.HandleFunc(options.BaseURL+"/v1/vector/list", wrapper.ListVectoreStores).Methods("GET")
 
 	return r
+}
+
+type AdminListAgentsRequestObject struct {
+	Params AdminListAgentsParams
+}
+
+type AdminListAgentsResponseObject interface {
+	VisitAdminListAgentsResponse(w http.ResponseWriter) error
+}
+
+type AdminListAgents200JSONResponse struct {
+	Data []Agent `json:"data"`
+	Meta struct {
+		TotalPages int `json:"total_pages"`
+	} `json:"meta"`
+}
+
+func (response AdminListAgents200JSONResponse) VisitAdminListAgentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminListAgents401Response struct {
+}
+
+func (response AdminListAgents401Response) VisitAdminListAgentsResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type AdminListAgents500Response struct {
+}
+
+func (response AdminListAgents500Response) VisitAdminListAgentsResponse(w http.ResponseWriter) error {
+	w.WriteHeader(500)
+	return nil
+}
+
+type AdminCreateAgentRequestObject struct {
+	Body *AdminCreateAgentJSONRequestBody
+}
+
+type AdminCreateAgentResponseObject interface {
+	VisitAdminCreateAgentResponse(w http.ResponseWriter) error
+}
+
+type AdminCreateAgent201JSONResponse Agent
+
+func (response AdminCreateAgent201JSONResponse) VisitAdminCreateAgentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminCreateAgent401Response struct {
+}
+
+func (response AdminCreateAgent401Response) VisitAdminCreateAgentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type AdminCreateAgent500Response struct {
+}
+
+func (response AdminCreateAgent500Response) VisitAdminCreateAgentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(500)
+	return nil
 }
 
 type AdminListApiTokensRequestObject struct {
@@ -1586,6 +1761,12 @@ func (response ListVectoreStores401Response) VisitListVectoreStoresResponse(w ht
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// List Agents
+	// (GET /v1/admin/agents)
+	AdminListAgents(ctx context.Context, request AdminListAgentsRequestObject) (AdminListAgentsResponseObject, error)
+	// Create a new Agent
+	// (POST /v1/admin/agents)
+	AdminCreateAgent(ctx context.Context, request AdminCreateAgentRequestObject) (AdminCreateAgentResponseObject, error)
 	// List API tokens
 	// (GET /v1/admin/api_tokens)
 	AdminListApiTokens(ctx context.Context, request AdminListApiTokensRequestObject) (AdminListApiTokensResponseObject, error)
@@ -1666,6 +1847,63 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// AdminListAgents operation middleware
+func (sh *strictHandler) AdminListAgents(w http.ResponseWriter, r *http.Request, params AdminListAgentsParams) {
+	var request AdminListAgentsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminListAgents(ctx, request.(AdminListAgentsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminListAgents")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminListAgentsResponseObject); ok {
+		if err := validResponse.VisitAdminListAgentsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminCreateAgent operation middleware
+func (sh *strictHandler) AdminCreateAgent(w http.ResponseWriter, r *http.Request) {
+	var request AdminCreateAgentRequestObject
+
+	var body AdminCreateAgentJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminCreateAgent(ctx, request.(AdminCreateAgentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminCreateAgent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminCreateAgentResponseObject); ok {
+		if err := validResponse.VisitAdminCreateAgentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // AdminListApiTokens operation middleware

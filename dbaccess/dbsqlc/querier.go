@@ -22,6 +22,7 @@ type Querier interface {
 	MigrationGetAll(ctx context.Context, db DBTX) ([]*Migration, error)
 	MigrationInsert(ctx context.Context, db DBTX, version int64) (*Migration, error)
 	MigrationInsertMany(ctx context.Context, db DBTX, version []int64) ([]*Migration, error)
+	PgNotifyOne(ctx context.Context, db DBTX, arg *PgNotifyOneParams) error
 	QueueFindById(ctx context.Context, db DBTX, id int64) (*Queue, error)
 	QueueInsert(ctx context.Context, db DBTX, arg *QueueInsertParams) (*Queue, error)
 	TableExists(ctx context.Context, db DBTX, tableName string) (bool, error)

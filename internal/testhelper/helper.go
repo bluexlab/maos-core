@@ -38,6 +38,11 @@ func Logger(tb testing.TB) *slog.Logger {
 	return NewLogger(tb, nil)
 }
 
+func LoggerWarn(tb testing.TB) *slog.Logger {
+	tb.Helper()
+	return NewLogger(tb, &slog.HandlerOptions{Level: slog.LevelWarn})
+}
+
 // TestDB acquires a dedicated test database for the test duration.
 // If an error occurs, the test fails.
 // The test database is returned to the pool at the end, and the pgxpool is closed.

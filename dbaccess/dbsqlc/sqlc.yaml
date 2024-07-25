@@ -8,6 +8,7 @@ sql:
       - agent.sql
       - api_token.sql
       - invocation.sql
+      - notify.sql
     gen:
       go:
         package: "dbsqlc"

@@ -1,6 +1,12 @@
 package main
 
+import (
+	"log/slog"
+	"os"
+)
+
 func main() {
-	app := &App{}
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	app := &App{logger}
 	app.Run()
 }

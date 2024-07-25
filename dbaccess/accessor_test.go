@@ -15,13 +15,13 @@ func TestNew(t *testing.T) {
 
 		dbPool := &pgxpool.Pool{}
 		executor := New(dbPool)
-		require.Equal(t, dbPool, executor.source)
+		require.Equal(t, dbPool, executor.Source())
 	})
 
 	t.Run("AllowsNilDatabasePool", func(t *testing.T) {
 		t.Parallel()
 
 		executor := New(nil)
-		require.Nil(t, executor.source)
+		require.Nil(t, executor.Source())
 	})
 }

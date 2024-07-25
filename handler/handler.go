@@ -3,22 +3,34 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 
-	"github.com/sirupsen/logrus"
 	"gitlab.com/navyx/ai/maos/maos-core/admin"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 	"gitlab.com/navyx/ai/maos/maos-core/invocation"
 )
 
-func NewAPIHandler(accessor dbaccess.Accessor) *APIHandler {
+func NewAPIHandler(logger *slog.Logger, accessor dbaccess.Accessor) *APIHandler {
 	return &APIHandler{
-		accessor: accessor,
+		logger:            logger,
+		accessor:          accessor,
+		invocationManager: invocation.NewManager(logger, accessor),
 	}
 }
 
 type APIHandler struct {
-	accessor dbaccess.Accessor
+	logger            *slog.Logger
+	accessor          dbaccess.Accessor
+	invocationManager *invocation.Manager
+}
+
+func (s *APIHandler) Start(ctx context.Context) error {
+	return s.invocationManager.Start(ctx)
+}
+
+func (s *APIHandler) Close(ctx context.Context) error {
+	return s.invocationManager.Close(ctx)
 }
 
 // GetCallerConfig implements the GET /v1/config endpoint
@@ -36,7 +48,7 @@ func (s *APIHandler) CreateInvocationAsync(ctx context.Context, request api.Crea
 	if token == nil {
 		return api.CreateInvocationAsync401Response{}, nil
 	}
-	return invocation.InsertInvocation(ctx, s.accessor, token.AgentId, request)
+	return s.invocationManager.InsertInvocation(ctx, token.AgentId, request)
 }
 
 func (s *APIHandler) CreateInvocationSync(ctx context.Context, request api.CreateInvocationSyncRequestObject) (api.CreateInvocationSyncResponseObject, error) {
@@ -49,16 +61,11 @@ func (s *APIHandler) GetInvocationById(ctx context.Context, request api.GetInvoc
 
 // GetNextInvocation implements the GET /v1/invocation/next endpoint
 func (s *APIHandler) GetNextInvocation(ctx context.Context, request api.GetNextInvocationRequestObject) (api.GetNextInvocationResponseObject, error) {
-	jobId := "job-dummy"
-	payload := map[string]interface{}{
-		"task": "example_task",
-		"data": "example_data",
+	token := ValidatePermissions(ctx, "GetNextInvocation")
+	if token == nil {
+		return api.GetNextInvocation401Response{}, nil
 	}
-	job := api.GetNextInvocation200JSONResponse{
-		Id:      jobId,
-		Payload: payload,
-	}
-	return job, nil
+	return s.invocationManager.GetNextInvocation(ctx, token.AgentId, token.QueueId, request)
 }
 
 // ReturnInvocationResponse implements the POST /v1/invocation/{invoke_id}/response endpoint
@@ -71,7 +78,7 @@ func (s *APIHandler) ReturnInvocationResponse(ctx context.Context, request api.R
 	// Here you would typically store or process the result
 	// For this example, we'll just log it
 	resultJSON, _ := json.Marshal(result)
-	logrus.Infof("Received result for invocation %s: %s", invokeID, string(resultJSON))
+	s.logger.Info("Received result", "invocation", invokeID, "result", string(resultJSON))
 
 	return api.ReturnInvocationResponse200Response{}, nil
 }
@@ -86,7 +93,7 @@ func (s *APIHandler) ReturnInvocationError(ctx context.Context, request api.Retu
 	// Here you would typically store or process the error
 	// For this example, we'll just log it
 	errorJSON, _ := json.Marshal(errorDetails)
-	logrus.Infof("Received error for invocation: %s: %s", invokeID, string(errorJSON))
+	s.logger.Info("Received error for", "invocation", invokeID, "error", string(errorJSON))
 
 	return api.ReturnInvocationError200Response{}, nil
 }

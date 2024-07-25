@@ -2,10 +2,10 @@ package middleware
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/dgraph-io/ristretto"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -49,7 +49,7 @@ func (c *ApiTokenCache) GetToken(ctx context.Context, apiToken string) *Token {
 		}
 		if token == nil {
 			// Non-existent tokens are also briefly cached (with empty content)
-			logrus.Warnf("api token not found: %s", apiToken)
+			slog.Warn("api token not found", "token", apiToken)
 			c.cache.SetWithTTL(apiToken, nil, 1, c.ttl)
 			return nil, nil
 		}
@@ -59,7 +59,7 @@ func (c *ApiTokenCache) GetToken(ctx context.Context, apiToken string) *Token {
 	})
 
 	if err != nil {
-		logrus.Errorf("cannot fetching api token %s. error: %v", apiToken, err)
+		slog.Error("cannot fetching api token", "token", apiToken, "error", err)
 		return nil
 	}
 	if fetched == nil {

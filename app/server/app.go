@@ -3,15 +3,15 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 
 	"github.com/go-playground/validator"
 	"github.com/gorilla/mux"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
-	"github.com/sirupsen/logrus"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 	"gitlab.com/navyx/ai/maos/maos-core/handler"
@@ -19,7 +19,9 @@ import (
 
 const appName string = "maos-core-server"
 
-type App struct{}
+type App struct {
+	logger *slog.Logger
+}
 
 func (a *App) Run() {
 	a.runServer()
@@ -30,41 +32,57 @@ func (a *App) runServer() {
 
 	// Load environment variables from .env file if exists
 	if _, err := os.Stat(".env"); err == nil {
-		logrus.Infof("Load environment variables from .env file")
+		a.logger.Info("Load environment variables from .env file")
 		if err := godotenv.Load(".env"); err != nil {
-			logrus.Fatalf("Error loading .env file: %v", err)
+			a.logger.Error("Error loading .env file: %v", err)
+			os.Exit(1)
 		}
 	}
 
 	// Load environment variables into the struct
 	var config Config
 	if err := envconfig.Process("", &config); err != nil {
-		logrus.Fatalf("Failed to process environment variables: %v", err)
+		a.logger.Error("Failed to process environment variables.", "err", err)
+		os.Exit(1)
 	}
 
 	// Validate the struct
 	validate := validator.New()
 	if err := validate.Struct(config); err != nil {
-		logrus.Fatalf("Validation failed: %v", err)
+		a.logger.Error("Validation failed: %v", err)
+		os.Exit(1)
 	}
 
 	// Connect to the database and create a new accessor
-	db, err := pgx.Connect(ctx, config.DatabaseUrl)
+	pool, err := pgxpool.New(ctx, config.DatabaseUrl)
 	if err != nil {
-		logrus.Fatalf("Failed to connect to database: %v", err)
+		a.logger.Error("Failed to connect to database", "err", err)
+		os.Exit(1)
 	}
-	defer db.Close(ctx)
+	defer pool.Close()
 
-	accessor := dbaccess.New(db)
-	logrus.Infof("Connected to database: %v", accessor)
+	accessor := dbaccess.New(pool)
+	a.logger.Info("Connected to database", "database", config.DatabaseUrl)
 
 	// Init Mux router and API handler
 	router := mux.NewRouter()
 
 	middlewares := []api.StrictMiddlewareFunc{}
-	handler := handler.NewAPIHandler(accessor)
+	handler := handler.NewAPIHandler(a.logger.WithGroup("APIHandler"), accessor)
+	err = handler.Start(ctx)
+	if err != nil {
+		a.logger.Error("Failed to initialize handler", "err", err)
+		os.Exit(1)
+	}
+
+	defer handler.Close(ctx)
+
 	api.HandlerFromMux(api.NewStrictHandler(handler, middlewares), router)
 
-	logrus.Infof("Starting %s server on pot %d", appName, config.Port)
-	logrus.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", config.Port), router))
+	a.logger.Info("Starting server", "port", config.Port)
+	err = http.ListenAndServe(fmt.Sprintf(":%d", config.Port), router)
+	if err != nil {
+		a.logger.Error("Server running error", "err", err)
+		os.Exit(1)
+	}
 }

@@ -34,7 +34,9 @@ get:
             $ref: '../../schemas/InvocationJob.yaml'
     '404':
       description: No invocation job available
+    '400':
+      $ref : "../../responses/400.yaml"
     '401':
       description: Unauthorized
     '500':
-      description: Internal Server Error
+      $ref : "../../responses/500.yaml"

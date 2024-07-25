@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/stretchr/testify/require"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 	"gitlab.com/navyx/ai/maos/maos-core/handler"
@@ -25,7 +26,11 @@ func SetupHttpTestWithDb(t *testing.T, ctx context.Context) (*httptest.Server, d
 	dbPool := testhelper.TestDB(ctx, t)
 	accessor := dbaccess.New(dbPool)
 
-	apiHandler := handler.NewAPIHandler(accessor)
+	logger := testhelper.Logger(t)
+	apiHandler := handler.NewAPIHandler(logger.WithGroup("APIHandler"), accessor)
+	err := apiHandler.Start(ctx)
+	require.NoError(t, err)
+
 	router := mux.NewRouter()
 	middleware, cacheCloser := middleware.NewBearerAuthMiddleware(
 		middleware.NewDatabaseApiTokenFetch(accessor),
@@ -48,6 +53,7 @@ func SetupHttpTestWithDb(t *testing.T, ctx context.Context) (*httptest.Server, d
 	server := httptest.NewServer(router)
 
 	closer := func() {
+		apiHandler.Close(ctx)
 		server.Close()
 		dbPool.Close()
 		cacheCloser()

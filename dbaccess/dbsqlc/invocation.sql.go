@@ -132,7 +132,7 @@ SELECT
 	coalesce($6::jsonb, '{}'),
 	coalesce($7::varchar(255)[], '{}')
 FROM agent_queue
-RETURNING id
+RETURNING id, queue_id
 `
 
 type InvocationInsertParams struct {
@@ -146,7 +146,12 @@ type InvocationInsertParams struct {
 	AgentName   string
 }
 
-func (q *Queries) InvocationInsert(ctx context.Context, db DBTX, arg *InvocationInsertParams) (int64, error) {
+type InvocationInsertRow struct {
+	ID      int64
+	QueueID int64
+}
+
+func (q *Queries) InvocationInsert(ctx context.Context, db DBTX, arg *InvocationInsertParams) (*InvocationInsertRow, error) {
 	row := db.QueryRow(ctx, invocationInsert,
 		arg.State,
 		arg.CreatedAt,
@@ -157,7 +162,7 @@ func (q *Queries) InvocationInsert(ctx context.Context, db DBTX, arg *Invocation
 		arg.Tags,
 		arg.AgentName,
 	)
-	var id int64
-	err := row.Scan(&id)
-	return id, err
+	var i InvocationInsertRow
+	err := row.Scan(&i.ID, &i.QueueID)
+	return &i, err
 }

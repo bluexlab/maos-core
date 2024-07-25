@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 
@@ -11,7 +12,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/samber/lo"
-	"github.com/sirupsen/logrus"
 	"gitlab.com/navyx/ai/maos/maos-core/llm"
 )
 
@@ -32,7 +32,7 @@ func init() {
 	for k, v := range ModelDeploymentMap {
 		deployment := os.Getenv(v)
 		if deployment == "" {
-			logrus.Errorf("deployment not found for model %s", k)
+			slog.Error("deployment not found for model", "name", k)
 		}
 		newMap[k] = deployment
 	}

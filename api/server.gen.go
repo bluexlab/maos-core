@@ -1754,6 +1754,15 @@ func (response GetNextInvocation200JSONResponse) VisitGetNextInvocationResponse(
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetNextInvocation400JSONResponse struct{ N400JSONResponse }
+
+func (response GetNextInvocation400JSONResponse) VisitGetNextInvocationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetNextInvocation401Response struct {
 }
 
@@ -1770,12 +1779,13 @@ func (response GetNextInvocation404Response) VisitGetNextInvocationResponse(w ht
 	return nil
 }
 
-type GetNextInvocation500Response struct {
-}
+type GetNextInvocation500JSONResponse struct{ N500JSONResponse }
 
-func (response GetNextInvocation500Response) VisitGetNextInvocationResponse(w http.ResponseWriter) error {
+func (response GetNextInvocation500JSONResponse) VisitGetNextInvocationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
-	return nil
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type CreateInvocationSyncRequestObject struct {

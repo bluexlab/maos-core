@@ -88,8 +88,6 @@ func WrapTestMain(m *testing.M) {
 		panic(err)
 	}
 
-	// logrus.SetOutput(os.Stdout)
-
 	manager, err := testdb.NewManager(ctx)
 	if err != nil {
 		panic(err)

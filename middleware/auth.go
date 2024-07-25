@@ -2,11 +2,11 @@ package middleware
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
 )
 
@@ -45,7 +45,7 @@ func NewBearerAuthMiddleware(fetcher TokenFetcher, cacheTtl time.Duration) (api.
 				return nil, nil
 			}
 
-			logrus.Debugf("Authorization token: %s", auth[:6])
+			slog.Debug("Authorization token", "token", auth[:6])
 
 			tokenString := auth[len(prefix):]
 			token := tokenCache.GetToken(ctx, tokenString)

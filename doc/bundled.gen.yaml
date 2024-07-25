@@ -254,12 +254,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/InvocationJob'
+        '400':
+          $ref: '#/components/responses/400'
         '401':
           description: Unauthorized
         '404':
           description: No invocation job available
         '500':
-          description: Internal Server Error
+          $ref: '#/components/responses/500'
   /v1/invocations/{id}:
     get:
       summary: Get the status and result of an invocation job by ID

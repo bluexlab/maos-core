@@ -24,6 +24,7 @@ func TestInsertInvocation(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
 		accessor := dbaccess.New(dbPool)
+		manager := NewManager(testhelper.Logger(t), accessor)
 
 		agent := fixture.InsertAgent(t, ctx, dbPool, "agent1")
 
@@ -37,7 +38,7 @@ func TestInsertInvocation(t *testing.T) {
 				Payload: payload,
 			},
 		}
-		response, err := InsertInvocation(ctx, accessor, agent.ID, request)
+		response, err := manager.InsertInvocation(ctx, agent.ID, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.CreateInvocationAsync201JSONResponse{}, response)
@@ -75,6 +76,7 @@ func TestInsertInvocation(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
 		accessor := dbaccess.New(dbPool)
+		manager := NewManager(testhelper.Logger(t), accessor)
 
 		callerAgentID := int64(1)
 
@@ -89,7 +91,7 @@ func TestInsertInvocation(t *testing.T) {
 			},
 		}
 
-		response, err := InsertInvocation(ctx, accessor, callerAgentID, request)
+		response, err := manager.InsertInvocation(ctx, callerAgentID, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.CreateInvocationAsync500JSONResponse{}, response)
@@ -101,6 +103,7 @@ func TestInsertInvocation(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
 		accessor := dbaccess.New(dbPool)
+		manager := NewManager(testhelper.Logger(t), accessor)
 
 		agent := fixture.InsertAgent(t, ctx, dbPool, "agent1")
 
@@ -111,7 +114,7 @@ func TestInsertInvocation(t *testing.T) {
 				Payload: map[string]interface{}{},
 			},
 		}
-		response, err := InsertInvocation(ctx, accessor, agent.ID, request)
+		response, err := manager.InsertInvocation(ctx, agent.ID, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.CreateInvocationAsync400JSONResponse{}, response)
@@ -123,6 +126,7 @@ func TestInsertInvocation(t *testing.T) {
 		defer dbPool.Close()
 
 		accessor := dbaccess.New(dbPool)
+		manager := NewManager(testhelper.Logger(t), accessor)
 
 		callerAgentID := int64(1)
 
@@ -134,7 +138,7 @@ func TestInsertInvocation(t *testing.T) {
 		}
 
 		dbPool.Close() // Simulate a database error by closing the connection
-		_, err := InsertInvocation(ctx, accessor, callerAgentID, request)
+		_, err := manager.InsertInvocation(ctx, callerAgentID, request)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "closed pool")

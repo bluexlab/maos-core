@@ -12,6 +12,7 @@ var (
 	Permissions = map[string][]string{
 		"CreateInvocationAsync": {"create:invocation"},
 		"CreateInvocationSync":  {"create:invocation"},
+		"GetNextInvocation":     {"read:invocation"},
 		"AdminListAgents":       {"admin"},
 		"AdminCreateAgent":      {"admin"},
 		"AdminListApiTokens":    {"admin"},

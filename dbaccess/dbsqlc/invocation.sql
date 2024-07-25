@@ -29,7 +29,7 @@ SELECT
 	coalesce(@metadata::jsonb, '{}'),
 	coalesce(@tags::varchar(255)[], '{}')
 FROM agent_queue
-RETURNING id;
+RETURNING id, queue_id;
 
 -- name: InvocationGetAvailable :many
 WITH locked_invocations AS (

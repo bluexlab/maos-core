@@ -102,17 +102,13 @@ func TestInvocationCreateEndpoint(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server, accessor, closer := SetupHttpTestWithDb(t, ctx)
-			defer closer()
+			server, accessor := SetupHttpTestWithDb(t, ctx)
 
 			agent := fixture.InsertAgent(t, ctx, accessor.Source(), tt.agentName)
 			token := fixture.InsertToken(t, ctx, accessor.Source(), tt.tokenName, agent.ID, 0, tt.permissions)
 
-			resp := PostHttp(t, server.URL+"/v1/invocations/async", tt.body, token.ID)
+			resp, resBody := PostHttp(t, server.URL+"/v1/invocations/async", tt.body, token.ID)
 			require.Equal(t, tt.expectedStatus, resp.StatusCode)
-
-			resBody, err := testhelper.ReadBody(resp.Body)
-			require.NoError(t, err)
 
 			if tt.expectedStatus == http.StatusCreated {
 				invocations, err := accessor.Querier().InvocationGetAvailable(ctx, accessor.Source(), &dbsqlc.InvocationGetAvailableParams{
@@ -123,6 +119,7 @@ func TestInvocationCreateEndpoint(t *testing.T) {
 				require.NoError(t, err)
 				require.Len(t, invocations, 1)
 				require.JSONEq(t, fmt.Sprintf(`{"id":"%d"}`, invocations[0].ID), resBody)
+				require.Equal(t, invocations[0].AttemptedBy, []int64{agent.ID})
 			} else {
 				if tt.expectedBody != "" {
 					resJson := testhelper.JsonToMap(t, resBody)

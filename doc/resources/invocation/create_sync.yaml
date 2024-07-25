@@ -29,6 +29,15 @@ post:
   operationId: createInvocationSync
   tags:
     - Invocation
+  parameters:
+    - in: query
+      name: wait
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 60
+      description: The maximum time (in seconds) to wait for job completion. default is 10s
   requestBody:
     required: true
     content:
@@ -55,18 +64,18 @@ post:
       content:
         application/json:
           schema:
-            type: object
-            properties:
-              id:
-                type: string
-                description: The unique identifier of the created invocation job
-            required:
-              - id
+            $ref: '../../schemas/InvocationResult.yaml'
           example:
-            id: 'inv-16888'
+            id: "inv_123456789"
+            state: "completed"
+            attempted_at: 1737456000
+            finalized_at: 1737466000
+            result: { "key": "value" }
     '400':
       $ref : "../../responses/400.yaml"
     '401':
       description: Unauthorized
+    '408':
+      description: Request timeout
     '500':
       $ref : "../../responses/500.yaml"

@@ -10,13 +10,14 @@ import (
 var (
 	// Permissions is a map of operation id to the permissions they require.
 	Permissions = map[string][]string{
-		"CreateInvocationAsync": {"create:invocation"},
-		"CreateInvocationSync":  {"create:invocation"},
-		"GetNextInvocation":     {"read:invocation"},
-		"AdminListAgents":       {"admin"},
-		"AdminCreateAgent":      {"admin"},
-		"AdminListApiTokens":    {"admin"},
-		"AdminCreateApiToken":   {"admin"},
+		"CreateInvocationAsync":    {"create:invocation"},
+		"CreateInvocationSync":     {"create:invocation"},
+		"GetNextInvocation":        {"read:invocation"},
+		"ReturnInvocationResponse": {"read:invocation"},
+		"AdminListAgents":          {"admin"},
+		"AdminCreateAgent":         {"admin"},
+		"AdminListApiTokens":       {"admin"},
+		"AdminCreateApiToken":      {"admin"},
 	}
 )
 

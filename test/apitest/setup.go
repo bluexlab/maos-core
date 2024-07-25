@@ -18,11 +18,9 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/middleware"
 )
 
-type ServerCloser func()
-
 // SetupHttpTestWithDb sets up a test server and database accessor.
 // user has to call the returned ServerCloser to stop the server after the test.
-func SetupHttpTestWithDb(t *testing.T, ctx context.Context) (*httptest.Server, dbaccess.Accessor, ServerCloser) {
+func SetupHttpTestWithDb(t *testing.T, ctx context.Context) (*httptest.Server, dbaccess.Accessor) {
 	dbPool := testhelper.TestDB(ctx, t)
 	accessor := dbaccess.New(dbPool)
 
@@ -52,12 +50,12 @@ func SetupHttpTestWithDb(t *testing.T, ctx context.Context) (*httptest.Server, d
 
 	server := httptest.NewServer(router)
 
-	closer := func() {
+	t.Cleanup(func() {
 		apiHandler.Close(ctx)
 		server.Close()
 		dbPool.Close()
 		cacheCloser()
-	}
+	})
 
-	return server, accessor, closer
+	return server, accessor
 }

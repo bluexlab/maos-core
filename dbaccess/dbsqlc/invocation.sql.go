@@ -12,7 +12,7 @@ import (
 const invocationFindById = `-- name: InvocationFindById :one
 SELECT id, state, queue_id, attempted_at, created_at, finalized_at, priority, payload, errors, result, metadata, tags, attempted_by
 FROM invocations
-WHERE id = $1
+WHERE id = $1::bigint
 `
 
 func (q *Queries) InvocationFindById(ctx context.Context, db DBTX, id int64) (*Invocation, error) {
@@ -38,32 +38,32 @@ func (q *Queries) InvocationFindById(ctx context.Context, db DBTX, id int64) (*I
 
 const invocationGetAvailable = `-- name: InvocationGetAvailable :many
 WITH locked_invocations AS (
-    SELECT
-        id, state, queue_id, attempted_at, created_at, finalized_at, priority, payload, errors, result, metadata, tags, attempted_by
-    FROM
-        invocations
-    WHERE
-        state = 'available'::invocation_state
-        AND queue_id = $2::bigint
-    ORDER BY
-        priority ASC,
-        id ASC
-    LIMIT $3::integer
-    FOR UPDATE
-    SKIP LOCKED
+	SELECT
+		id, state, queue_id, attempted_at, created_at, finalized_at, priority, payload, errors, result, metadata, tags, attempted_by
+	FROM
+		invocations
+	WHERE
+		state = 'available'::invocation_state
+		AND queue_id = $2::bigint
+	ORDER BY
+		priority ASC,
+		id ASC
+	LIMIT $3::integer
+	FOR UPDATE
+	SKIP LOCKED
 )
 UPDATE
-    invocations
+	invocations
 SET
-    state = 'running'::invocation_state,
-    attempted_at = EXTRACT(EPOCH FROM NOW()),
-    attempted_by = array_append(invocations.attempted_by, $1::bigint)
+	state = 'running'::invocation_state,
+	attempted_at = EXTRACT(EPOCH FROM NOW()),
+	attempted_by = array_append(invocations.attempted_by, $1::bigint)
 FROM
-    locked_invocations
+	locked_invocations
 WHERE
-    invocations.id = locked_invocations.id
+	invocations.id = locked_invocations.id
 RETURNING
-    invocations.id, invocations.state, invocations.queue_id, invocations.attempted_at, invocations.created_at, invocations.finalized_at, invocations.priority, invocations.payload, invocations.errors, invocations.result, invocations.metadata, invocations.tags, invocations.attempted_by
+	invocations.id, invocations.state, invocations.queue_id, invocations.attempted_at, invocations.created_at, invocations.finalized_at, invocations.priority, invocations.payload, invocations.errors, invocations.result, invocations.metadata, invocations.tags, invocations.attempted_by
 `
 
 type InvocationGetAvailableParams struct {
@@ -164,5 +164,56 @@ func (q *Queries) InvocationInsert(ctx context.Context, db DBTX, arg *Invocation
 	)
 	var i InvocationInsertRow
 	err := row.Scan(&i.ID, &i.QueueID)
+	return &i, err
+}
+
+const invocationSetCompleteIfRunning = `-- name: InvocationSetCompleteIfRunning :one
+WITH invocation_to_update AS (
+	SELECT invocations.id
+	FROM invocations
+	WHERE invocations.id = $1::bigint
+		AND invocations.state = 'running'::invocation_state
+		AND (
+            array_length(attempted_by, 1) > 0
+            AND attempted_by[array_length(attempted_by, 1)] = $2::bigint
+        )
+	FOR UPDATE
+),
+updated_invocation AS (
+	UPDATE invocations
+	SET
+		finalized_at = $3::bigint,
+		result = $4::jsonb,
+		state = 'completed'
+	FROM invocation_to_update
+	WHERE invocations.id = invocation_to_update.id
+	RETURNING invocations.id, invocations.state, invocations.queue_id, invocations.attempted_at, invocations.created_at, invocations.finalized_at, invocations.priority, invocations.payload, invocations.errors, invocations.result, invocations.metadata, invocations.tags, invocations.attempted_by
+)
+SELECT id, state, finalized_at
+FROM updated_invocation
+`
+
+type InvocationSetCompleteIfRunningParams struct {
+	ID          int64
+	FinalizerID int64
+	FinalizedAt int64
+	Result      []byte
+}
+
+type InvocationSetCompleteIfRunningRow struct {
+	ID          int64
+	State       InvocationState
+	FinalizedAt *int64
+}
+
+func (q *Queries) InvocationSetCompleteIfRunning(ctx context.Context, db DBTX, arg *InvocationSetCompleteIfRunningParams) (*InvocationSetCompleteIfRunningRow, error) {
+	row := db.QueryRow(ctx, invocationSetCompleteIfRunning,
+		arg.ID,
+		arg.FinalizerID,
+		arg.FinalizedAt,
+		arg.Result,
+	)
+	var i InvocationSetCompleteIfRunningRow
+	err := row.Scan(&i.ID, &i.State, &i.FinalizedAt)
 	return &i, err
 }

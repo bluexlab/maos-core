@@ -2,7 +2,6 @@ package invocation
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"strconv"
 	"time"
@@ -20,7 +19,8 @@ import (
 )
 
 const (
-	invokeTopic = "maos_invoke"
+	invokeTopic   = "maos_invoke"
+	responseTopic = "maos_response"
 )
 
 var (
@@ -55,6 +55,10 @@ type Manager struct {
 func (m *Manager) Start(ctx context.Context) error {
 	invokeSub, err := m.notifier.Listen(ctx, invokeTopic, m.handleInvokeNotify)
 	if err != nil {
+		return err
+	}
+	if err != nil {
+		invokeSub.Unlisten(ctx)
 		return err
 	}
 
@@ -96,15 +100,15 @@ func (m *Manager) InsertInvocation(ctx context.Context, callerAgentId int64, req
 
 	metadata, err := json.Marshal(request.Body.Meta)
 	if err != nil {
+		m.logger.Error("Failed to marshal metadata", "err", err)
 		return api.CreateInvocationAsync500JSONResponse{
-			N500JSONResponse: api.N500JSONResponse{
-				Error: fmt.Sprintf("Failed to marshal metadata. err: %s", err.Error()),
-			},
+			N500JSONResponse: api.N500JSONResponse{Error: "Failed to marshal metadata"},
 		}, nil
 	}
 
 	payload, err := json.Marshal(request.Body.Payload)
 	if err != nil {
+		m.logger.Error("Failed to marshal payload", "err", err)
 		return api.CreateInvocationAsync500JSONResponse{
 			N500JSONResponse: api.N500JSONResponse{Error: "Failed to marshal payload"},
 		}, nil
@@ -138,6 +142,149 @@ func (m *Manager) InsertInvocation(ctx context.Context, callerAgentId int64, req
 	}, nil
 }
 
+func (m *Manager) ExecuteInvocationSync(ctx context.Context, callerAgentId int64, request api.CreateInvocationSyncRequestObject) (api.CreateInvocationSyncResponseObject, error) {
+	m.logger.Info("ExecuteInvocationSync start", "callerAgentId", callerAgentId, "requestBody", request.Body)
+
+	if len(request.Body.Meta) == 0 {
+		return api.CreateInvocationSync400JSONResponse{
+			N400JSONResponse: api.N400JSONResponse{Error: "Meta is required"},
+		}, nil
+	}
+
+	metadata, err := json.Marshal(request.Body.Meta)
+	if err != nil {
+		m.logger.Error("Failed to marshal metadata", "err", err)
+		return api.CreateInvocationSync500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: "Failed to marshal metadata"},
+		}, nil
+	}
+
+	payload, err := json.Marshal(request.Body.Payload)
+	if err != nil {
+		m.logger.Error("Failed to marshal payload", "err", err)
+		return api.CreateInvocationSync500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: "Failed to marshal payload"},
+		}, nil
+	}
+
+	// subscript to response topic before insert invocation
+	// we keep 64 buffer size to avoid missing response before we start to drain the channel
+	responseCh := make(chan string, 64)
+	responseDone := make(chan struct{})
+	responseSub, err := m.notifier.Listen(ctx, responseTopic, func(topic notifier.NotificationTopic, payload string) {
+		// make sure we don't block the notifier
+		m.logger.Info("Received response notification", "topic", topic, "payload", payload)
+		select {
+		case <-responseDone:
+		case responseCh <- payload:
+		default:
+		}
+	})
+	defer responseSub.Unlisten(ctx)
+
+	invocation, err := m.accessor.Querier().InvocationInsert(ctx, m.accessor.Source(), &dbsqlc.InvocationInsertParams{
+		AgentName: request.Body.Agent,
+		State:     "available",
+		Metadata:  metadata,
+		Priority:  1,
+		Payload:   payload,
+	})
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return api.CreateInvocationSync400JSONResponse{
+				N400JSONResponse: api.N400JSONResponse{Error: "agent not found"},
+			}, nil
+		}
+		return nil, err
+	}
+
+	// notify invoke topic with the queue id
+	queueId := strconv.FormatInt(invocation.QueueID, 10)
+	m.accessor.Querier().PgNotifyOne(ctx, m.accessor.Source(), &dbsqlc.PgNotifyOneParams{
+		Topic:   invokeTopic,
+		Payload: queueId,
+	})
+
+	waitSec := util.Clamp(*lo.CoalesceOrEmpty(request.Params.Wait, &defaultWaitSec), 0, 60)
+	timeContext, cancel := context.WithTimeout(ctx, time.Duration(waitSec)*time.Second)
+	defer cancel()
+
+	invocationIdStr := strconv.FormatInt(invocation.ID, 10)
+	for {
+		select {
+		case <-timeContext.Done():
+			return api.CreateInvocationSync408Response{}, nil
+
+		case response := <-responseCh:
+			if response == invocationIdStr {
+				close(responseDone)
+				doneInvocation, err := m.accessor.Querier().InvocationFindById(ctx, m.accessor.Source(), invocation.ID)
+				result := make(map[string]interface{})
+				err = json.Unmarshal(doneInvocation.Result, &result)
+				if err != nil {
+					m.logger.Error("Failed to unmarshal result", "err", err)
+					return api.CreateInvocationSync500JSONResponse{}, nil
+				}
+				return api.CreateInvocationSync201JSONResponse{
+					Id:          invocationIdStr,
+					FinalizedAt: doneInvocation.AttemptedAt,
+					State:       api.InvocationState(doneInvocation.State),
+					Result:      &result,
+				}, nil
+			}
+		}
+	}
+}
+
+func (m *Manager) ReturnInvocationResponse(ctx context.Context, callerAgentId int64, request api.ReturnInvocationResponseRequestObject) (api.ReturnInvocationResponseResponseObject, error) {
+	m.logger.Info("ReturnInvocationResponse start", "callerAgentId", callerAgentId, "requestBody", *request.Body.Result)
+
+	// Find the invocation
+	invocationId, err := strconv.ParseInt(request.InvokeId, 10, 64)
+	if err != nil {
+		return api.ReturnInvocationResponse404Response{}, nil
+	}
+
+	result, err := json.Marshal(request.Body.Result)
+	if err != nil {
+		m.logger.Error("Failed to marshal invocation result", "err", err)
+		return api.ReturnInvocationResponse500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: "Failed to marshal result"},
+		}, nil
+	}
+
+	invocation, err := m.accessor.Querier().InvocationSetCompleteIfRunning(ctx, m.accessor.Source(), &dbsqlc.InvocationSetCompleteIfRunningParams{
+		ID:          invocationId,
+		FinalizedAt: time.Now().Unix(),
+		FinalizerID: callerAgentId,
+		Result:      result,
+	})
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return api.ReturnInvocationResponse404Response{}, nil
+		}
+
+		m.logger.Error("Failed to set invocation complete", "err", err)
+		return api.ReturnInvocationResponse500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: "Failed to set invocation compelte"},
+		}, nil
+	}
+
+	if invocation == nil {
+		return api.ReturnInvocationResponse404Response{}, nil
+	}
+
+	// notify response topic with the invocation id
+	m.logger.Debug("Notify response topic", "topic", responseTopic, "payload", request.InvokeId)
+	m.accessor.Querier().PgNotifyOne(ctx, m.accessor.Source(), &dbsqlc.PgNotifyOneParams{
+		Topic:   responseTopic,
+		Payload: request.InvokeId,
+	})
+
+	return api.ReturnInvocationResponse200Response{}, nil
+}
+
 func (m *Manager) GetNextInvocation(ctx context.Context, callerAgentId int64, queueId int64, request api.GetNextInvocationRequestObject) (api.GetNextInvocationResponseObject, error) {
 	m.logger.Info("GetNextInvocation start", "callerAgentId", callerAgentId, "requestParams", request.Params)
 
@@ -153,24 +300,13 @@ func (m *Manager) GetNextInvocation(ctx context.Context, callerAgentId int64, qu
 		return nil, err
 	}
 
-	waitSec := util.Clamp(*lo.CoalesceOrEmpty(request.Params.Wait, &defaultWaitSec), 0, 60)
+	waitSec := util.Clamp(*lo.CoalesceOrEmpty(request.Params.Wait, &defaultWaitSec), 1, 60)
 
 	dispatchId := strconv.FormatInt(queueId, 10)
 	m.invokeDispatcher.Listen(dispatchId)
 
-	invocation, err := getAvailble()
-	if err != nil {
-		m.logger.Error("Failed to get next invocation", "err", err)
-		return createGetNext500Response("Cannot get next invocation: " + err.Error()), nil
-	}
-
-	if invocation != nil {
-		return m.createGetNextResponse(invocation)
-	}
-
-	r, err := m.invokeDispatcher.WaitFor(dispatchId, time.Duration(waitSec)*time.Second)
-	if r != nil && err == nil {
-		// got notification. query again
+	startTime := time.Now().Unix()
+	for {
 		invocation, err := getAvailble()
 		if err != nil {
 			m.logger.Error("Failed to get next invocation", "err", err)
@@ -179,6 +315,17 @@ func (m *Manager) GetNextInvocation(ctx context.Context, callerAgentId int64, qu
 
 		if invocation != nil {
 			return m.createGetNextResponse(invocation)
+		}
+
+		remainingSec := waitSec - int(time.Now().Unix()-startTime)
+		if remainingSec <= 0 {
+			break
+		}
+
+		_, err = m.invokeDispatcher.WaitFor(dispatchId, time.Duration(remainingSec)*time.Second)
+		if err != nil {
+			m.logger.Error("Failed to wait for next invocation", "err", err)
+			return createGetNext500Response("Cannot wait for next invocation:"), nil
 		}
 	}
 

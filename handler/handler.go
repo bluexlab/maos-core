@@ -52,7 +52,11 @@ func (s *APIHandler) CreateInvocationAsync(ctx context.Context, request api.Crea
 }
 
 func (s *APIHandler) CreateInvocationSync(ctx context.Context, request api.CreateInvocationSyncRequestObject) (api.CreateInvocationSyncResponseObject, error) {
-	panic("not implemented")
+	token := ValidatePermissions(ctx, "CreateInvocationSync")
+	if token == nil {
+		return api.CreateInvocationSync401Response{}, nil
+	}
+	return s.invocationManager.ExecuteInvocationSync(ctx, token.AgentId, request)
 }
 
 func (s *APIHandler) GetInvocationById(ctx context.Context, request api.GetInvocationByIdRequestObject) (api.GetInvocationByIdResponseObject, error) {
@@ -70,17 +74,12 @@ func (s *APIHandler) GetNextInvocation(ctx context.Context, request api.GetNextI
 
 // ReturnInvocationResponse implements the POST /v1/invocation/{invoke_id}/response endpoint
 func (s *APIHandler) ReturnInvocationResponse(ctx context.Context, request api.ReturnInvocationResponseRequestObject) (api.ReturnInvocationResponseResponseObject, error) {
-	// Process the invocation response
-	// You can access the invoke_id and result from the request object
-	invokeID := request.InvokeId
-	result := request.Body.Result
+	token := ValidatePermissions(ctx, "ReturnInvocationResponse")
+	if token == nil {
+		return api.ReturnInvocationResponse401Response{}, nil
+	}
 
-	// Here you would typically store or process the result
-	// For this example, we'll just log it
-	resultJSON, _ := json.Marshal(result)
-	s.logger.Info("Received result", "invocation", invokeID, "result", string(resultJSON))
-
-	return api.ReturnInvocationResponse200Response{}, nil
+	return s.invocationManager.ReturnInvocationResponse(ctx, token.AgentId, request)
 }
 
 // ReturnInvocationError implements the POST /v1/invocation/{invoke_id}/error endpoint

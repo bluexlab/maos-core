@@ -469,6 +469,108 @@ func TestNotifier(t *testing.T) {
 		}
 	})
 
+	t.Run("RunWithAgentsUsers", func(t *testing.T) {
+		notifier, bundle := setup(t)
+		start(t, notifier)
+
+		const (
+			invokeTopic   = "invoke"
+			responseTopic = "response"
+			numUsers      = 100
+			numAgents     = 5
+		)
+		var (
+			agentShutdown = make(chan struct{})
+			agentErrors   = make(chan error)
+			userErrors    = make(chan error, numUsers)
+			responsesChan = make(chan string, numUsers)
+		)
+
+		timeout := time.After(10 * time.Second)
+
+		// simulate agent processing invocation
+		for i := 0; i < numAgents; i++ {
+			go func() {
+				sub, err := notifier.Listen(ctx, invokeTopic, func(topic NotificationTopic, payload string) {
+					t.Log("invoke notify", topic, payload)
+					sendNotification(ctx, t, bundle.accessor, responseTopic, "res-"+payload)
+				})
+				defer sub.Unlisten(ctx)
+
+				if err != nil {
+					agentErrors <- err
+					return
+				}
+				defer sub.Unlisten(ctx)
+				select {
+				case <-ctx.Done():
+				case <-agentShutdown:
+				}
+			}()
+		}
+
+		for i := 0; i < numUsers; i++ {
+			go func(idx int) {
+				doneChan := make(chan struct{})
+				payload := fmt.Sprintf("%d", idx)
+				once := sync.Once{}
+				sub, err := notifier.Listen(ctx, responseTopic, func(topic NotificationTopic, got string) {
+					// t.Log("response notify", topic, got)
+					if got == "res-"+payload {
+						once.Do(func() {
+							t.Logf("response: %s", got)
+
+							responsesChan <- got
+							doneChan <- struct{}{}
+						})
+					}
+				})
+				defer sub.Unlisten(ctx)
+				if err != nil {
+					userErrors <- err
+					return
+				}
+
+				sendNotification(ctx, t, bundle.accessor, invokeTopic, payload)
+
+				select {
+				case <-ctx.Done():
+				case <-doneChan:
+				}
+			}(i)
+		}
+
+		timed := false
+		responses := []string{}
+		for len(responses) < numUsers && !timed {
+			select {
+			case <-timeout:
+				timed = true
+				break
+			case <-ctx.Done():
+				break
+			case err := <-agentErrors:
+				t.Log("agent error: ", err)
+				require.NoError(t, err)
+				break
+			case err := <-userErrors:
+				t.Log("user error: ", err)
+				require.NoError(t, err)
+				break
+			case res := <-responsesChan:
+				t.Logf("response: %s", res)
+				responses = append(responses, res)
+				break
+			}
+		}
+
+		close(agentShutdown)
+
+		expected := lo.RepeatBy(numUsers, func(i int) string { return fmt.Sprintf("res-%d", i) })
+		require.ElementsMatch(t, expected, responses)
+	})
+
+	// Stress test meant to simulate a invocation is issued by users and processed agents
 	t.Run("WaitErrorAndBackoff", func(t *testing.T) {
 		t.Parallel()
 

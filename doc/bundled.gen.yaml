@@ -166,6 +166,17 @@ paths:
       operationId: createInvocationSync
       tags:
         - Invocation
+      parameters:
+        - in: query
+          name: wait
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 60
+          description: >-
+            The maximum time (in seconds) to wait for job completion. default is
+            10s
       requestBody:
         required: true
         content:
@@ -192,19 +203,20 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  id:
-                    type: string
-                    description: The unique identifier of the created invocation job
-                required:
-                  - id
+                $ref: '#/components/schemas/InvocationResult'
               example:
-                id: inv-16888
+                id: inv_123456789
+                state: completed
+                attempted_at: 1737456000
+                finalized_at: 1737466000
+                result:
+                  key: value
         '400':
           $ref: '#/components/responses/400'
         '401':
           description: Unauthorized
+        '408':
+          description: Request timeout
         '500':
           $ref: '#/components/responses/500'
   /v1/invocations/next:
@@ -299,7 +311,7 @@ paths:
           required: false
           schema:
             type: integer
-            minimum: 0
+            minimum: 1
             maximum: 60
           description: >-
             The maximum time (in seconds) to wait for job completion. If not
@@ -361,12 +373,14 @@ paths:
       responses:
         '200':
           description: Successful response
+        '400':
+          $ref: '#/components/responses/400'
         '401':
           description: Unauthorized
         '404':
           description: Invocation job not found
         '500':
-          description: Internal Server Error
+          $ref: '#/components/responses/500'
   /v1/invocations/{invoke_id}/error:
     post:
       summary: Return invocation error
@@ -1099,22 +1113,6 @@ components:
         error:
           type: string
           description: The error message
-    InvocationJob:
-      type: object
-      properties:
-        id:
-          type: string
-          description: The unique identifier for the invocation job
-        meta:
-          type: object
-          description: The metadata of the invocation job
-        payload:
-          type: object
-          description: The payload for the invocation job
-      required:
-        - id
-        - meta
-        - payload
     InvocationState:
       type: string
       enum:
@@ -1155,6 +1153,22 @@ components:
       required:
         - id
         - state
+    InvocationJob:
+      type: object
+      properties:
+        id:
+          type: string
+          description: The unique identifier for the invocation job
+        meta:
+          type: object
+          description: The metadata of the invocation job
+        payload:
+          type: object
+          description: The payload for the invocation job
+      required:
+        - id
+        - meta
+        - payload
     MessageContent:
       oneOf:
         - type: object

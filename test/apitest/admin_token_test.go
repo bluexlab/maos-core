@@ -61,18 +61,14 @@ func TestAdminTokenCreateEndpoint(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server, accessor, closer := SetupHttpTestWithDb(t, ctx)
-			defer closer()
+			server, accessor := SetupHttpTestWithDb(t, ctx)
 
 			agent := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
 			fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent.ID, 0, []string{"admin"})
 			fixture.InsertToken(t, ctx, accessor.Source(), "agent-token", agent.ID, 0, []string{"user"})
 
-			resp := PostHttp(t, server.URL+"/v1/admin/api_tokens", tt.body, tt.token)
+			resp, resBody := PostHttp(t, server.URL+"/v1/admin/api_tokens", tt.body, tt.token)
 			require.Equal(t, tt.expectedStatus, resp.StatusCode)
-
-			resBody, err := testhelper.ReadBody(resp.Body)
-			require.NoError(t, err)
 
 			if tt.expectedStatus == http.StatusCreated {
 				tokens, err := accessor.Querier().ApiTokenListByPage(ctx, accessor.Source(), &dbsqlc.ApiTokenListByPageParams{})

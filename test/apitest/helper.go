@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"net/http"
 	"testing"
+
+	"gitlab.com/navyx/ai/maos/maos-core/internal/testhelper"
 )
 
-func GetHttp(t *testing.T, url string, token string) *http.Response {
+func GetHttp(t *testing.T, url string, token string) (*http.Response, string) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		t.Fatalf("Error creating request: %v", err)
@@ -20,10 +22,16 @@ func GetHttp(t *testing.T, url string, token string) *http.Response {
 		t.Fatalf("Error making request: %v", err)
 	}
 
-	return resp
+	resBody, err := testhelper.ReadBody(resp.Body)
+	if err != nil {
+		t.Fatalf("Error reading response body: %v", err)
+	}
+
+	client.CloseIdleConnections()
+	return resp, resBody
 }
 
-func PostHttp(t *testing.T, url string, body string, token string) *http.Response {
+func PostHttp(t *testing.T, url string, body string, token string) (*http.Response, string) {
 	req, err := http.NewRequest("POST", url, bytes.NewBufferString(body))
 	if err != nil {
 		t.Fatalf("Error creating request: %v", err)
@@ -36,5 +44,10 @@ func PostHttp(t *testing.T, url string, body string, token string) *http.Respons
 		t.Fatalf("Error making request: %v", err)
 	}
 
-	return resp
+	resBody, err := testhelper.ReadBody(resp.Body)
+	if err != nil {
+		t.Fatalf("Error reading response body: %v", err)
+	}
+	client.CloseIdleConnections()
+	return resp, resBody
 }

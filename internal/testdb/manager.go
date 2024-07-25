@@ -111,8 +111,9 @@ func (m *Manager) Close(ctx context.Context) {
 		delete(m.activePools, pool)
 	}
 
+	backgroundCtx := context.Background()
 	for _, schemaName := range m.schemas {
-		_, err := m.mainPool.Exec(ctx, fmt.Sprintf(`DROP SCHEMA "%s" CASCADE;`, schemaName))
+		_, err := m.mainPool.Exec(backgroundCtx, fmt.Sprintf(`DROP SCHEMA "%s" CASCADE;`, schemaName))
 		if err != nil {
 			m.logger.Error("Failed to drop schema", "schema", schemaName, "error", err)
 		}

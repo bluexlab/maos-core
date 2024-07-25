@@ -356,6 +356,12 @@ type CreateInvocationSyncJSONBody struct {
 	Payload map[string]interface{} `json:"payload"`
 }
 
+// CreateInvocationSyncParams defines parameters for CreateInvocationSync.
+type CreateInvocationSyncParams struct {
+	// Wait The maximum time (in seconds) to wait for job completion. default is 10s
+	Wait *int `form:"wait,omitempty" json:"wait,omitempty"`
+}
+
 // GetInvocationByIdParams defines parameters for GetInvocationById.
 type GetInvocationByIdParams struct {
 	// Wait The maximum time (in seconds) to wait for job completion. If not specified, returns immediately.
@@ -568,7 +574,7 @@ type ServerInterface interface {
 	GetNextInvocation(w http.ResponseWriter, r *http.Request, params GetNextInvocationParams)
 	// Create a new synchronous invocation job
 	// (POST /v1/invocations/sync)
-	CreateInvocationSync(w http.ResponseWriter, r *http.Request)
+	CreateInvocationSync(w http.ResponseWriter, r *http.Request, params CreateInvocationSyncParams)
 	// Get the status and result of an invocation job by ID
 	// (GET /v1/invocations/{id})
 	GetInvocationById(w http.ResponseWriter, r *http.Request, id string, params GetInvocationByIdParams)
@@ -902,12 +908,25 @@ func (siw *ServerInterfaceWrapper) GetNextInvocation(w http.ResponseWriter, r *h
 func (siw *ServerInterfaceWrapper) CreateInvocationSync(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	var err error
+
 	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
 
 	ctx = context.WithValue(ctx, TraceScopes, []string{})
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateInvocationSyncParams
+
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "wait", r.URL.Query(), &params.Wait)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CreateInvocationSync(w, r)
+		siw.Handler.CreateInvocationSync(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1789,17 +1808,15 @@ func (response GetNextInvocation500JSONResponse) VisitGetNextInvocationResponse(
 }
 
 type CreateInvocationSyncRequestObject struct {
-	Body *CreateInvocationSyncJSONRequestBody
+	Params CreateInvocationSyncParams
+	Body   *CreateInvocationSyncJSONRequestBody
 }
 
 type CreateInvocationSyncResponseObject interface {
 	VisitCreateInvocationSyncResponse(w http.ResponseWriter) error
 }
 
-type CreateInvocationSync201JSONResponse struct {
-	// Id The unique identifier of the created invocation job
-	Id string `json:"id"`
-}
+type CreateInvocationSync201JSONResponse InvocationResult
 
 func (response CreateInvocationSync201JSONResponse) VisitCreateInvocationSyncResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
@@ -1822,6 +1839,14 @@ type CreateInvocationSync401Response struct {
 
 func (response CreateInvocationSync401Response) VisitCreateInvocationSyncResponse(w http.ResponseWriter) error {
 	w.WriteHeader(401)
+	return nil
+}
+
+type CreateInvocationSync408Response struct {
+}
+
+func (response CreateInvocationSync408Response) VisitCreateInvocationSyncResponse(w http.ResponseWriter) error {
+	w.WriteHeader(408)
 	return nil
 }
 
@@ -1953,6 +1978,15 @@ func (response ReturnInvocationResponse200Response) VisitReturnInvocationRespons
 	return nil
 }
 
+type ReturnInvocationResponse400JSONResponse struct{ N400JSONResponse }
+
+func (response ReturnInvocationResponse400JSONResponse) VisitReturnInvocationResponseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ReturnInvocationResponse401Response struct {
 }
 
@@ -1969,12 +2003,13 @@ func (response ReturnInvocationResponse404Response) VisitReturnInvocationRespons
 	return nil
 }
 
-type ReturnInvocationResponse500Response struct {
-}
+type ReturnInvocationResponse500JSONResponse struct{ N500JSONResponse }
 
-func (response ReturnInvocationResponse500Response) VisitReturnInvocationResponseResponse(w http.ResponseWriter) error {
+func (response ReturnInvocationResponse500JSONResponse) VisitReturnInvocationResponseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
-	return nil
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type CreateRerankRequestObject struct {
@@ -2574,8 +2609,10 @@ func (sh *strictHandler) GetNextInvocation(w http.ResponseWriter, r *http.Reques
 }
 
 // CreateInvocationSync operation middleware
-func (sh *strictHandler) CreateInvocationSync(w http.ResponseWriter, r *http.Request) {
+func (sh *strictHandler) CreateInvocationSync(w http.ResponseWriter, r *http.Request, params CreateInvocationSyncParams) {
 	var request CreateInvocationSyncRequestObject
+
+	request.Params = params
 
 	var body CreateInvocationSyncJSONRequestBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {

@@ -1,10 +1,11 @@
-package invocation
+package invocation_test
 
 import (
 	"context"
 	"strconv"
 	"testing"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
@@ -12,7 +13,10 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess/dbsqlc"
 	"gitlab.com/navyx/ai/maos/maos-core/internal/fixture"
 	"gitlab.com/navyx/ai/maos/maos-core/internal/testhelper"
+	"gitlab.com/navyx/ai/maos/maos-core/invocation"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 func TestInsertInvocation(t *testing.T) {
 	t.Parallel()
@@ -24,7 +28,7 @@ func TestInsertInvocation(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
 		accessor := dbaccess.New(dbPool)
-		manager := NewManager(testhelper.Logger(t), accessor)
+		manager := invocation.NewManager(testhelper.Logger(t), accessor)
 
 		agent := fixture.InsertAgent(t, ctx, dbPool, "agent1")
 
@@ -76,7 +80,7 @@ func TestInsertInvocation(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
 		accessor := dbaccess.New(dbPool)
-		manager := NewManager(testhelper.Logger(t), accessor)
+		manager := invocation.NewManager(testhelper.Logger(t), accessor)
 
 		callerAgentID := int64(1)
 
@@ -103,7 +107,7 @@ func TestInsertInvocation(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
 		accessor := dbaccess.New(dbPool)
-		manager := NewManager(testhelper.Logger(t), accessor)
+		manager := invocation.NewManager(testhelper.Logger(t), accessor)
 
 		agent := fixture.InsertAgent(t, ctx, dbPool, "agent1")
 
@@ -126,7 +130,7 @@ func TestInsertInvocation(t *testing.T) {
 		defer dbPool.Close()
 
 		accessor := dbaccess.New(dbPool)
-		manager := NewManager(testhelper.Logger(t), accessor)
+		manager := invocation.NewManager(testhelper.Logger(t), accessor)
 
 		callerAgentID := int64(1)
 

@@ -1,7 +1,7 @@
 -- name: InvocationFindById :one
 SELECT *
 FROM invocations
-WHERE id = @id;
+WHERE id = @id::bigint;
 
 -- name: InvocationInsert :one
 WITH agent_queue AS (
@@ -33,29 +33,55 @@ RETURNING id, queue_id;
 
 -- name: InvocationGetAvailable :many
 WITH locked_invocations AS (
-    SELECT
-        *
-    FROM
-        invocations
-    WHERE
-        state = 'available'::invocation_state
-        AND queue_id = @queue_id::bigint
-    ORDER BY
-        priority ASC,
-        id ASC
-    LIMIT @max::integer
-    FOR UPDATE
-    SKIP LOCKED
+	SELECT
+		*
+	FROM
+		invocations
+	WHERE
+		state = 'available'::invocation_state
+		AND queue_id = @queue_id::bigint
+	ORDER BY
+		priority ASC,
+		id ASC
+	LIMIT @max::integer
+	FOR UPDATE
+	SKIP LOCKED
 )
 UPDATE
-    invocations
+	invocations
 SET
-    state = 'running'::invocation_state,
-    attempted_at = EXTRACT(EPOCH FROM NOW()),
-    attempted_by = array_append(invocations.attempted_by, @attempted_by::bigint)
+	state = 'running'::invocation_state,
+	attempted_at = EXTRACT(EPOCH FROM NOW()),
+	attempted_by = array_append(invocations.attempted_by, @attempted_by::bigint)
 FROM
-    locked_invocations
+	locked_invocations
 WHERE
-    invocations.id = locked_invocations.id
+	invocations.id = locked_invocations.id
 RETURNING
-    invocations.*;
+	invocations.*;
+
+
+-- name: InvocationSetCompleteIfRunning :one
+WITH invocation_to_update AS (
+	SELECT invocations.id
+	FROM invocations
+	WHERE invocations.id = @id::bigint
+		AND invocations.state = 'running'::invocation_state
+		AND (
+            array_length(attempted_by, 1) > 0
+            AND attempted_by[array_length(attempted_by, 1)] = @finalizer_id::bigint
+        )
+	FOR UPDATE
+),
+updated_invocation AS (
+	UPDATE invocations
+	SET
+		finalized_at = @finalized_at::bigint,
+		result = @result::jsonb,
+		state = 'completed'
+	FROM invocation_to_update
+	WHERE invocations.id = invocation_to_update.id
+	RETURNING invocations.*
+)
+SELECT id, state, finalized_at
+FROM updated_invocation;

@@ -17,7 +17,7 @@ func TestDispatcher(t *testing.T) {
 		d := invocation.NewDispatcher[int]()
 		require.NotNil(t, d, "NewDispatcher should not return nil")
 		require.False(t, d.IsClosed(), "New dispatcher should not be closed")
-		require.Empty(t, d.Payloads(), "New dispatcher should have empty payloads map")
+		require.Zero(t, d.Size(), "New dispatcher should be empty")
 	})
 
 	t.Run("WaitFor", func(t *testing.T) {
@@ -44,7 +44,7 @@ func TestDispatcher(t *testing.T) {
 		})
 
 		t.Run("Closed dispatcher", func(t *testing.T) {
-			require.NoError(t, d.Close())
+			require.NotPanics(t, func() { d.Close() })
 			_, err := d.WaitFor("closed", 10*time.Millisecond)
 			require.EqualError(t, err, "dispatcher is closed")
 		})
@@ -74,7 +74,7 @@ func TestDispatcher(t *testing.T) {
 		})
 
 		t.Run("Dispatch to closed dispatcher", func(t *testing.T) {
-			require.NoError(t, d.Close())
+			require.NotPanics(t, func() { d.Close() })
 			require.NotPanics(t, func() {
 				d.Dispatch("closed", ptr(5))
 			})
@@ -105,7 +105,7 @@ func TestDispatcher(t *testing.T) {
 				require.NotNil(t, result)
 			}
 
-			require.NoError(t, d.Close())
+			require.NotPanics(t, func() { d.Close() })
 		})
 
 	})
@@ -114,15 +114,13 @@ func TestDispatcher(t *testing.T) {
 		d := invocation.NewDispatcher[bool]()
 
 		t.Run("Successful close", func(t *testing.T) {
-			err := d.Close()
-			require.NoError(t, err)
+			d.Close()
 			require.True(t, d.IsClosed(), "Dispatcher should be marked as closed")
-			require.Empty(t, d.Payloads(), "Payloads map should be empty after closing")
+			require.Zero(t, d.Size(), "Payloads map should be empty after closing")
 		})
 
 		t.Run("Double close", func(t *testing.T) {
-			err := d.Close()
-			require.EqualError(t, err, "dispatcher is already closed")
+			require.NotPanics(t, func() { d.Close() }, "dispatcher is already closed")
 		})
 	})
 
@@ -152,7 +150,7 @@ func TestDispatcher(t *testing.T) {
 		}
 
 		wg.Wait()
-		require.NoError(t, d.Close())
+		require.NotPanics(t, func() { d.Close() })
 	})
 
 	t.Run("Dispatch to multiple IDs", func(t *testing.T) {
@@ -179,7 +177,7 @@ func TestDispatcher(t *testing.T) {
 			}
 
 			wg.Wait()
-			require.NoError(t, d.Close())
+			require.NotPanics(t, func() { d.Close() })
 		})
 
 		t.Run("Dispatch and wait with different goroutines", func(t *testing.T) {
@@ -211,7 +209,7 @@ func TestDispatcher(t *testing.T) {
 			}
 
 			wg.Wait()
-			require.NoError(t, d.Close())
+			require.NotPanics(t, func() { d.Close() })
 		})
 	})
 }

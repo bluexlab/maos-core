@@ -31,7 +31,7 @@ func SetupHttpTestWithDb(t *testing.T, ctx context.Context) (*httptest.Server, d
 
 	router := mux.NewRouter()
 	middleware, cacheCloser := middleware.NewBearerAuthMiddleware(
-		middleware.NewDatabaseApiTokenFetch(accessor),
+		middleware.NewDatabaseApiTokenFetch(accessor, ""),
 		10*time.Second,
 	)
 

@@ -8,5 +8,10 @@ import (
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	app := &App{logger}
-	app.Run()
+
+	if len(os.Args) > 1 && os.Args[1] == "migrate" {
+		app.Migrate()
+	} else {
+		app.Run()
+	}
 }

@@ -1,17 +1,9 @@
-# i.e. https://jasonstitt.com/gitignore-whitelisting-patterns
-# Ignore everything in the root
-/*
+.env*
 
-# Allow files and folders with a pattern starting with !
-!*.sh
-!/app/
-!/credential/
-!/frontend/
-/frontend/.*
-/frontend/dist/
-/frontend/node_modules/
-!/pkg/
-!/test/
-!/testdata/
-!go.mod
-!go.sum
+vendor/
+bin/
+
+go.work
+.vscode
+coverage.html
+coverage.out

@@ -154,7 +154,7 @@ func (s *APIHandler) AdminCreateAgent(ctx context.Context, request api.AdminCrea
 	if token == nil {
 		return api.AdminCreateAgent401Response{}, nil
 	}
-	panic("not implemented")
+	return admin.CreateaAgent(ctx, s.accessor, request)
 }
 
 func (s *APIHandler) AdminListApiTokens(ctx context.Context, request api.AdminListApiTokensRequestObject) (api.AdminListApiTokensResponseObject, error) {

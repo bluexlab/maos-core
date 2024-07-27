@@ -184,7 +184,7 @@ type InvocationJob struct {
 	// Id The unique identifier for the invocation job
 	Id string `json:"id"`
 
-	// Meta The metadata of the invocation job
+	// Meta The metadata of the invocation job. it contains 'kind' to specify the type of the invocation job
 	Meta map[string]interface{} `json:"meta"`
 
 	// Payload The payload for the invocation job

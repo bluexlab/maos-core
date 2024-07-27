@@ -32,7 +32,9 @@ func ListAgents(ctx context.Context, accessor dbaccess.Accessor, request api.Adm
 		},
 	)
 	response := api.AdminListAgents200JSONResponse{Data: data}
-	response.Meta.TotalPages = int((res[0].TotalCount + int64(*pageSize) - 1) / int64(*pageSize))
+	if len(res) > 0 {
+		response.Meta.TotalPages = int((res[0].TotalCount + int64(*pageSize) - 1) / int64(*pageSize))
+	}
 	return response, nil
 }
 

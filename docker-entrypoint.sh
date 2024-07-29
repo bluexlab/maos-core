@@ -2,21 +2,11 @@
 
 set -e
 
-# Make sure DATABASE_URL is set
-if [ -z "$DATABASE_URL" ]; then
-    echo "ERROR: DATABASE_URL is not set"
-    exit 1
-fi
-
-# Extract the host and port using sed
-DATABASE_HOST=$(echo "$DATABASE_URL" | grep -oE '://([^@/]+@)?([^:/]+)' | grep -oE '([^@/]+)$')
-DATABASE_PORT=$(echo "$DATABASE_URL" | grep -oE ':[0-9]+/' | grep -oE '[0-9]+')
-
 # Check if both HOST and PORT were extracted successfully
 if [ -n "$DATABASE_HOST" ] && [ -n "$DATABASE_PORT" ]; then
     echo "INFO: Waiting for Postgres in $DATABASE_HOST:$DATABASE_PORT"
 else
-    echo "Could not extract HOST and PORT from DATABASE_URL"
+    echo "ERROR: DATABASE_HOST and DATABASE_PORT is not set"
     exit 1
 fi
 

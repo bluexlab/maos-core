@@ -90,7 +90,7 @@ func (m *Manager) Close(ctx context.Context) error {
 }
 
 func (m *Manager) InsertInvocation(ctx context.Context, callerAgentId int64, request api.CreateInvocationAsyncRequestObject) (api.CreateInvocationAsyncResponseObject, error) {
-	m.logger.Info("InsertInvocation start", "callerAgentId", callerAgentId, "requestBody", request.Body)
+	m.logger.Debug("InsertInvocation start", "callerAgentId", callerAgentId, "requestBody", request.Body)
 
 	if len(request.Body.Meta) == 0 {
 		return api.CreateInvocationAsync400JSONResponse{

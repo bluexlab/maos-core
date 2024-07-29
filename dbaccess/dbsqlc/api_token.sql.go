@@ -9,6 +9,18 @@ import (
 	"context"
 )
 
+const apiTokenCount = `-- name: ApiTokenCount :one
+SELECT COUNT(*) as count
+FROM api_tokens
+`
+
+func (q *Queries) ApiTokenCount(ctx context.Context, db DBTX) (int64, error) {
+	row := db.QueryRow(ctx, apiTokenCount)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const apiTokenFindByID = `-- name: ApiTokenFindByID :one
 SELECT t.id, a.id as agent_id, a.queue_id, t.permissions, t.expire_at, t.created_by
 FROM api_tokens t

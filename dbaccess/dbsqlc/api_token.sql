@@ -21,6 +21,10 @@ JOIN agents a ON t.agent_id = a.id
 WHERE t.id = @id
 LIMIT 1;
 
+-- name: ApiTokenCount :one
+SELECT COUNT(*) as count
+FROM api_tokens;
+
 -- name: ApiTokenInsert :one
 INSERT INTO api_tokens(
     id,

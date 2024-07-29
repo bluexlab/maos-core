@@ -12,6 +12,7 @@ type Querier interface {
 	AgentFindById(ctx context.Context, db DBTX, id int64) (*Agent, error)
 	AgentInsert(ctx context.Context, db DBTX, arg *AgentInsertParams) (*Agent, error)
 	AgentListPagenated(ctx context.Context, db DBTX, arg *AgentListPagenatedParams) ([]*AgentListPagenatedRow, error)
+	ApiTokenCount(ctx context.Context, db DBTX) (int64, error)
 	ApiTokenFindByID(ctx context.Context, db DBTX, id string) (*ApiTokenFindByIDRow, error)
 	ApiTokenInsert(ctx context.Context, db DBTX, arg *ApiTokenInsertParams) (*ApiToken, error)
 	ApiTokenListByPage(ctx context.Context, db DBTX, arg *ApiTokenListByPageParams) ([]*ApiTokenListByPageRow, error)

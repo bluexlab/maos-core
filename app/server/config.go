@@ -8,5 +8,4 @@ type Config struct {
 	DatabaseUser     string `envconfig:"DATABASE_USER" validate:"omitempty"`
 	DatabasePassword string `envconfig:"DATABASE_PASSWORD" validate:"omitempty"`
 	DatabaseName     string `envconfig:"DATABASE_NAME" validate:"omitempty"`
-	SysApiToken      string `envconfig:"SYS_API_TOKEN" validate:"omitempty"`
 }

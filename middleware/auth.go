@@ -52,8 +52,6 @@ func NewBearerAuthMiddleware(fetcher TokenFetcher, cacheTtl time.Duration) (api.
 				return nil, nil
 			}
 
-			slog.Debug("Authorization token", "token", auth[:6])
-
 			tokenString := auth[len(prefix):]
 			token := tokenCache.GetToken(ctx, tokenString)
 			if token == nil {

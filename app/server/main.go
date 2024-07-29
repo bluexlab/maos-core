@@ -28,7 +28,7 @@ func main() {
 func initLogger() *slog.Logger {
 	// Get log level from environment variable, default to "info"
 	logLevel := strings.ToLower(os.Getenv("LOG_LEVEL"))
-	level := slog.LevelInfo
+	level := slog.LevelDebug
 	switch logLevel {
 	case "debug":
 		level = slog.LevelDebug

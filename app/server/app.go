@@ -7,10 +7,12 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/go-playground/validator"
 	"github.com/gorilla/mux"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kelseyhightower/envconfig"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
@@ -21,6 +23,26 @@ import (
 )
 
 const appName string = "maos-core-server"
+const bootstrapApiToken string = "bootstrap-token"
+
+type LoggingQueryTracer struct {
+	logger *slog.Logger
+}
+
+func (t *LoggingQueryTracer) TraceQueryStart(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
+	traceId := ctx.Value("TRACEID")
+	if strings.Contains(data.SQL, "api_tokens") {
+		t.logger.Debug("Query started", "sql", data.SQL, "TraceId", traceId)
+	} else {
+		t.logger.Debug("Query started", "sql", data.SQL, "args", data.Args, "TraceId", traceId)
+	}
+	return ctx
+}
+
+func (t *LoggingQueryTracer) TraceQueryEnd(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryEndData) {
+	traceId := ctx.Value("TRACEID")
+	t.logger.Debug("Query ended", "CommandTag", data.CommandTag, "duration", data.CommandTag, "TraceId", traceId)
+}
 
 type App struct {
 	logger *slog.Logger
@@ -32,7 +54,14 @@ func (a *App) Run() {
 	config := a.loadConfig()
 
 	// Connect to the database and create a new accessor
-	pool, err := pgxpool.New(ctx, config.DatabaseUrl)
+	dbConfig, err := pgxpool.ParseConfig(config.DatabaseUrl)
+	if err != nil {
+		a.logger.Error("Failed to parse connection string", "err", err)
+		os.Exit(1)
+	}
+
+	dbConfig.ConnConfig.Tracer = &LoggingQueryTracer{a.logger}
+	pool, err := pgxpool.NewWithConfig(ctx, dbConfig)
 	if err != nil {
 		a.logger.Error("Failed to connect to database", "err", err)
 		os.Exit(1)
@@ -46,12 +75,8 @@ func (a *App) Run() {
 	router := mux.NewRouter()
 
 	// Init auth middleware and token cache
-	if config.SysApiToken != "" {
-		a.logger.Info("System API token is set")
-	}
-
 	middleware, cacheCloser := middleware.NewBearerAuthMiddleware(
-		middleware.NewDatabaseApiTokenFetch(accessor, config.SysApiToken),
+		middleware.NewDatabaseApiTokenFetch(accessor, bootstrapApiToken),
 		10*time.Second,
 	)
 	defer cacheCloser()
@@ -122,7 +147,14 @@ func (a *App) Migrate() {
 	config := a.loadConfig()
 
 	// Connect to the database and create a new accessor
-	pool, err := pgxpool.New(ctx, config.DatabaseUrl)
+	dbConfig, err := pgxpool.ParseConfig(config.DatabaseUrl)
+	if err != nil {
+		a.logger.Error("Failed to parse connection string", "err", err)
+		os.Exit(1)
+	}
+
+	dbConfig.ConnConfig.Tracer = &LoggingQueryTracer{a.logger}
+	pool, err := pgxpool.NewWithConfig(ctx, dbConfig)
 	if err != nil {
 		a.logger.Error("Failed to connect to database", "err", err)
 		os.Exit(1)
@@ -130,6 +162,7 @@ func (a *App) Migrate() {
 	defer pool.Close()
 
 	accessor := dbaccess.New(pool)
+
 	_, err = migrate.New(accessor, nil).Migrate(ctx, migrate.DirectionUp, &migrate.MigrateOpts{})
 	if err != nil {
 		a.logger.Error("Failed to migrate db", "url", config.DatabaseUrl, "error", err.Error())

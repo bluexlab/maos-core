@@ -13,7 +13,7 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/internal/fixture"
 )
 
-func TestInvocationReturnResponseEndpoint(t *testing.T) {
+func TestInvocationReturnErrorEndpoint(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -36,37 +36,38 @@ func TestInvocationReturnResponseEndpoint(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		body := `{"result":{"res": 16888}}`
-		resp, _ := PostHttp(t, fmt.Sprintf("%s/v1/invocations/%d/response", server.URL, invocation), body, token.ID)
+		body := `{"errors":{"err": 16888}}`
+		resp, _ := PostHttp(t, fmt.Sprintf("%s/v1/invocations/%d/error", server.URL, invocation), body, token.ID)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
 		row, err := accessor.Querier().InvocationFindById(ctx, accessor.Source(), invocation)
 		require.NoError(t, err)
-		require.Equal(t, dbsqlc.InvocationState("completed"), row.State)
-		require.JSONEq(t, `{"res": 16888}`, string(row.Result))
+		require.Equal(t, dbsqlc.InvocationState("discarded"), row.State)
+		require.JSONEq(t, `{"err": 16888}`, string(row.Errors))
 	})
 
 	t.Run("invalid token", func(t *testing.T) {
 		server, _, _, token := setup(t, ctx)
 
-		body := `{"result":{"res": 16888}}`
-		resp, _ := PostHttp(t, fmt.Sprintf("%s/v1/invocations/%d/response", server.URL, 1998), body, token.ID+"n")
+		body := `{"errors":{"err": 16888}}`
+		resp, _ := PostHttp(t, fmt.Sprintf("%s/v1/invocations/%d/error", server.URL, 1998), body, token.ID+"n")
 		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	})
 
 	t.Run("invalid permission", func(t *testing.T) {
-		server, _, _, token := setup(t, ctx)
+		server, accessor, agent, _ := setup(t, ctx)
+		token := fixture.InsertToken(t, ctx, accessor.Source(), "agent-token2", agent.ID, 0, []string{"create:invocation"})
 
-		body := `{"result":{"res": 16888}}`
-		resp, _ := PostHttp(t, fmt.Sprintf("%s/v1/invocations/%d/response", server.URL, 1998), body, token.ID+"n")
+		body := `{"errors":{"err": 16888}}`
+		resp, _ := PostHttp(t, fmt.Sprintf("%s/v1/invocations/%d/error", server.URL, 1998), body, token.ID+"n")
 		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	})
 
 	t.Run("invalid invocation id", func(t *testing.T) {
 		server, _, _, token := setup(t, ctx)
 
-		body := `{"result":{"res": 16888}}`
-		resp, _ := PostHttp(t, fmt.Sprintf("%s/v1/invocations/%d/response", server.URL, 1998), body, token.ID)
+		body := `{"errors":{"err": 16888}}`
+		resp, _ := PostHttp(t, fmt.Sprintf("%s/v1/invocations/%d/error", server.URL, 1998), body, token.ID)
 		require.Equal(t, http.StatusNotFound, resp.StatusCode)
 	})
 
@@ -84,8 +85,8 @@ func TestInvocationReturnResponseEndpoint(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		body := `{"result":{"res": 16888}}`
-		resp, _ := PostHttp(t, fmt.Sprintf("%s/v1/invocations/%d/response", server.URL, invocation), body, token2.ID)
+		body := `{"errors":{"err": 16888}}`
+		resp, _ := PostHttp(t, fmt.Sprintf("%s/v1/invocations/%d/error", server.URL, invocation), body, token2.ID)
 		require.Equal(t, http.StatusNotFound, resp.StatusCode)
 	})
 }

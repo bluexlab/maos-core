@@ -356,7 +356,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InvocationJob'
+                $ref: '#/components/schemas/InvocationResult'
               example:
                 id: inv_123456789
                 state: running
@@ -421,18 +421,20 @@ paths:
             schema:
               type: object
               properties:
-                error:
+                errors:
                   type: object
                   description: The error details of the invocation
       responses:
         '200':
           description: Successful response
+        '400':
+          $ref: '#/components/responses/400'
         '401':
           description: Unauthorized
         '404':
           description: Invocation job not found
         '500':
-          description: Internal Server Error
+          $ref: '#/components/responses/500'
   /v1/completion/models:
     get:
       summary: Get model list.

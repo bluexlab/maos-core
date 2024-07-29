@@ -22,7 +22,7 @@ func TestInvocationExecuteEndpoint(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("one agent and one execution", func(t *testing.T) {
-		server, accessor := SetupHttpTestWithDb(t, ctx)
+		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
 
 		agent := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
 		token := fixture.InsertToken(t, ctx, accessor.Source(), "agent-token", agent.ID, 0, []string{"read:invocation"})
@@ -32,7 +32,7 @@ func TestInvocationExecuteEndpoint(t *testing.T) {
 		var invocationId int64
 		go func() {
 			// get available invocation
-			time.Sleep(10 * time.Millisecond)
+			time.Sleep(50 * time.Millisecond)
 			invocations, err := accessor.Querier().InvocationGetAvailable(ctx, accessor.Source(), &dbsqlc.InvocationGetAvailableParams{
 				AttemptedBy: agent.ID,
 				QueueID:     agent.QueueID,
@@ -59,7 +59,7 @@ func TestInvocationExecuteEndpoint(t *testing.T) {
 	})
 
 	t.Run("timeout", func(t *testing.T) {
-		server, accessor := SetupHttpTestWithDb(t, ctx)
+		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
 
 		fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
 		user := fixture.InsertAgent(t, ctx, accessor.Source(), "user")
@@ -71,7 +71,7 @@ func TestInvocationExecuteEndpoint(t *testing.T) {
 	})
 
 	t.Run("multiple agents and executions", func(t *testing.T) {
-		server, accessor := SetupHttpTestWithDb(t, ctx)
+		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
 
 		const (
 			agentCount   = 4
@@ -228,7 +228,7 @@ func TestInvocationExecuteEndpointErrorCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server, accessor := SetupHttpTestWithDb(t, ctx)
+			server, accessor, _ := SetupHttpTestWithDb(t, ctx)
 
 			agent := fixture.InsertAgent(t, ctx, accessor.Source(), tt.agentName)
 			token := fixture.InsertToken(t, ctx, accessor.Source(), tt.tokenName, agent.ID, 0, tt.permissions)

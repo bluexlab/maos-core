@@ -217,3 +217,54 @@ func (q *Queries) InvocationSetCompleteIfRunning(ctx context.Context, db DBTX, a
 	err := row.Scan(&i.ID, &i.State, &i.FinalizedAt)
 	return &i, err
 }
+
+const invocationSetFailureIfRunning = `-- name: InvocationSetFailureIfRunning :one
+WITH invocation_to_update AS (
+	SELECT invocations.id
+	FROM invocations
+	WHERE invocations.id = $1::bigint
+		AND invocations.state = 'running'::invocation_state
+		AND (
+            array_length(attempted_by, 1) > 0
+            AND attempted_by[array_length(attempted_by, 1)] = $2::bigint
+        )
+	FOR UPDATE
+),
+updated_invocation AS (
+	UPDATE invocations
+	SET
+		finalized_at = $3::bigint,
+		errors = $4::jsonb,
+		state = 'discarded'
+	FROM invocation_to_update
+	WHERE invocations.id = invocation_to_update.id
+	RETURNING invocations.id, invocations.state, invocations.queue_id, invocations.attempted_at, invocations.created_at, invocations.finalized_at, invocations.priority, invocations.payload, invocations.errors, invocations.result, invocations.metadata, invocations.tags, invocations.attempted_by
+)
+SELECT id, state, finalized_at
+FROM updated_invocation
+`
+
+type InvocationSetFailureIfRunningParams struct {
+	ID          int64
+	FinalizerID int64
+	FinalizedAt int64
+	Errors      []byte
+}
+
+type InvocationSetFailureIfRunningRow struct {
+	ID          int64
+	State       InvocationState
+	FinalizedAt *int64
+}
+
+func (q *Queries) InvocationSetFailureIfRunning(ctx context.Context, db DBTX, arg *InvocationSetFailureIfRunningParams) (*InvocationSetFailureIfRunningRow, error) {
+	row := db.QueryRow(ctx, invocationSetFailureIfRunning,
+		arg.ID,
+		arg.FinalizerID,
+		arg.FinalizedAt,
+		arg.Errors,
+	)
+	var i InvocationSetFailureIfRunningRow
+	err := row.Scan(&i.ID, &i.State, &i.FinalizedAt)
+	return &i, err
+}

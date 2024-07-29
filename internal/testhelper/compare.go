@@ -14,6 +14,13 @@ func AssertEqualIgnoringFields(t *testing.T, expected, actual interface{}, ignor
 	assertEqualRecursive(t, reflect.ValueOf(expected), reflect.ValueOf(actual), "", ignoredFields)
 }
 
+func AssertJsonEqIgnoringFields(t *testing.T, expected, actual string, ignoredFields ...string) {
+	t.Helper()
+	expectedMap := JsonToMap(t, expected)
+	actualMap := JsonToMap(t, actual)
+	AssertEqualIgnoringFields(t, expectedMap, actualMap, ignoredFields...)
+}
+
 func assertEqualRecursive(t *testing.T, expected, actual reflect.Value, path string, ignoredFields []string) {
 	t.Helper()
 

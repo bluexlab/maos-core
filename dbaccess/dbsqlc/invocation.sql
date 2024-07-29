@@ -85,3 +85,28 @@ updated_invocation AS (
 )
 SELECT id, state, finalized_at
 FROM updated_invocation;
+
+-- name: InvocationSetFailureIfRunning :one
+WITH invocation_to_update AS (
+	SELECT invocations.id
+	FROM invocations
+	WHERE invocations.id = @id::bigint
+		AND invocations.state = 'running'::invocation_state
+		AND (
+            array_length(attempted_by, 1) > 0
+            AND attempted_by[array_length(attempted_by, 1)] = @finalizer_id::bigint
+        )
+	FOR UPDATE
+),
+updated_invocation AS (
+	UPDATE invocations
+	SET
+		finalized_at = @finalized_at::bigint,
+		errors = @errors::jsonb,
+		state = 'discarded'
+	FROM invocation_to_update
+	WHERE invocations.id = invocation_to_update.id
+	RETURNING invocations.*
+)
+SELECT id, state, finalized_at
+FROM updated_invocation;

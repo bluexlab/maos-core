@@ -61,7 +61,7 @@ func TestAdminTokenCreateEndpoint(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server, accessor := SetupHttpTestWithDb(t, ctx)
+			server, accessor, _ := SetupHttpTestWithDb(t, ctx)
 
 			agent := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
 			fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent.ID, 0, []string{"admin"})

@@ -24,8 +24,13 @@ const (
 )
 
 var (
-	json           = jsoniter.ConfigCompatibleWithStandardLibrary
-	defaultWaitSec = 10
+	json              = jsoniter.ConfigCompatibleWithStandardLibrary
+	defaultWaitSec    = 10
+	finalizedStatuses = []dbsqlc.InvocationState{
+		dbsqlc.InvocationStateCancelled,
+		dbsqlc.InvocationStateCompleted,
+		dbsqlc.InvocationStateDiscarded,
+	}
 )
 
 func NewManager(logger *slog.Logger, accessor dbaccess.Accessor) *Manager {
@@ -50,17 +55,21 @@ type Manager struct {
 	notifier         *notifier.Notifier
 	invokeDispatcher *Dispatcher[InvokeRequest]
 	invokeSub        *notifier.Subscription
+	responseSub      *notifier.Subscription
 }
 
 func (m *Manager) Start(ctx context.Context) error {
 	invokeSub, err := m.notifier.Listen(ctx, invokeTopic, m.handleInvokeNotify)
 	if err != nil {
-		return err
-	}
-	if err != nil {
 		invokeSub.Unlisten(ctx)
 		return err
 	}
+
+	// subscribe response topic to keep notifier listening to the topic
+	// this is to avoid frequent subscribe/unsubscribe to the topic
+	responseSub, _ := m.notifier.Listen(ctx, responseTopic, func(topic notifier.NotificationTopic, payload string) {
+		// we do nothing here.
+	})
 
 	err = m.notifier.Start(ctx)
 	if err != nil {
@@ -70,6 +79,7 @@ func (m *Manager) Start(ctx context.Context) error {
 	}
 
 	m.invokeSub = invokeSub
+	m.responseSub = responseSub
 	return nil
 }
 
@@ -81,6 +91,9 @@ func (m *Manager) handleInvokeNotify(topic notifier.NotificationTopic, payload s
 func (m *Manager) Close(ctx context.Context) error {
 	if m.invokeSub != nil {
 		m.invokeSub.Unlisten(ctx)
+	}
+	if m.responseSub != nil {
+		m.responseSub.Unlisten(ctx)
 	}
 
 	m.invokeDispatcher.Close()
@@ -140,6 +153,88 @@ func (m *Manager) InsertInvocation(ctx context.Context, callerAgentId int64, req
 	return api.CreateInvocationAsync201JSONResponse{
 		Id: strconv.FormatInt(invocation.ID, 10),
 	}, nil
+}
+
+func (m *Manager) GetInvocationById(ctx context.Context, callerAgentId int64, request api.GetInvocationByIdRequestObject) (api.GetInvocationByIdResponseObject, error) {
+	invocationId, err := strconv.ParseInt(request.Id, 10, 64)
+	if err != nil {
+		return api.GetInvocationById404Response{}, nil
+	}
+
+	getInvocation := func() api.GetInvocationByIdResponseObject {
+		invocation, err := m.accessor.Querier().InvocationFindById(ctx, m.accessor.Source(), invocationId)
+		if invocation == nil || err != nil {
+			if err == pgx.ErrNoRows {
+				return api.GetInvocationById404Response{}
+			}
+			m.logger.Error("Failed to find invocation", "err", err)
+			return api.GetInvocationById500JSONResponse{
+				N500JSONResponse: api.N500JSONResponse{Error: "Failed to find invocation"},
+			}
+		}
+		result, err1 := parseJson(invocation.Result)
+		errors, err2 := parseJson(invocation.Errors)
+		if err1 != nil || err2 != nil {
+			m.logger.Error("Failed to parse result", "err1", err, "err2", err2)
+			return api.GetInvocationById500JSONResponse{
+				N500JSONResponse: api.N500JSONResponse{Error: "Failed to parse result or errors"},
+			}
+		}
+		if lo.Contains(finalizedStatuses, invocation.State) {
+			return api.GetInvocationById200JSONResponse{
+				Id:          request.Id,
+				AttemptedAt: invocation.AttemptedAt,
+				FinalizedAt: invocation.FinalizedAt,
+				State:       api.InvocationState(invocation.State),
+				Result:      result,
+				Errors:      errors,
+			}
+		}
+		return api.GetInvocationById202JSONResponse{
+			Id:          request.Id,
+			AttemptedAt: invocation.AttemptedAt,
+			FinalizedAt: invocation.FinalizedAt,
+			State:       api.InvocationState(invocation.State),
+			Result:      result,
+			Errors:      errors,
+		}
+	}
+
+	if request.Params.Wait == nil {
+		return getInvocation(), nil
+	}
+
+	// subscript to response topic before insert invocation
+	// we keep 64 buffer size to avoid missing response before we start to drain the channel
+	responseCh := make(chan string, 64)
+	responseDone := make(chan struct{})
+	responseSub, err := m.notifier.Listen(ctx, responseTopic, func(topic notifier.NotificationTopic, payload string) {
+		// make sure we don't block the notifier
+		m.logger.Info("Received response notification", "topic", topic, "payload", payload)
+		select {
+		case <-responseDone:
+		case responseCh <- payload:
+		default:
+		}
+	})
+	defer responseSub.Unlisten(ctx)
+
+	waitSec := util.Clamp(*lo.CoalesceOrEmpty(request.Params.Wait, &defaultWaitSec), 0, 60)
+	timeContext, cancel := context.WithTimeout(ctx, time.Duration(waitSec)*time.Second)
+	defer cancel()
+
+	for {
+		select {
+		case <-timeContext.Done():
+			return getInvocation(), nil
+
+		case response := <-responseCh:
+			if response == request.Id {
+				close(responseDone)
+				return getInvocation(), nil
+			}
+		}
+	}
 }
 
 func (m *Manager) ExecuteInvocationSync(ctx context.Context, callerAgentId int64, request api.CreateInvocationSyncRequestObject) (api.CreateInvocationSyncResponseObject, error) {
@@ -227,7 +322,7 @@ func (m *Manager) ExecuteInvocationSync(ctx context.Context, callerAgentId int64
 				}
 				return api.CreateInvocationSync201JSONResponse{
 					Id:          invocationIdStr,
-					FinalizedAt: doneInvocation.AttemptedAt,
+					FinalizedAt: doneInvocation.FinalizedAt,
 					State:       api.InvocationState(doneInvocation.State),
 					Result:      &result,
 				}, nil
@@ -237,7 +332,7 @@ func (m *Manager) ExecuteInvocationSync(ctx context.Context, callerAgentId int64
 }
 
 func (m *Manager) ReturnInvocationResponse(ctx context.Context, callerAgentId int64, request api.ReturnInvocationResponseRequestObject) (api.ReturnInvocationResponseResponseObject, error) {
-	m.logger.Info("ReturnInvocationResponse start", "callerAgentId", callerAgentId, "requestBody", *request.Body.Result)
+	m.logger.Info("ReturnInvocationResponse start", "callerAgentId", callerAgentId, "requestBody", request.Body.Result)
 
 	// Find the invocation
 	invocationId, err := strconv.ParseInt(request.InvokeId, 10, 64)
@@ -283,6 +378,55 @@ func (m *Manager) ReturnInvocationResponse(ctx context.Context, callerAgentId in
 	})
 
 	return api.ReturnInvocationResponse200Response{}, nil
+}
+
+func (m *Manager) ReturnInvocationError(ctx context.Context, callerAgentId int64, request api.ReturnInvocationErrorRequestObject) (api.ReturnInvocationErrorResponseObject, error) {
+	m.logger.Info("ReturnInvocationError start", "callerAgentId", callerAgentId, "requestBody", request.Body.Errors)
+
+	// Find the invocation
+	invocationId, err := strconv.ParseInt(request.InvokeId, 10, 64)
+	if err != nil {
+		return api.ReturnInvocationError404Response{}, nil
+	}
+
+	errors, err := json.Marshal(request.Body.Errors)
+	if err != nil {
+		m.logger.Error("Failed to marshal invocation result", "err", err)
+		return api.ReturnInvocationError500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: "Failed to marshal result"},
+		}, nil
+	}
+
+	invocation, err := m.accessor.Querier().InvocationSetFailureIfRunning(ctx, m.accessor.Source(), &dbsqlc.InvocationSetFailureIfRunningParams{
+		ID:          invocationId,
+		FinalizedAt: time.Now().Unix(),
+		FinalizerID: callerAgentId,
+		Errors:      errors,
+	})
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return api.ReturnInvocationError404Response{}, nil
+		}
+
+		m.logger.Error("Failed to set invocation failure", "err", err)
+		return api.ReturnInvocationError500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: "Failed to set invocation failure"},
+		}, nil
+	}
+
+	if invocation == nil {
+		return api.ReturnInvocationError404Response{}, nil
+	}
+
+	// notify response topic with the invocation id
+	m.logger.Debug("Notify response topic", "topic", responseTopic, "payload", request.InvokeId)
+	m.accessor.Querier().PgNotifyOne(ctx, m.accessor.Source(), &dbsqlc.PgNotifyOneParams{
+		Topic:   responseTopic,
+		Payload: request.InvokeId,
+	})
+
+	return api.ReturnInvocationError200Response{}, nil
 }
 
 func (m *Manager) GetNextInvocation(ctx context.Context, callerAgentId int64, queueId int64, request api.GetNextInvocationRequestObject) (api.GetNextInvocationResponseObject, error) {
@@ -358,4 +502,13 @@ func createGetNext500Response(err string) api.GetNextInvocationResponseObject {
 	return api.GetNextInvocation500JSONResponse{
 		N500JSONResponse: api.N500JSONResponse{Error: err},
 	}
+}
+
+func parseJson(data []byte) (*map[string]interface{}, error) {
+	if data == nil {
+		return nil, nil
+	}
+	var result map[string]interface{}
+	err := json.Unmarshal(data, &result)
+	return &result, err
 }

@@ -48,7 +48,7 @@ get:
       content:
         application/json:
           schema:
-            $ref: '../../schemas/InvocationJob.yaml'
+            $ref: '../../schemas/InvocationResult.yaml'
           example:
             id: "inv_123456789"
             state: "running"

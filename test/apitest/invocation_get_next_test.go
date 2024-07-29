@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/require"
+	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess/dbsqlc"
 	"gitlab.com/navyx/ai/maos/maos-core/internal/fixture"
 )
@@ -19,12 +21,15 @@ func TestInvocationGetNextEndpoint(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-
-	t.Run("Invocations exist", func(t *testing.T) {
-		server, accessor := SetupHttpTestWithDb(t, ctx)
-
+	setup := func(t *testing.T, ctx context.Context) (*httptest.Server, dbaccess.Accessor, *dbsqlc.Agent, *dbsqlc.ApiToken) {
+		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
 		agent := fixture.InsertAgent(t, ctx, accessor.Source(), "test-agent")
 		token := fixture.InsertToken(t, ctx, accessor.Source(), "agent-token", agent.ID, 0, []string{"read:invocation"})
+		return server, accessor, agent, token
+	}
+
+	t.Run("Invocations exist", func(t *testing.T) {
+		server, accessor, agent, token := setup(t, ctx)
 		invocation := fixture.InsertInvocation(t, ctx, accessor.Source(), "available", `{"seq": 1}`, agent.Name)
 
 		resp, resBody := GetHttp(t, server.URL+"/v1/invocations/next", token.ID)
@@ -39,10 +44,7 @@ func TestInvocationGetNextEndpoint(t *testing.T) {
 	})
 
 	t.Run("Timeout", func(t *testing.T) {
-		server, accessor := SetupHttpTestWithDb(t, ctx)
-
-		agent := fixture.InsertAgent(t, ctx, accessor.Source(), "test-agent")
-		token := fixture.InsertToken(t, ctx, accessor.Source(), "agent-token", agent.ID, 0, []string{"read:invocation"})
+		server, accessor, agent, token := setup(t, ctx)
 		fixture.InsertInvocation(t, ctx, accessor.Source(), "running", `{"seq": 1}`, agent.Name)
 
 		resp, _ := GetHttp(t, server.URL+"/v1/invocations/next?wait=1", token.ID)
@@ -50,10 +52,7 @@ func TestInvocationGetNextEndpoint(t *testing.T) {
 	})
 
 	t.Run("Available and running Invocations both exist", func(t *testing.T) {
-		server, accessor := SetupHttpTestWithDb(t, ctx)
-
-		agent := fixture.InsertAgent(t, ctx, accessor.Source(), "test-agent")
-		token := fixture.InsertToken(t, ctx, accessor.Source(), "agent-token", agent.ID, 0, []string{"read:invocation"})
+		server, accessor, agent, token := setup(t, ctx)
 		fixture.InsertInvocation(t, ctx, accessor.Source(), "running", `{"seq": 2}`, agent.Name)
 		invocation := fixture.InsertInvocation(t, ctx, accessor.Source(), "available", `{"seq": 1}`, agent.Name)
 		fixture.InsertInvocation(t, ctx, accessor.Source(), "running", `{"seq": 3}`, agent.Name)
@@ -66,7 +65,7 @@ func TestInvocationGetNextEndpoint(t *testing.T) {
 	})
 
 	t.Run("Invocations insert after", func(t *testing.T) {
-		server, accessor := SetupHttpTestWithDb(t, ctx)
+		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
 
 		agent := fixture.InsertAgent(t, ctx, accessor.Source(), "test-agent")
 		user := fixture.InsertAgent(t, ctx, accessor.Source(), "test-user")
@@ -93,7 +92,7 @@ func TestInvocationGetNextEndpoint(t *testing.T) {
 	})
 
 	t.Run("multiple get next request", func(t *testing.T) {
-		server, accessor := SetupHttpTestWithDb(t, ctx)
+		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
 
 		agent := fixture.InsertAgent(t, ctx, accessor.Source(), "test-agent")
 		user := fixture.InsertAgent(t, ctx, accessor.Source(), "test-user")

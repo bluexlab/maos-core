@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 
 	"gitlab.com/navyx/ai/maos/maos-core/admin"
@@ -60,7 +59,11 @@ func (s *APIHandler) CreateInvocationSync(ctx context.Context, request api.Creat
 }
 
 func (s *APIHandler) GetInvocationById(ctx context.Context, request api.GetInvocationByIdRequestObject) (api.GetInvocationByIdResponseObject, error) {
-	panic("not implemented")
+	token := ValidatePermissions(ctx, "CreateInvocationSync")
+	if token == nil {
+		return api.GetInvocationById401Response{}, nil
+	}
+	return s.invocationManager.GetInvocationById(ctx, token.AgentId, request)
 }
 
 // GetNextInvocation implements the GET /v1/invocation/next endpoint
@@ -84,17 +87,12 @@ func (s *APIHandler) ReturnInvocationResponse(ctx context.Context, request api.R
 
 // ReturnInvocationError implements the POST /v1/invocation/{invoke_id}/error endpoint
 func (s *APIHandler) ReturnInvocationError(ctx context.Context, request api.ReturnInvocationErrorRequestObject) (api.ReturnInvocationErrorResponseObject, error) {
-	// Process the invocation error
-	// You can access the invoke_id and error from the request object
-	invokeID := request.InvokeId
-	errorDetails := request.Body.Error
+	token := ValidatePermissions(ctx, "ReturnInvocationResponse")
+	if token == nil {
+		return api.ReturnInvocationError401Response{}, nil
+	}
 
-	// Here you would typically store or process the error
-	// For this example, we'll just log it
-	errorJSON, _ := json.Marshal(errorDetails)
-	s.logger.Info("Received error for", "invocation", invokeID, "error", string(errorJSON))
-
-	return api.ReturnInvocationError200Response{}, nil
+	return s.invocationManager.ReturnInvocationError(ctx, token.AgentId, request)
 }
 
 func (s *APIHandler) ListEmbeddingModels(ctx context.Context, request api.ListEmbeddingModelsRequestObject) (api.ListEmbeddingModelsResponseObject, error) {

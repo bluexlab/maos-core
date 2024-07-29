@@ -16,7 +16,7 @@ post:
         schema:
           type: object
           properties:
-            error:
+            errors:
               type: object
               description: The error details of the invocation
   responses:
@@ -24,7 +24,9 @@ post:
       description: Successful response
     '404':
       description: Invocation job not found
+    '400':
+      $ref : "../../responses/400.yaml"
     '401':
       description: Unauthorized
     '500':
-      description: Internal Server Error
+      $ref : "../../responses/500.yaml"

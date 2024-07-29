@@ -370,8 +370,8 @@ type GetInvocationByIdParams struct {
 
 // ReturnInvocationErrorJSONBody defines parameters for ReturnInvocationError.
 type ReturnInvocationErrorJSONBody struct {
-	// Error The error details of the invocation
-	Error *map[string]interface{} `json:"error,omitempty"`
+	// Errors The error details of the invocation
+	Errors *map[string]interface{} `json:"errors,omitempty"`
 }
 
 // ReturnInvocationResponseJSONBody defines parameters for ReturnInvocationResponse.
@@ -1920,7 +1920,7 @@ func (response GetInvocationById200JSONResponse) VisitGetInvocationByIdResponse(
 	return json.NewEncoder(w).Encode(response)
 }
 
-type GetInvocationById202JSONResponse InvocationJob
+type GetInvocationById202JSONResponse InvocationResult
 
 func (response GetInvocationById202JSONResponse) VisitGetInvocationByIdResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
@@ -1980,6 +1980,15 @@ func (response ReturnInvocationError200Response) VisitReturnInvocationErrorRespo
 	return nil
 }
 
+type ReturnInvocationError400JSONResponse struct{ N400JSONResponse }
+
+func (response ReturnInvocationError400JSONResponse) VisitReturnInvocationErrorResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ReturnInvocationError401Response struct {
 }
 
@@ -1996,12 +2005,13 @@ func (response ReturnInvocationError404Response) VisitReturnInvocationErrorRespo
 	return nil
 }
 
-type ReturnInvocationError500Response struct {
-}
+type ReturnInvocationError500JSONResponse struct{ N500JSONResponse }
 
-func (response ReturnInvocationError500Response) VisitReturnInvocationErrorResponse(w http.ResponseWriter) error {
+func (response ReturnInvocationError500JSONResponse) VisitReturnInvocationErrorResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
-	return nil
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type ReturnInvocationResponseRequestObject struct {

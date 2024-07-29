@@ -20,6 +20,7 @@ type Querier interface {
 	InvocationGetAvailable(ctx context.Context, db DBTX, arg *InvocationGetAvailableParams) ([]*Invocation, error)
 	InvocationInsert(ctx context.Context, db DBTX, arg *InvocationInsertParams) (*InvocationInsertRow, error)
 	InvocationSetCompleteIfRunning(ctx context.Context, db DBTX, arg *InvocationSetCompleteIfRunningParams) (*InvocationSetCompleteIfRunningRow, error)
+	InvocationSetFailureIfRunning(ctx context.Context, db DBTX, arg *InvocationSetFailureIfRunningParams) (*InvocationSetFailureIfRunningRow, error)
 	MigrationDeleteByVersionMany(ctx context.Context, db DBTX, version []int64) ([]*Migration, error)
 	MigrationGetAll(ctx context.Context, db DBTX) ([]*Migration, error)
 	MigrationInsert(ctx context.Context, db DBTX, version int64) (*Migration, error)

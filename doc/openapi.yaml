@@ -14,6 +14,7 @@ security:
 paths:
   /health:
     $ref: "./resources/health.yaml"
+
   /v1/config:
     $ref: "./resources/config.yaml"
 

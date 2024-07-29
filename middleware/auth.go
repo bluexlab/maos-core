@@ -33,10 +33,17 @@ func NewBearerAuthMiddleware(fetcher TokenFetcher, cacheTtl time.Duration) (api.
 
 	return func(f api.StrictHandlerFunc, operationID string) api.StrictHandlerFunc {
 		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, args interface{}) (interface{}, error) {
+			if r != nil {
+				slog.Debug("BearerAuthMiddleware", "request-uri", r.URL.RequestURI(), "method", r.Method, "operationID", operationID, "token", maskAuthToken(r.Header.Get("Authorization")))
+			} else {
+				slog.Debug("BearerAuthMiddleware. request is nil")
+			}
+
 			auth := r.Header.Get("Authorization")
 			if auth == "" {
-				http.Error(w, `{"error":"Missing authorization header"}`, http.StatusUnauthorized)
-				return nil, nil
+				// No token provided
+				// call the next handler with no token in context
+				return f(ctx, w, r, args)
 			}
 
 			const prefix = "Bearer "
@@ -60,4 +67,19 @@ func NewBearerAuthMiddleware(fetcher TokenFetcher, cacheTtl time.Duration) (api.
 			return f(newContext, w, r, args)
 		}
 	}, closer
+}
+
+func maskAuthToken(token string) string {
+	token = strings.TrimSpace(token)
+	length := len(token)
+
+	if length <= 0 {
+		return ""
+	} else if length <= 6 {
+		return "******"
+	}
+
+	last6 := token[length-6:]
+
+	return "******" + last6
 }

@@ -9,6 +9,27 @@ security:
   - bearerAuth: []
   - trace: []
 paths:
+  /health:
+    get:
+      summary: Get health status
+      operationId: getHealth
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    description: >-
+                      The health status of the service. it can be "healthy" or
+                      "unhealthy"
+                required:
+                  - status
   /v1/config:
     get:
       summary: Get configuration of the caller
@@ -1456,5 +1477,7 @@ tags:
     description: Operations involving rerank models and texts
   - name: Admin
     description: Operations involving admin tasks
+  - name: Health
+    description: Operations related to system health
 x-namespaces:
   - Maos

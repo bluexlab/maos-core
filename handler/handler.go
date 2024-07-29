@@ -172,3 +172,7 @@ func (s *APIHandler) AdminCreateApiToken(ctx context.Context, request api.AdminC
 	}
 	return admin.CreateApiToken(ctx, s.accessor, request)
 }
+
+func (s *APIHandler) GetHealth(ctx context.Context, request api.GetHealthRequestObject) (api.GetHealthResponseObject, error) {
+	return api.GetHealth200JSONResponse{Status: "healthy"}, nil
+}

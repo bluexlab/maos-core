@@ -12,7 +12,6 @@ import (
 	"github.com/go-playground/validator"
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
@@ -31,7 +30,6 @@ func (a *App) Run() {
 	ctx := context.Background()
 
 	config := a.loadConfig()
-	a.logger.Info("Log level", "level", config.LogLevel)
 
 	// Connect to the database and create a new accessor
 	pool, err := pgxpool.New(ctx, config.DatabaseUrl)
@@ -90,15 +88,6 @@ func (a *App) Run() {
 }
 
 func (a *App) loadConfig() Config {
-	// Load environment variables from .env file if exists
-	if _, err := os.Stat(".env"); err == nil {
-		a.logger.Info("Load environment variables from .env file")
-		if err := godotenv.Load(".env"); err != nil {
-			a.logger.Error("Error loading .env file: %v", err)
-			os.Exit(1)
-		}
-	}
-
 	// Load environment variables into the struct
 	var config Config
 	if err := envconfig.Process("", &config); err != nil {
@@ -113,25 +102,15 @@ func (a *App) loadConfig() Config {
 		os.Exit(1)
 	}
 
-	if config.LogLevel != "info" {
-		level := func() slog.Level {
-			switch config.LogLevel {
-			case "debug":
-				return slog.LevelDebug
-			case "info":
-				return slog.LevelInfo
-			case "warn":
-				return slog.LevelWarn
-			case "error":
-				return slog.LevelError
-			default:
-				return slog.LevelInfo
-			}
-		}()
-
-		a.logger = slog.New(slog.NewJSONHandler(os.Stdout,
-			&slog.HandlerOptions{Level: level}))
-		slog.SetLogLoggerLevel(level)
+	// construct database url from the environment variables
+	if config.DatabaseUrl == "" {
+		config.DatabaseUrl = fmt.Sprintf(
+			"postgres://%s:%s@%s:%s/%s",
+			config.DatabaseUser,
+			config.DatabasePassword,
+			config.DatabaseHost,
+			config.DatabasePort,
+			config.DatabaseName)
 	}
 
 	return config

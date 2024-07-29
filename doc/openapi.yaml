@@ -12,6 +12,8 @@ security:
   - trace: []
 
 paths:
+  /health:
+    $ref: "./resources/health.yaml"
   /v1/config:
     $ref: "./resources/config.yaml"
 
@@ -93,6 +95,8 @@ tags:
     description: Operations involving rerank models and texts
   - name: Admin
     description: Operations involving admin tasks
+  - name: Health
+    description: Operations related to system health
 
 x-namespaces:
   - Maos

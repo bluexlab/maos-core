@@ -36,16 +36,20 @@ func TestNewBearerAuthMiddleware(t *testing.T) {
 		middleware, closer := NewBearerAuthMiddleware(mockFetcher.FetchToken, cacheTTL)
 		defer closer()
 
+		var capturedToken *Token
+		var foundToken bool
 		handler := middleware(func(ctx context.Context, w http.ResponseWriter, r *http.Request, args interface{}) (interface{}, error) {
-			return nil, nil
+			capturedToken, foundToken = ctx.Value(TokenContextKey).(*Token)
+			return "success", nil
 		}, "test")
 
 		result, err := handler(context.Background(), w, req, nil)
 
-		assert.Nil(t, result)
+		assert.Equal(t, "success", result)
 		assert.Nil(t, err)
-		assert.Equal(t, http.StatusUnauthorized, w.Code)
-		assert.JSONEq(t, `{"error":"Missing authorization header"}`, w.Body.String())
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Nil(t, capturedToken, "context should not contain token")
+		assert.False(t, foundToken, "context should not contain token")
 	})
 
 	t.Run("Invalid Authorization Header", func(t *testing.T) {

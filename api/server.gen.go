@@ -539,6 +539,9 @@ func (t *MessageContent) UnmarshalJSON(b []byte) error {
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// Get health status
+	// (GET /health)
+	GetHealth(w http.ResponseWriter, r *http.Request)
 	// List Agents
 	// (GET /v1/admin/agents)
 	AdminListAgents(w http.ResponseWriter, r *http.Request, params AdminListAgentsParams)
@@ -615,6 +618,25 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GetHealth operation middleware
+func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetHealth(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
 
 // AdminListAgents operation middleware
 func (siw *ServerInterfaceWrapper) AdminListAgents(w http.ResponseWriter, r *http.Request) {
@@ -1365,6 +1387,8 @@ func HandlerWithOptions(si ServerInterface, options GorillaServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	r.HandleFunc(options.BaseURL+"/health", wrapper.GetHealth).Methods("GET")
+
 	r.HandleFunc(options.BaseURL+"/v1/admin/agents", wrapper.AdminListAgents).Methods("GET")
 
 	r.HandleFunc(options.BaseURL+"/v1/admin/agents", wrapper.AdminCreateAgent).Methods("POST")
@@ -1415,6 +1439,25 @@ func HandlerWithOptions(si ServerInterface, options GorillaServerOptions) http.H
 type N400JSONResponse Error
 
 type N500JSONResponse Error
+
+type GetHealthRequestObject struct {
+}
+
+type GetHealthResponseObject interface {
+	VisitGetHealthResponse(w http.ResponseWriter) error
+}
+
+type GetHealth200JSONResponse struct {
+	// Status The health status of the service. it can be "healthy" or "unhealthy"
+	Status string `json:"status"`
+}
+
+func (response GetHealth200JSONResponse) VisitGetHealthResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
 
 type AdminListAgentsRequestObject struct {
 	Params AdminListAgentsParams
@@ -2206,6 +2249,9 @@ func (response ListVectoreStores401Response) VisitListVectoreStoresResponse(w ht
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// Get health status
+	// (GET /health)
+	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
 	// List Agents
 	// (GET /v1/admin/agents)
 	AdminListAgents(ctx context.Context, request AdminListAgentsRequestObject) (AdminListAgentsResponseObject, error)
@@ -2301,6 +2347,30 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// GetHealth operation middleware
+func (sh *strictHandler) GetHealth(w http.ResponseWriter, r *http.Request) {
+	var request GetHealthRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetHealth(ctx, request.(GetHealthRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetHealth")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetHealthResponseObject); ok {
+		if err := validResponse.VisitGetHealthResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // AdminListAgents operation middleware

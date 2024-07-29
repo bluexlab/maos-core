@@ -27,6 +27,7 @@ COPY . /app/src/
 
 # build the maos-core-server
 RUN cd /app/src \
+    && echo $BUILDNO > REVISION \
     && go build -o /go/bin/maos-core-server ./app/server
 
 # FROM scratch

@@ -3,7 +3,8 @@ package adapter
 import "gitlab.com/navyx/ai/maos/maos-core/llm"
 
 const (
-	PROVIDER_AZURE = "Azure"
+	PROVIDER_AZURE     = "Azure"
+	PROVIDER_ANTHROPIC = "Anthropic"
 )
 
 var modelList = []llm.Model{
@@ -16,6 +17,16 @@ var modelList = []llm.Model{
 		ID:       "bdf5c21b-ad28-4096-9bca-667927b5c742-azure-gpt4",
 		Provider: PROVIDER_AZURE,
 		Name:     "Azure gpt-4",
+	},
+	{
+		ID:       "3db6db92-a091-4944-9f7e-9d43e70218d3-anthropic-claude-3-opus-20240229",
+		Provider: PROVIDER_ANTHROPIC,
+		Name:     "Anthropic Claude 3 Opus 20240229",
+	},
+	{
+		ID:       "93d07ee3-c9fb-4f0e-9fc1-df1a7af10b6c-anthropic-claude-3.5-sonnet-20240620",
+		Provider: PROVIDER_ANTHROPIC,
+		Name:     "Anthropic Claude 3.5 Sonnet 20240620",
 	},
 }
 

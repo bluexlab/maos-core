@@ -19,17 +19,17 @@ type AzureAdapter struct {
 	client *azopenai.Client
 }
 
-// ModelDeploymentMap is a map of model ID to Azure deployment name.
+// AzureModelDeploymentMap is a map of model ID to Azure deployment name.
 // The predefined deployment name should be set in the environment variable.
 // After package initialization, the deployment name will be replaced by the real value.
-var ModelDeploymentMap = map[string]string{
+var AzureModelDeploymentMap = map[string]string{
 	"5a265146-4e05-4cd7-a0a9-9adda7bf7a38-azure-gpt4o": "AOAI_GPT4O_DEPLOYMENT",
 	"bdf5c21b-ad28-4096-9bca-667927b5c742-azure-gpt4":  "AOAI_GPT4_DEPLOYMENT",
 }
 
 func init() {
 	newMap := make(map[string]string)
-	for k, v := range ModelDeploymentMap {
+	for k, v := range AzureModelDeploymentMap {
 		deployment := os.Getenv(v)
 		if deployment == "" {
 			slog.Error("deployment not found for model", "name", k)
@@ -37,7 +37,7 @@ func init() {
 		newMap[k] = deployment
 	}
 
-	ModelDeploymentMap = newMap
+	AzureModelDeploymentMap = newMap
 }
 
 func NewAzureAdapter(endpoint, credential string) (*AzureAdapter, error) {
@@ -83,7 +83,7 @@ func (a *AzureAdapter) GetCompletion(ctx context.Context, request llm.Completion
 }
 
 func GetAzureDeploymentByModelID(modelID string) (string, error) {
-	deploymentName, ok := ModelDeploymentMap[modelID]
+	deploymentName, ok := AzureModelDeploymentMap[modelID]
 	if !ok {
 		return "", fmt.Errorf("model not found")
 	}

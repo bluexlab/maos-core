@@ -85,10 +85,12 @@ func (a *App) Run() {
 	options := api.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
 			message, _ := json.Marshal(err.Error())
+			a.logger.Debug("Bad request error", "url", r.RequestURI, "err", message)
 			http.Error(w, fmt.Sprintf(`{"error":%s}`, message), http.StatusBadRequest)
 		},
 		ResponseErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
 			message, _ := json.Marshal(err.Error())
+			a.logger.Debug("Internal server error", "url", r.RequestURI, "err", message)
 			http.Error(w, fmt.Sprintf(`{"error":%s}`, message), http.StatusInternalServerError)
 		},
 	}
@@ -102,6 +104,17 @@ func (a *App) Run() {
 
 	defer apiHandler.Close(ctx)
 
+	api.HandlerWithOptions(
+		api.NewStrictHandlerWithOptions(apiHandler, middlewares, options),
+		api.GorillaServerOptions{
+			BaseRouter: router,
+			ErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
+				message, _ := json.Marshal(err.Error())
+				a.logger.Debug("Bad request error", "url", r.RequestURI, "err", err.Error())
+				http.Error(w, fmt.Sprintf(`{"error":%s}`, message), http.StatusBadRequest)
+			},
+		},
+	)
 	api.HandlerFromMux(api.NewStrictHandlerWithOptions(apiHandler, middlewares, options), router)
 
 	a.logger.Info("Starting server", "port", config.Port)

@@ -34,9 +34,11 @@ func NewBearerAuthMiddleware(fetcher TokenFetcher, cacheTtl time.Duration) (api.
 	return func(f api.StrictHandlerFunc, operationID string) api.StrictHandlerFunc {
 		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, args interface{}) (interface{}, error) {
 			if r != nil {
-				slog.Debug("BearerAuthMiddleware", "request-uri", r.URL.RequestURI(), "method", r.Method, "operationID", operationID, "token", maskAuthToken(r.Header.Get("Authorization")))
+				slog.Debug("BearerAuthMiddleware", "request-uri", r.URL.RequestURI(), "method", r.Method, "remote", r.RemoteAddr, "operationID", operationID, "token", maskAuthToken(r.Header.Get("Authorization")))
 			} else {
-				slog.Debug("BearerAuthMiddleware. request is nil")
+				slog.Debug("BearerAuthMiddleware. request is blank")
+				http.Error(w, `{"error":"Blank request"}`, http.StatusBadRequest)
+				return nil, nil
 			}
 
 			auth := r.Header.Get("Authorization")

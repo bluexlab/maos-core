@@ -156,6 +156,8 @@ func (m *Manager) InsertInvocation(ctx context.Context, callerAgentId int64, req
 }
 
 func (m *Manager) GetInvocationById(ctx context.Context, callerAgentId int64, request api.GetInvocationByIdRequestObject) (api.GetInvocationByIdResponseObject, error) {
+	m.logger.Debug("GetInvocationById start", "callerAgentId", callerAgentId, "id", request.Id, "wait", request.Params.Wait)
+
 	invocationId, err := strconv.ParseInt(request.Id, 10, 64)
 	if err != nil {
 		return api.GetInvocationById404Response{}, nil
@@ -305,27 +307,36 @@ func (m *Manager) ExecuteInvocationSync(ctx context.Context, callerAgentId int64
 	defer cancel()
 
 	invocationIdStr := strconv.FormatInt(invocation.ID, 10)
+
+	returnInvication := func() (api.CreateInvocationSyncResponseObject, error) {
+		latestInvocation, err := m.accessor.Querier().InvocationFindById(ctx, m.accessor.Source(), invocation.ID)
+		result, err1 := parseJson(latestInvocation.Result)
+		errors, err2 := parseJson(latestInvocation.Errors)
+		if err1 != nil || err2 != nil {
+			m.logger.Error("Failed to parse result", "err1", err, "err2", err2)
+			return api.CreateInvocationSync500JSONResponse{
+				N500JSONResponse: api.N500JSONResponse{Error: "Failed to parse result or errors"},
+			}, nil
+		}
+		return api.CreateInvocationSync201JSONResponse{
+			Id:          invocationIdStr,
+			AttemptedAt: latestInvocation.AttemptedAt,
+			FinalizedAt: latestInvocation.FinalizedAt,
+			State:       api.InvocationState(latestInvocation.State),
+			Result:      result,
+			Errors:      errors,
+		}, nil
+	}
+
 	for {
 		select {
 		case <-timeContext.Done():
-			return api.CreateInvocationSync408Response{}, nil
+			return returnInvication()
 
 		case response := <-responseCh:
 			if response == invocationIdStr {
 				close(responseDone)
-				doneInvocation, err := m.accessor.Querier().InvocationFindById(ctx, m.accessor.Source(), invocation.ID)
-				result := make(map[string]interface{})
-				err = json.Unmarshal(doneInvocation.Result, &result)
-				if err != nil {
-					m.logger.Error("Failed to unmarshal result", "err", err)
-					return api.CreateInvocationSync500JSONResponse{}, nil
-				}
-				return api.CreateInvocationSync201JSONResponse{
-					Id:          invocationIdStr,
-					FinalizedAt: doneInvocation.FinalizedAt,
-					State:       api.InvocationState(doneInvocation.State),
-					Result:      &result,
-				}, nil
+				return returnInvication()
 			}
 		}
 	}

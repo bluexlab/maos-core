@@ -66,8 +66,11 @@ func TestInvocationExecuteEndpoint(t *testing.T) {
 		userToken := fixture.InsertToken(t, ctx, accessor.Source(), "user-token", user.ID, 0, []string{"create:invocation"})
 
 		body := `{"agent":"agent1","meta":{"kind": "test"},"payload":{"key1": 16888,"key2":{"key3": "value3"}}}`
-		resp, _ := PostHttp(t, server.URL+"/v1/invocations/sync?wait=1", body, userToken.ID)
-		require.Equal(t, http.StatusRequestTimeout, resp.StatusCode)
+		resp, body := PostHttp(t, server.URL+"/v1/invocations/sync?wait=1", body, userToken.ID)
+		require.Equal(t, http.StatusCreated, resp.StatusCode)
+		bodyJson := testhelper.JsonToMap(t, body)
+		require.NotEmpty(t, bodyJson["id"])
+		testhelper.AssertJsonEqIgnoringFields(t, `{"id":"`+bodyJson["id"].(string)+`","state":"available"}`, body, "result")
 	})
 
 	t.Run("multiple agents and executions", func(t *testing.T) {

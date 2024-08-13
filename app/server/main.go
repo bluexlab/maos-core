@@ -18,6 +18,8 @@ func main() {
 	logger := initLogger()
 	app := &App{logger}
 
+	logger.Warn("stating", slog.String("level", "debug"))
+
 	if len(os.Args) > 1 && os.Args[1] == "migrate" {
 		app.Migrate()
 	} else {
@@ -40,22 +42,33 @@ func initLogger() *slog.Logger {
 		level = slog.LevelError
 	}
 
-	// Choose handler based on environment
-	var handler slog.Handler
+	// Create Logger based on environment
+	var logger *slog.Logger
 	if os.Getenv("DEV") != "" {
-		handler = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level})
+		handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level})
+		logger = slog.New(handler)
 	} else {
-		handler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level})
+		opts := slog.HandlerOptions{
+			AddSource:   true,
+			Level:       slog.LevelInfo,
+			ReplaceAttr: unixTimestampHandler,
+		}
+		handler := slog.NewJSONHandler(os.Stdout, &opts)
+		logger = slog.New(handler).With(
+			"service", maoscore.ServiceName,
+			"version", maoscore.GetVersion(),
+		)
 	}
-
-	// Create logger with additional context
-	logger := slog.New(handler).With(
-		"service", maoscore.ServiceName,
-		"version", maoscore.GetVersion(),
-	)
 
 	// Set as default logger
 	slog.SetDefault(logger)
 
 	return logger
+}
+
+func unixTimestampHandler(groups []string, a slog.Attr) slog.Attr {
+	if a.Key == slog.TimeKey {
+		return slog.Int64("ts", a.Value.Time().UnixNano()/1e6) // millisecond precision
+	}
+	return a
 }

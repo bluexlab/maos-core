@@ -125,35 +125,6 @@ func (a *App) Run() {
 	}
 }
 
-func (a *App) loadConfig() Config {
-	// Load environment variables into the struct
-	var config Config
-	if err := envconfig.Process("", &config); err != nil {
-		a.logger.Error("Failed to process environment variables.", "err", err)
-		os.Exit(1)
-	}
-
-	// Validate the struct
-	validate := validator.New()
-	if err := validate.Struct(config); err != nil {
-		a.logger.Error("Validation failed: %v", err)
-		os.Exit(1)
-	}
-
-	// construct database url from the environment variables
-	if config.DatabaseUrl == "" {
-		config.DatabaseUrl = fmt.Sprintf(
-			"postgres://%s:%s@%s:%s/%s",
-			config.DatabaseUser,
-			config.DatabasePassword,
-			config.DatabaseHost,
-			config.DatabasePort,
-			config.DatabaseName)
-	}
-
-	return config
-}
-
 func (a *App) Migrate() {
 	ctx := context.Background()
 
@@ -183,4 +154,33 @@ func (a *App) Migrate() {
 	}
 
 	a.logger.Info("maos-core Database migrated")
+}
+
+func (a *App) loadConfig() Config {
+	// Load environment variables into the struct
+	var config Config
+	if err := envconfig.Process("", &config); err != nil {
+		a.logger.Error("Failed to process environment variables.", "err", err)
+		os.Exit(1)
+	}
+
+	// Validate the struct
+	validate := validator.New()
+	if err := validate.Struct(config); err != nil {
+		a.logger.Error("Validation failed: %v", err)
+		os.Exit(1)
+	}
+
+	// construct database url from the environment variables
+	if config.DatabaseUrl == "" {
+		config.DatabaseUrl = fmt.Sprintf(
+			"postgres://%s:%s@%s:%s/%s",
+			config.DatabaseUser,
+			config.DatabasePassword,
+			config.DatabaseHost,
+			config.DatabasePort,
+			config.DatabaseName)
+	}
+
+	return config
 }

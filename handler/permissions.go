@@ -15,7 +15,10 @@ var (
 		"GetNextInvocation":        {"read:invocation"},
 		"ReturnInvocationResponse": {"read:invocation"},
 		"AdminListAgents":          {"admin"},
+		"AdminGetAgents":           {"admin"},
 		"AdminCreateAgent":         {"admin"},
+		"AdminUpdateAgent":         {"admin"},
+		"AdminDeleteAgent":         {"admin"},
 		"AdminListApiTokens":       {"admin"},
 		"AdminCreateApiToken":      {"admin"},
 	}

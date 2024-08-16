@@ -115,7 +115,7 @@ func TestMigrator(t *testing.T) {
 			require.Equal(t, DirectionDown, res.Direction)
 			require.Equal(t, []int{migrationsMaxVersion - 2}, util.MapSlice(res.Versions, migrateVersionToInt))
 
-			_, err = bundle.accessor.Exec(ctx, "SELECT * FROM invocations")
+			_, err = bundle.accessor.Exec(ctx, "SELECT * FROM configs")
 			require.Error(t, err)
 		}
 	})

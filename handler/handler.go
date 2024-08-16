@@ -144,7 +144,7 @@ func (s *APIHandler) AdminListAgents(ctx context.Context, request api.AdminListA
 	if token == nil {
 		return api.AdminListAgents401Response{}, nil
 	}
-	return admin.ListAgents(ctx, s.accessor, request)
+	return admin.ListAgents(ctx, s.logger, s.accessor, request)
 }
 
 func (s *APIHandler) AdminCreateAgent(ctx context.Context, request api.AdminCreateAgentRequestObject) (api.AdminCreateAgentResponseObject, error) {
@@ -152,7 +152,31 @@ func (s *APIHandler) AdminCreateAgent(ctx context.Context, request api.AdminCrea
 	if token == nil {
 		return api.AdminCreateAgent401Response{}, nil
 	}
-	return admin.CreateaAgent(ctx, s.accessor, request)
+	return admin.CreateaAgent(ctx, s.logger, s.accessor, request)
+}
+
+func (s *APIHandler) AdminGetAgent(ctx context.Context, request api.AdminGetAgentRequestObject) (api.AdminGetAgentResponseObject, error) {
+	token := ValidatePermissions(ctx, "AdminGetAgents")
+	if token == nil {
+		return api.AdminGetAgent401Response{}, nil
+	}
+	return admin.GetAgent(ctx, s.logger, s.accessor, request)
+}
+
+func (s *APIHandler) AdminUpdateAgent(ctx context.Context, request api.AdminUpdateAgentRequestObject) (api.AdminUpdateAgentResponseObject, error) {
+	token := ValidatePermissions(ctx, "AdminUpdateAgent")
+	if token == nil {
+		return api.AdminUpdateAgent401Response{}, nil
+	}
+	return admin.UpdateAgent(ctx, s.logger, s.accessor, request)
+}
+
+func (s *APIHandler) AdminDeleteAgent(ctx context.Context, request api.AdminDeleteAgentRequestObject) (api.AdminDeleteAgentResponseObject, error) {
+	token := ValidatePermissions(ctx, "AdminDeleteAgent")
+	if token == nil {
+		return api.AdminDeleteAgent401Response{}, nil
+	}
+	return admin.DeleteAgent(ctx, s.logger, s.accessor, request)
 }
 
 func (s *APIHandler) AdminListApiTokens(ctx context.Context, request api.AdminListApiTokensRequestObject) (api.AdminListApiTokensResponseObject, error) {

@@ -18,6 +18,7 @@ import (
 
 func TestListAgentsWithDB(t *testing.T) {
 	t.Parallel()
+	logger := testhelper.Logger(t)
 
 	type testCase struct {
 		name          string
@@ -86,12 +87,11 @@ func TestListAgentsWithDB(t *testing.T) {
 
 			_ = tt.setupAgents(ctx, dbPool)
 
-			response, err := ListAgents(ctx, accessor, tt.request)
+			response, err := ListAgents(ctx, logger, accessor, tt.request)
 
 			if tt.expectedError != "" {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), tt.expectedError)
-				assert.IsType(t, api.AdminListAgents500Response{}, response)
+				assert.NoError(t, err)
+				assert.IsType(t, api.AdminListAgents500JSONResponse{}, response)
 			} else {
 				assert.NoError(t, err)
 				require.IsType(t, api.AdminListAgents200JSONResponse{}, response)
@@ -116,6 +116,7 @@ func TestListAgentsWithDB(t *testing.T) {
 
 func TestCreateAgentWithDB(t *testing.T) {
 	t.Parallel()
+	logger := testhelper.Logger(t)
 
 	ctx := context.Background()
 
@@ -131,7 +132,7 @@ func TestCreateAgentWithDB(t *testing.T) {
 			},
 		}
 
-		response, err := CreateaAgent(ctx, accessor, request)
+		response, err := CreateaAgent(ctx, logger, accessor, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminCreateAgent201JSONResponse{}, response)
@@ -167,11 +168,10 @@ func TestCreateAgentWithDB(t *testing.T) {
 		}
 
 		dbPool.Close()
-		response, err := CreateaAgent(ctx, accessor, request)
+		response, err := CreateaAgent(ctx, logger, accessor, request)
 
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "closed")
-		assert.IsType(t, api.AdminCreateAgent500Response{}, response)
+		assert.NoError(t, err)
+		assert.IsType(t, api.AdminCreateAgent500JSONResponse{}, response)
 	})
 
 	// Test case 3: Duplicate agent name
@@ -189,10 +189,9 @@ func TestCreateAgentWithDB(t *testing.T) {
 			},
 		}
 
-		response, err := CreateaAgent(ctx, accessor, request)
+		response, err := CreateaAgent(ctx, logger, accessor, request)
 
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "duplicate")
-		assert.IsType(t, api.AdminCreateAgent500Response{}, response)
+		assert.NoError(t, err)
+		assert.IsType(t, api.AdminCreateAgent500JSONResponse{}, response)
 	})
 }

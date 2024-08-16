@@ -289,6 +289,11 @@ type AdminListAgentsParams struct {
 	Name *string `form:"name,omitempty" json:"name,omitempty"`
 }
 
+// AdminUpdateAgentJSONBody defines parameters for AdminUpdateAgent.
+type AdminUpdateAgentJSONBody struct {
+	Name *string `json:"name,omitempty"`
+}
+
 // AdminListApiTokensParams defines parameters for AdminListApiTokens.
 type AdminListApiTokensParams struct {
 	// Page Page number (default 1)
@@ -419,6 +424,9 @@ type UpsertCollectionJSONBody = map[string]interface{}
 // AdminCreateAgentJSONRequestBody defines body for AdminCreateAgent for application/json ContentType.
 type AdminCreateAgentJSONRequestBody = AgentCreate
 
+// AdminUpdateAgentJSONRequestBody defines body for AdminUpdateAgent for application/json ContentType.
+type AdminUpdateAgentJSONRequestBody AdminUpdateAgentJSONBody
+
 // AdminCreateApiTokenJSONRequestBody defines body for AdminCreateApiToken for application/json ContentType.
 type AdminCreateApiTokenJSONRequestBody = ApiTokenCreate
 
@@ -548,6 +556,15 @@ type ServerInterface interface {
 	// Create a new Agent
 	// (POST /v1/admin/agents)
 	AdminCreateAgent(w http.ResponseWriter, r *http.Request)
+	// Delete one specific Agent
+	// (DELETE /v1/admin/agents/{id})
+	AdminDeleteAgent(w http.ResponseWriter, r *http.Request, id int)
+	// Get one specific Agents
+	// (GET /v1/admin/agents/{id})
+	AdminGetAgent(w http.ResponseWriter, r *http.Request, id int)
+	// Update one specific Agent
+	// (PATCH /v1/admin/agents/{id})
+	AdminUpdateAgent(w http.ResponseWriter, r *http.Request, id int)
 	// List API tokens
 	// (GET /v1/admin/api_tokens)
 	AdminListApiTokens(w http.ResponseWriter, r *http.Request, params AdminListApiTokensParams)
@@ -696,6 +713,96 @@ func (siw *ServerInterfaceWrapper) AdminCreateAgent(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminCreateAgent(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// AdminDeleteAgent operation middleware
+func (siw *ServerInterfaceWrapper) AdminDeleteAgent(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: false})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminDeleteAgent(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// AdminGetAgent operation middleware
+func (siw *ServerInterfaceWrapper) AdminGetAgent(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: false})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminGetAgent(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// AdminUpdateAgent operation middleware
+func (siw *ServerInterfaceWrapper) AdminUpdateAgent(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: false})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminUpdateAgent(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1393,6 +1500,12 @@ func HandlerWithOptions(si ServerInterface, options GorillaServerOptions) http.H
 
 	r.HandleFunc(options.BaseURL+"/v1/admin/agents", wrapper.AdminCreateAgent).Methods("POST")
 
+	r.HandleFunc(options.BaseURL+"/v1/admin/agents/{id}", wrapper.AdminDeleteAgent).Methods("DELETE")
+
+	r.HandleFunc(options.BaseURL+"/v1/admin/agents/{id}", wrapper.AdminGetAgent).Methods("GET")
+
+	r.HandleFunc(options.BaseURL+"/v1/admin/agents/{id}", wrapper.AdminUpdateAgent).Methods("PATCH")
+
 	r.HandleFunc(options.BaseURL+"/v1/admin/api_tokens", wrapper.AdminListApiTokens).Methods("GET")
 
 	r.HandleFunc(options.BaseURL+"/v1/admin/api_tokens", wrapper.AdminCreateApiToken).Methods("POST")
@@ -1489,12 +1602,13 @@ func (response AdminListAgents401Response) VisitAdminListAgentsResponse(w http.R
 	return nil
 }
 
-type AdminListAgents500Response struct {
-}
+type AdminListAgents500JSONResponse struct{ N500JSONResponse }
 
-func (response AdminListAgents500Response) VisitAdminListAgentsResponse(w http.ResponseWriter) error {
+func (response AdminListAgents500JSONResponse) VisitAdminListAgentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
-	return nil
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type AdminCreateAgentRequestObject struct {
@@ -1514,6 +1628,15 @@ func (response AdminCreateAgent201JSONResponse) VisitAdminCreateAgentResponse(w 
 	return json.NewEncoder(w).Encode(response)
 }
 
+type AdminCreateAgent400JSONResponse struct{ N400JSONResponse }
+
+func (response AdminCreateAgent400JSONResponse) VisitAdminCreateAgentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type AdminCreateAgent401Response struct {
 }
 
@@ -1522,12 +1645,160 @@ func (response AdminCreateAgent401Response) VisitAdminCreateAgentResponse(w http
 	return nil
 }
 
-type AdminCreateAgent500Response struct {
+type AdminCreateAgent500JSONResponse struct{ N500JSONResponse }
+
+func (response AdminCreateAgent500JSONResponse) VisitAdminCreateAgentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
 }
 
-func (response AdminCreateAgent500Response) VisitAdminCreateAgentResponse(w http.ResponseWriter) error {
-	w.WriteHeader(500)
+type AdminDeleteAgentRequestObject struct {
+	Id int `json:"id,omitempty"`
+}
+
+type AdminDeleteAgentResponseObject interface {
+	VisitAdminDeleteAgentResponse(w http.ResponseWriter) error
+}
+
+type AdminDeleteAgent200Response struct {
+}
+
+func (response AdminDeleteAgent200Response) VisitAdminDeleteAgentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(200)
 	return nil
+}
+
+type AdminDeleteAgent401Response struct {
+}
+
+func (response AdminDeleteAgent401Response) VisitAdminDeleteAgentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type AdminDeleteAgent404Response struct {
+}
+
+func (response AdminDeleteAgent404Response) VisitAdminDeleteAgentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type AdminDeleteAgent409Response struct {
+}
+
+func (response AdminDeleteAgent409Response) VisitAdminDeleteAgentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(409)
+	return nil
+}
+
+type AdminDeleteAgent500JSONResponse struct{ N500JSONResponse }
+
+func (response AdminDeleteAgent500JSONResponse) VisitAdminDeleteAgentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminGetAgentRequestObject struct {
+	Id int `json:"id,omitempty"`
+}
+
+type AdminGetAgentResponseObject interface {
+	VisitAdminGetAgentResponse(w http.ResponseWriter) error
+}
+
+type AdminGetAgent200JSONResponse struct {
+	Data Agent `json:"data"`
+}
+
+func (response AdminGetAgent200JSONResponse) VisitAdminGetAgentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminGetAgent401Response struct {
+}
+
+func (response AdminGetAgent401Response) VisitAdminGetAgentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type AdminGetAgent404Response struct {
+}
+
+func (response AdminGetAgent404Response) VisitAdminGetAgentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type AdminGetAgent500JSONResponse struct{ N500JSONResponse }
+
+func (response AdminGetAgent500JSONResponse) VisitAdminGetAgentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminUpdateAgentRequestObject struct {
+	Id   int `json:"id,omitempty"`
+	Body *AdminUpdateAgentJSONRequestBody
+}
+
+type AdminUpdateAgentResponseObject interface {
+	VisitAdminUpdateAgentResponse(w http.ResponseWriter) error
+}
+
+type AdminUpdateAgent200JSONResponse struct {
+	Data Agent `json:"data"`
+}
+
+func (response AdminUpdateAgent200JSONResponse) VisitAdminUpdateAgentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminUpdateAgent400JSONResponse struct{ N400JSONResponse }
+
+func (response AdminUpdateAgent400JSONResponse) VisitAdminUpdateAgentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminUpdateAgent401Response struct {
+}
+
+func (response AdminUpdateAgent401Response) VisitAdminUpdateAgentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type AdminUpdateAgent404Response struct {
+}
+
+func (response AdminUpdateAgent404Response) VisitAdminUpdateAgentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type AdminUpdateAgent500JSONResponse struct{ N500JSONResponse }
+
+func (response AdminUpdateAgent500JSONResponse) VisitAdminUpdateAgentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type AdminListApiTokensRequestObject struct {
@@ -2268,6 +2539,15 @@ type StrictServerInterface interface {
 	// Create a new Agent
 	// (POST /v1/admin/agents)
 	AdminCreateAgent(ctx context.Context, request AdminCreateAgentRequestObject) (AdminCreateAgentResponseObject, error)
+	// Delete one specific Agent
+	// (DELETE /v1/admin/agents/{id})
+	AdminDeleteAgent(ctx context.Context, request AdminDeleteAgentRequestObject) (AdminDeleteAgentResponseObject, error)
+	// Get one specific Agents
+	// (GET /v1/admin/agents/{id})
+	AdminGetAgent(ctx context.Context, request AdminGetAgentRequestObject) (AdminGetAgentResponseObject, error)
+	// Update one specific Agent
+	// (PATCH /v1/admin/agents/{id})
+	AdminUpdateAgent(ctx context.Context, request AdminUpdateAgentRequestObject) (AdminUpdateAgentResponseObject, error)
 	// List API tokens
 	// (GET /v1/admin/api_tokens)
 	AdminListApiTokens(ctx context.Context, request AdminListApiTokensRequestObject) (AdminListApiTokensResponseObject, error)
@@ -2433,6 +2713,91 @@ func (sh *strictHandler) AdminCreateAgent(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminCreateAgentResponseObject); ok {
 		if err := validResponse.VisitAdminCreateAgentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminDeleteAgent operation middleware
+func (sh *strictHandler) AdminDeleteAgent(w http.ResponseWriter, r *http.Request, id int) {
+	var request AdminDeleteAgentRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminDeleteAgent(ctx, request.(AdminDeleteAgentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminDeleteAgent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminDeleteAgentResponseObject); ok {
+		if err := validResponse.VisitAdminDeleteAgentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminGetAgent operation middleware
+func (sh *strictHandler) AdminGetAgent(w http.ResponseWriter, r *http.Request, id int) {
+	var request AdminGetAgentRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminGetAgent(ctx, request.(AdminGetAgentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminGetAgent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminGetAgentResponseObject); ok {
+		if err := validResponse.VisitAdminGetAgentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminUpdateAgent operation middleware
+func (sh *strictHandler) AdminUpdateAgent(w http.ResponseWriter, r *http.Request, id int) {
+	var request AdminUpdateAgentRequestObject
+
+	request.Id = id
+
+	var body AdminUpdateAgentJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminUpdateAgent(ctx, request.(AdminUpdateAgentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminUpdateAgent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminUpdateAgentResponseObject); ok {
+		if err := validResponse.VisitAdminUpdateAgentResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

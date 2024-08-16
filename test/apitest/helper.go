@@ -9,7 +9,23 @@ import (
 )
 
 func GetHttp(t *testing.T, url string, token string) (*http.Response, string) {
-	req, err := http.NewRequest("GET", url, nil)
+	return request(t, "GET", url, token)
+}
+
+func PostHttp(t *testing.T, url string, body string, token string) (*http.Response, string) {
+	return reqeustWithBody(t, "POST", url, body, token)
+}
+
+func PatchHttp(t *testing.T, url string, body string, token string) (*http.Response, string) {
+	return reqeustWithBody(t, "PATCH", url, body, token)
+}
+
+func DeleteHttp(t *testing.T, url string, token string) (*http.Response, string) {
+	return request(t, "DELETE", url, token)
+}
+
+func request(t *testing.T, method string, url string, token string) (*http.Response, string) {
+	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
 		t.Fatalf("Error creating request: %v", err)
 	}
@@ -31,8 +47,8 @@ func GetHttp(t *testing.T, url string, token string) (*http.Response, string) {
 	return resp, resBody
 }
 
-func PostHttp(t *testing.T, url string, body string, token string) (*http.Response, string) {
-	req, err := http.NewRequest("POST", url, bytes.NewBufferString(body))
+func reqeustWithBody(t *testing.T, method string, url string, body string, token string) (*http.Response, string) {
+	req, err := http.NewRequest(method, url, bytes.NewBufferString(body))
 	if err != nil {
 		t.Fatalf("Error creating request: %v", err)
 	}

@@ -2,7 +2,10 @@ package admin
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/samber/lo"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
@@ -10,7 +13,9 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/util"
 )
 
-func ListAgents(ctx context.Context, accessor dbaccess.Accessor, request api.AdminListAgentsRequestObject) (api.AdminListAgentsResponseObject, error) {
+func ListAgents(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminListAgentsRequestObject) (api.AdminListAgentsResponseObject, error) {
+	logger.Info("ListAgents", "request", request)
+
 	page, _ := lo.Coalesce[*int](request.Params.Page, &defaultPage)
 	pageSize, _ := lo.Coalesce[*int](request.Params.PageSize, &defaultPageSize)
 	res, err := accessor.Querier().AgentListPagenated(ctx, accessor.Source(), &dbsqlc.AgentListPagenatedParams{
@@ -18,7 +23,10 @@ func ListAgents(ctx context.Context, accessor dbaccess.Accessor, request api.Adm
 		PageSize: int64(*pageSize),
 	})
 	if err != nil {
-		return api.AdminListAgents500Response{}, err
+		logger.Error("Cannot list agents", "error", err)
+		return api.AdminListAgents500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot list agents: %v", err)},
+		}, nil
 	}
 
 	data := util.MapSlice(
@@ -38,13 +46,24 @@ func ListAgents(ctx context.Context, accessor dbaccess.Accessor, request api.Adm
 	return response, nil
 }
 
-func CreateaAgent(ctx context.Context, accessor dbaccess.Accessor, request api.AdminCreateAgentRequestObject) (api.AdminCreateAgentResponseObject, error) {
+func CreateaAgent(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminCreateAgentRequestObject) (api.AdminCreateAgentResponseObject, error) {
+	logger.Info("CreateAgent", "request", request)
+
+	if request.Body.Name == "" {
+		return api.AdminCreateAgent400JSONResponse{
+			N400JSONResponse: api.N400JSONResponse{Error: "Missing required field: name"},
+		}, nil
+	}
+
 	queue, err := accessor.Querier().QueueInsert(ctx, accessor.Source(), &dbsqlc.QueueInsertParams{
 		Name:     request.Body.Name,
 		Metadata: []byte(`{"type":"agent"}`),
 	})
 	if err != nil {
-		return api.AdminCreateAgent500Response{}, err
+		logger.Error("Cannot create agents", "error", err)
+		return api.AdminCreateAgent500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot create agents: %v", err)},
+		}, nil
 	}
 
 	agent, err := accessor.Querier().AgentInsert(ctx, accessor.Source(), &dbsqlc.AgentInsertParams{
@@ -52,12 +71,95 @@ func CreateaAgent(ctx context.Context, accessor dbaccess.Accessor, request api.A
 		QueueID: queue.ID,
 	})
 	if err != nil {
-		return api.AdminCreateAgent500Response{}, err
+
+		return api.AdminCreateAgent500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot create agents: %v", err)},
+		}, nil
 	}
 
 	return api.AdminCreateAgent201JSONResponse{
 		Id:        agent.ID,
 		Name:      agent.Name,
 		CreatedAt: agent.CreatedAt,
+	}, nil
+}
+
+func GetAgent(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminGetAgentRequestObject) (api.AdminGetAgentResponseObject, error) {
+	logger.Info("GetAgent", "request", request)
+
+	agent, err := accessor.Querier().AgentFindById(ctx, accessor.Source(), int64(request.Id))
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return api.AdminGetAgent404Response{}, nil
+		}
+
+		logger.Error("Cannot get agent", "error", err)
+		return api.AdminGetAgent500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot get agent: %v", err)},
+		}, nil
+	}
+
+	if agent == nil {
+		return api.AdminGetAgent404Response{}, nil
+	}
+
+	return api.AdminGetAgent200JSONResponse{
+		Data: api.Agent{
+			Id:        agent.ID,
+			Name:      agent.Name,
+			CreatedAt: agent.CreatedAt,
+		},
+	}, nil
+}
+
+func UpdateAgent(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminUpdateAgentRequestObject) (api.AdminUpdateAgentResponseObject, error) {
+	logger.Info("UpdateAgent", "request", request)
+
+	agent, err := accessor.Querier().AgentUpdate(ctx, accessor.Source(), &dbsqlc.AgentUpdateParams{
+		ID:   int64(request.Id),
+		Name: request.Body.Name,
+	})
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return api.AdminUpdateAgent404Response{}, nil
+		}
+
+		logger.Error("Cannot update agent", "error", err)
+		return api.AdminUpdateAgent500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot update agent: %v", err)},
+		}, nil
+	}
+
+	return api.AdminUpdateAgent200JSONResponse{
+		Data: api.Agent{
+			Id:        agent.ID,
+			Name:      agent.Name,
+			CreatedAt: agent.CreatedAt,
+		},
+	}, nil
+}
+
+func DeleteAgent(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminDeleteAgentRequestObject) (api.AdminDeleteAgentResponseObject, error) {
+	logger.Info("DeleteAgent", "request", request)
+
+	agent, err := accessor.Querier().AgentDelete(ctx, accessor.Source(), int64(request.Id))
+	if err != nil {
+		logger.Error("Cannot delete agent", "error", err)
+		return api.AdminDeleteAgent500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot delete agent: %v", err)},
+		}, nil
+	}
+
+	if agent == "NOTFOUND" {
+		return api.AdminDeleteAgent404Response{}, nil
+	}
+	if agent == "REFERENCED" {
+		return api.AdminDeleteAgent409Response{}, nil
+	}
+	if agent == "DONE" {
+		return api.AdminDeleteAgent200Response{}, nil
+	}
+	return api.AdminDeleteAgent500JSONResponse{
+		N500JSONResponse: api.N500JSONResponse{Error: "Cannot delete agent"},
 	}, nil
 }

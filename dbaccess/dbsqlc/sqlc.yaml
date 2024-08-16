@@ -6,6 +6,7 @@ sql:
       - migration.sql
       - queue.sql
       - agent.sql
+      - config.sql
       - api_token.sql
       - invocation.sql
       - notify.sql
@@ -25,6 +26,8 @@ sql:
           ttl: "TTL"
           agents: "Agent"
           queues: "Queue"
+          configs: "Config"
+          config_suites: "ConfigSuite"
           api_tokens: "ApiToken"
           invocations: "Invocation"
 

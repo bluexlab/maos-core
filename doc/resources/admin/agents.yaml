@@ -20,7 +20,7 @@ get:
         type: string
       description: Filter by agent ID
   responses:
-    '200':
+    "200":
       description: Successful response
       content:
         application/json:
@@ -30,7 +30,7 @@ get:
               data:
                 type: array
                 items:
-                  $ref: '../../schemas/Agent.yaml'
+                  $ref: "../../schemas/Agent.yaml"
               meta:
                 type: object
                 properties:
@@ -43,16 +43,16 @@ get:
               - meta
           example:
             data:
-            - id: 16888
-              name: "agent-16888"
-              created_at: 1640995200
-            - id: 16889
-              name: "agent-16889"
-              created_at: 1640999200
-    '401':
+              - id: 16888
+                name: "agent-16888"
+                created_at: 1640995200
+              - id: 16889
+                name: "agent-16889"
+                created_at: 1640999200
+    "401":
       description: Unauthorized
-    '500':
-      description: Server Internal Error
+    "500":
+      $ref: "../../responses/500.yaml"
 
 post:
   summary: Create a new Agent
@@ -64,21 +64,23 @@ post:
     content:
       application/json:
         schema:
-          $ref: '../../schemas/AgentCreate.yaml'
+          $ref: "../../schemas/AgentCreate.yaml"
         example:
           name: "agent-16888"
   responses:
-    '201':
+    "201":
       description: Successfully created
       content:
         application/json:
           schema:
-            $ref: '../../schemas/Agent.yaml'
+            $ref: "../../schemas/Agent.yaml"
           example:
             id: 16888
             name: "agent-16888"
             created_at: 1640995200
-    '401':
+    "401":
       description: Unauthorized
-    '500':
-      description: Server Internal Error
+    "400":
+      $ref: "../../responses/400.yaml"
+    "500":
+      $ref: "../../responses/500.yaml"

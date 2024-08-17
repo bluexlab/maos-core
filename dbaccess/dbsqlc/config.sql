@@ -1,8 +1,9 @@
--- name: ConfigFindByAgentId :many
+-- name: ConfigFindByAgentId :one
 SELECT *
 FROM configs
 WHERE agent_id = @agent_id
-ORDER BY created_at DESC;
+ORDER BY created_at DESC, id DESC
+LIMIT 1;
 
 -- name: ConfigInsert :one
 INSERT INTO configs(
@@ -16,4 +17,3 @@ INSERT INTO configs(
     @created_by::text,
     sqlc.narg('min_agent_version')::text
 ) RETURNING *;
-

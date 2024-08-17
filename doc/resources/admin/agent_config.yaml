@@ -1,0 +1,74 @@
+get:
+  summary: Get the latest config of the Agent
+  operationId: adminGetAgentConfig
+  tags:
+    - Admin
+  parameters:
+    - in: path
+      name: id
+      schema:
+        type: integer
+      description: Agent ID
+  responses:
+    "200":
+      description: Successful response
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: "../../schemas/Config.yaml"
+            required:
+              - data
+    "401":
+      description: Unauthorized
+    "404":
+      description: Agent not found
+    "500":
+      $ref: "../../responses/500.yaml"
+
+post:
+  summary: Add/Update one specific Agent
+  description:
+    Add/Update the latest config of the Agent. Because config is immutable,
+    it will create a new config if the agent already has one.
+  operationId: adminUpdateAgentConfig
+  tags:
+    - Admin
+  parameters:
+    - in: path
+      name: id
+      schema:
+        type: integer
+        format: int64
+      description: Agent ID
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            content:
+              type: object
+            minAgentVersion:
+              type: string
+            user:
+              type: string
+          description: Config data to update
+          required:
+            - content
+            - user
+
+  responses:
+    "201":
+      description: Successful created
+    "401":
+      description: Unauthorized
+    "404":
+      description: Agent not found
+    "400":
+      $ref: "../../responses/400.yaml"
+    "500":
+      $ref: "../../responses/500.yaml"

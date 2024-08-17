@@ -14,7 +14,7 @@ func InsertConfig(t *testing.T, ctx context.Context, ds DataSource, agentId int6
 	if err != nil {
 		t.Fatalf("Failed to marshal content: %v", err)
 	}
-	config, err := query.ConfigInsert(ctx, ds, &dbsqlc.ConfigInsertParams{AgentID: agentId, Content: contentBytes, CreatedBy: "test"})
+	config, err := query.ConfigInsert(ctx, ds, &dbsqlc.ConfigInsertParams{AgentId: agentId, Content: contentBytes, CreatedBy: "test"})
 	if err != nil {
 		t.Fatalf("Failed to insert queue: %v", err)
 	}

@@ -1,0 +1,20 @@
+type: object
+properties:
+  agentId:
+    type: integer
+    format: int64
+  minAgentVersion:
+    type: string
+  content:
+    type: object
+  created_at:
+    type: integer
+    format: int64
+  created_by:
+    type: string
+
+required:
+  - agentId
+  - content
+  - created_at
+  - created_by

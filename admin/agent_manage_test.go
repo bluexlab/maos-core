@@ -1,4 +1,4 @@
-package admin
+package admin_test
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gitlab.com/navyx/ai/maos/maos-core/admin"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess/dbsqlc"
@@ -87,7 +88,7 @@ func TestListAgentsWithDB(t *testing.T) {
 
 			_ = tt.setupAgents(ctx, dbPool)
 
-			response, err := ListAgents(ctx, logger, accessor, tt.request)
+			response, err := admin.ListAgents(ctx, logger, accessor, tt.request)
 
 			if tt.expectedError != "" {
 				assert.NoError(t, err)
@@ -132,7 +133,7 @@ func TestCreateAgentWithDB(t *testing.T) {
 			},
 		}
 
-		response, err := CreateaAgent(ctx, logger, accessor, request)
+		response, err := admin.CreateAgent(ctx, logger, accessor, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminCreateAgent201JSONResponse{}, response)
@@ -168,7 +169,7 @@ func TestCreateAgentWithDB(t *testing.T) {
 		}
 
 		dbPool.Close()
-		response, err := CreateaAgent(ctx, logger, accessor, request)
+		response, err := admin.CreateAgent(ctx, logger, accessor, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminCreateAgent500JSONResponse{}, response)
@@ -189,7 +190,7 @@ func TestCreateAgentWithDB(t *testing.T) {
 			},
 		}
 
-		response, err := CreateaAgent(ctx, logger, accessor, request)
+		response, err := admin.CreateAgent(ctx, logger, accessor, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminCreateAgent500JSONResponse{}, response)

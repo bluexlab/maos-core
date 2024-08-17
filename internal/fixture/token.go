@@ -11,7 +11,7 @@ func InsertToken(t *testing.T, ctx context.Context, ds DataSource, id string, ag
 	query := dbsqlc.New()
 	token, err := query.ApiTokenInsert(ctx, ds, &dbsqlc.ApiTokenInsertParams{
 		ID:          id,
-		AgentID:     agentId,
+		AgentId:     agentId,
 		ExpireAt:    expireAt,
 		CreatedBy:   "test",
 		Permissions: permissions,
@@ -27,7 +27,7 @@ func InsertAgentToken(t *testing.T, ctx context.Context, ds DataSource, id strin
 	agent := InsertAgent(t, ctx, ds, id+"-agent")
 	token, err := query.ApiTokenInsert(ctx, ds, &dbsqlc.ApiTokenInsertParams{
 		ID:          id,
-		AgentID:     agent.ID,
+		AgentId:     agent.ID,
 		ExpireAt:    expireAt,
 		CreatedBy:   "test",
 		Permissions: permissions,

@@ -19,6 +19,8 @@ var (
 		"AdminCreateAgent":         {"admin"},
 		"AdminUpdateAgent":         {"admin"},
 		"AdminDeleteAgent":         {"admin"},
+		"AdminGetAgentConfig":      {"admin"},
+		"AdminUpdateAgentConfig":   {"admin"},
 		"AdminListApiTokens":       {"admin"},
 		"AdminCreateApiToken":      {"admin"},
 	}

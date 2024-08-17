@@ -161,6 +161,15 @@ type CollectionIndexIndexType string
 // CollectionIndexMetricType defines model for CollectionIndex.MetricType.
 type CollectionIndexMetricType string
 
+// Config defines model for Config.
+type Config struct {
+	AgentId         int64                  `json:"agentId"`
+	Content         map[string]interface{} `json:"content"`
+	CreatedAt       int64                  `json:"created_at"`
+	CreatedBy       string                 `json:"created_by"`
+	MinAgentVersion *string                `json:"minAgentVersion,omitempty"`
+}
+
 // Configuration A key-value structure representing the caller's configuration
 type Configuration map[string]string
 
@@ -292,6 +301,13 @@ type AdminListAgentsParams struct {
 // AdminUpdateAgentJSONBody defines parameters for AdminUpdateAgent.
 type AdminUpdateAgentJSONBody struct {
 	Name *string `json:"name,omitempty"`
+}
+
+// AdminUpdateAgentConfigJSONBody defines parameters for AdminUpdateAgentConfig.
+type AdminUpdateAgentConfigJSONBody struct {
+	Content         map[string]interface{} `json:"content"`
+	MinAgentVersion *string                `json:"minAgentVersion,omitempty"`
+	User            string                 `json:"user"`
 }
 
 // AdminListApiTokensParams defines parameters for AdminListApiTokens.
@@ -426,6 +442,9 @@ type AdminCreateAgentJSONRequestBody = AgentCreate
 
 // AdminUpdateAgentJSONRequestBody defines body for AdminUpdateAgent for application/json ContentType.
 type AdminUpdateAgentJSONRequestBody AdminUpdateAgentJSONBody
+
+// AdminUpdateAgentConfigJSONRequestBody defines body for AdminUpdateAgentConfig for application/json ContentType.
+type AdminUpdateAgentConfigJSONRequestBody AdminUpdateAgentConfigJSONBody
 
 // AdminCreateApiTokenJSONRequestBody defines body for AdminCreateApiToken for application/json ContentType.
 type AdminCreateApiTokenJSONRequestBody = ApiTokenCreate
@@ -565,6 +584,12 @@ type ServerInterface interface {
 	// Update one specific Agent
 	// (PATCH /v1/admin/agents/{id})
 	AdminUpdateAgent(w http.ResponseWriter, r *http.Request, id int)
+	// Get the latest config of the Agent
+	// (GET /v1/admin/agents/{id}/config)
+	AdminGetAgentConfig(w http.ResponseWriter, r *http.Request, id int)
+	// Add/Update one specific Agent
+	// (POST /v1/admin/agents/{id}/config)
+	AdminUpdateAgentConfig(w http.ResponseWriter, r *http.Request, id int64)
 	// List API tokens
 	// (GET /v1/admin/api_tokens)
 	AdminListApiTokens(w http.ResponseWriter, r *http.Request, params AdminListApiTokensParams)
@@ -803,6 +828,66 @@ func (siw *ServerInterfaceWrapper) AdminUpdateAgent(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminUpdateAgent(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// AdminGetAgentConfig operation middleware
+func (siw *ServerInterfaceWrapper) AdminGetAgentConfig(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: false})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminGetAgentConfig(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// AdminUpdateAgentConfig operation middleware
+func (siw *ServerInterfaceWrapper) AdminUpdateAgentConfig(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: false})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminUpdateAgentConfig(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1506,6 +1591,10 @@ func HandlerWithOptions(si ServerInterface, options GorillaServerOptions) http.H
 
 	r.HandleFunc(options.BaseURL+"/v1/admin/agents/{id}", wrapper.AdminUpdateAgent).Methods("PATCH")
 
+	r.HandleFunc(options.BaseURL+"/v1/admin/agents/{id}/config", wrapper.AdminGetAgentConfig).Methods("GET")
+
+	r.HandleFunc(options.BaseURL+"/v1/admin/agents/{id}/config", wrapper.AdminUpdateAgentConfig).Methods("POST")
+
 	r.HandleFunc(options.BaseURL+"/v1/admin/api_tokens", wrapper.AdminListApiTokens).Methods("GET")
 
 	r.HandleFunc(options.BaseURL+"/v1/admin/api_tokens", wrapper.AdminCreateApiToken).Methods("POST")
@@ -1795,6 +1884,101 @@ func (response AdminUpdateAgent404Response) VisitAdminUpdateAgentResponse(w http
 type AdminUpdateAgent500JSONResponse struct{ N500JSONResponse }
 
 func (response AdminUpdateAgent500JSONResponse) VisitAdminUpdateAgentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminGetAgentConfigRequestObject struct {
+	Id int `json:"id,omitempty"`
+}
+
+type AdminGetAgentConfigResponseObject interface {
+	VisitAdminGetAgentConfigResponse(w http.ResponseWriter) error
+}
+
+type AdminGetAgentConfig200JSONResponse struct {
+	Data Config `json:"data"`
+}
+
+func (response AdminGetAgentConfig200JSONResponse) VisitAdminGetAgentConfigResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminGetAgentConfig401Response struct {
+}
+
+func (response AdminGetAgentConfig401Response) VisitAdminGetAgentConfigResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type AdminGetAgentConfig404Response struct {
+}
+
+func (response AdminGetAgentConfig404Response) VisitAdminGetAgentConfigResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type AdminGetAgentConfig500JSONResponse struct{ N500JSONResponse }
+
+func (response AdminGetAgentConfig500JSONResponse) VisitAdminGetAgentConfigResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminUpdateAgentConfigRequestObject struct {
+	Id   int64 `json:"id,omitempty"`
+	Body *AdminUpdateAgentConfigJSONRequestBody
+}
+
+type AdminUpdateAgentConfigResponseObject interface {
+	VisitAdminUpdateAgentConfigResponse(w http.ResponseWriter) error
+}
+
+type AdminUpdateAgentConfig201Response struct {
+}
+
+func (response AdminUpdateAgentConfig201Response) VisitAdminUpdateAgentConfigResponse(w http.ResponseWriter) error {
+	w.WriteHeader(201)
+	return nil
+}
+
+type AdminUpdateAgentConfig400JSONResponse struct{ N400JSONResponse }
+
+func (response AdminUpdateAgentConfig400JSONResponse) VisitAdminUpdateAgentConfigResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminUpdateAgentConfig401Response struct {
+}
+
+func (response AdminUpdateAgentConfig401Response) VisitAdminUpdateAgentConfigResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type AdminUpdateAgentConfig404Response struct {
+}
+
+func (response AdminUpdateAgentConfig404Response) VisitAdminUpdateAgentConfigResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type AdminUpdateAgentConfig500JSONResponse struct{ N500JSONResponse }
+
+func (response AdminUpdateAgentConfig500JSONResponse) VisitAdminUpdateAgentConfigResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
 
@@ -2548,6 +2732,12 @@ type StrictServerInterface interface {
 	// Update one specific Agent
 	// (PATCH /v1/admin/agents/{id})
 	AdminUpdateAgent(ctx context.Context, request AdminUpdateAgentRequestObject) (AdminUpdateAgentResponseObject, error)
+	// Get the latest config of the Agent
+	// (GET /v1/admin/agents/{id}/config)
+	AdminGetAgentConfig(ctx context.Context, request AdminGetAgentConfigRequestObject) (AdminGetAgentConfigResponseObject, error)
+	// Add/Update one specific Agent
+	// (POST /v1/admin/agents/{id}/config)
+	AdminUpdateAgentConfig(ctx context.Context, request AdminUpdateAgentConfigRequestObject) (AdminUpdateAgentConfigResponseObject, error)
 	// List API tokens
 	// (GET /v1/admin/api_tokens)
 	AdminListApiTokens(ctx context.Context, request AdminListApiTokensRequestObject) (AdminListApiTokensResponseObject, error)
@@ -2798,6 +2988,65 @@ func (sh *strictHandler) AdminUpdateAgent(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminUpdateAgentResponseObject); ok {
 		if err := validResponse.VisitAdminUpdateAgentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminGetAgentConfig operation middleware
+func (sh *strictHandler) AdminGetAgentConfig(w http.ResponseWriter, r *http.Request, id int) {
+	var request AdminGetAgentConfigRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminGetAgentConfig(ctx, request.(AdminGetAgentConfigRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminGetAgentConfig")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminGetAgentConfigResponseObject); ok {
+		if err := validResponse.VisitAdminGetAgentConfigResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminUpdateAgentConfig operation middleware
+func (sh *strictHandler) AdminUpdateAgentConfig(w http.ResponseWriter, r *http.Request, id int64) {
+	var request AdminUpdateAgentConfigRequestObject
+
+	request.Id = id
+
+	var body AdminUpdateAgentConfigJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminUpdateAgentConfig(ctx, request.(AdminUpdateAgentConfigRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminUpdateAgentConfig")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminUpdateAgentConfigResponseObject); ok {
+		if err := validResponse.VisitAdminUpdateAgentConfigResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

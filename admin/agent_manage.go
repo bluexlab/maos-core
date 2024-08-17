@@ -46,7 +46,7 @@ func ListAgents(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acce
 	return response, nil
 }
 
-func CreateaAgent(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminCreateAgentRequestObject) (api.AdminCreateAgentResponseObject, error) {
+func CreateAgent(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminCreateAgentRequestObject) (api.AdminCreateAgentResponseObject, error) {
 	logger.Info("CreateAgent", "request", request)
 
 	if request.Body.Name == "" {

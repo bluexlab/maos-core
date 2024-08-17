@@ -47,7 +47,7 @@ func NewDatabaseApiTokenFetch(accessor dbaccess.Accessor, bootstrapApiToken stri
 		}
 		return &Token{
 			Id:          token.ID,
-			AgentId:     token.AgentID,
+			AgentId:     token.AgentId,
 			QueueId:     token.QueueID,
 			ExpireAt:    token.ExpireAt,
 			Permissions: token.Permissions,

@@ -30,6 +30,7 @@ sql:
           config_suites: "ConfigSuite"
           api_tokens: "ApiToken"
           invocations: "Invocation"
+          agent_id: "AgentId"
 
         overrides:
           - db_type: "pg_catalog.interval"

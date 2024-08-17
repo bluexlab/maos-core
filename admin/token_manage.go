@@ -31,7 +31,7 @@ func ListApiTokens(ctx context.Context, accessor dbaccess.Accessor, request api.
 		func(row *dbsqlc.ApiTokenListByPageRow) api.ApiToken {
 			return api.ApiToken{
 				Id:          row.ID,
-				AgentId:     row.AgentID,
+				AgentId:     row.AgentId,
 				CreatedAt:   row.CreatedAt,
 				CreatedBy:   row.CreatedBy,
 				ExpireAt:    row.ExpireAt,
@@ -55,7 +55,7 @@ func CreateApiToken(ctx context.Context, accessor dbaccess.Accessor, request api
 
 	params := dbsqlc.ApiTokenInsertParams{
 		ID:          GenerateAPIToken(),
-		AgentID:     request.Body.AgentId,
+		AgentId:     request.Body.AgentId,
 		CreatedBy:   request.Body.CreatedBy,
 		Permissions: request.Body.Permissions,
 		ExpireAt:    request.Body.ExpireAt,
@@ -70,7 +70,7 @@ func CreateApiToken(ctx context.Context, accessor dbaccess.Accessor, request api
 
 	return api.AdminCreateApiToken201JSONResponse{
 		Id:          apiToken.ID,
-		AgentId:     apiToken.AgentID,
+		AgentId:     apiToken.AgentId,
 		CreatedAt:   apiToken.ExpireAt,
 		CreatedBy:   apiToken.CreatedBy,
 		ExpireAt:    apiToken.ExpireAt,

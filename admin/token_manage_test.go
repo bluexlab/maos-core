@@ -156,7 +156,7 @@ func TestCreateApiTokenWithDB(t *testing.T) {
 		}
 
 		expectedApiToken := dbsqlc.ApiToken{
-			AgentID:     request.Body.AgentId,
+			AgentId:     request.Body.AgentId,
 			CreatedBy:   request.Body.CreatedBy,
 			Permissions: request.Body.Permissions,
 			ExpireAt:    request.Body.ExpireAt,
@@ -169,7 +169,7 @@ func TestCreateApiTokenWithDB(t *testing.T) {
 		jsonResponse := response.(api.AdminCreateApiToken201JSONResponse)
 		assert.Equal(t, tokenLength+3, len(jsonResponse.Id))
 		assert.True(t, strings.HasPrefix(jsonResponse.Id, "ma-"))
-		assert.Equal(t, expectedApiToken.AgentID, jsonResponse.AgentId)
+		assert.Equal(t, expectedApiToken.AgentId, jsonResponse.AgentId)
 		assert.Equal(t, expectedApiToken.CreatedBy, jsonResponse.CreatedBy)
 		assert.Equal(t,
 			util.MapSlice(expectedApiToken.Permissions, func(p string) api.Permission { return api.Permission(p) }),
@@ -179,7 +179,7 @@ func TestCreateApiTokenWithDB(t *testing.T) {
 
 		apiToken, err := accessor.Querier().ApiTokenFindByID(ctx, accessor.Source(), jsonResponse.Id)
 		assert.NoError(t, err)
-		assert.Equal(t, expectedApiToken.AgentID, apiToken.AgentID)
+		assert.Equal(t, expectedApiToken.AgentId, apiToken.AgentId)
 		assert.Equal(t, expectedApiToken.CreatedBy, apiToken.CreatedBy)
 		assert.Equal(t, expectedApiToken.Permissions, apiToken.Permissions)
 		assert.Equal(t, expectedApiToken.ExpireAt, apiToken.ExpireAt)

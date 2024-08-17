@@ -31,7 +31,7 @@ LIMIT 1
 
 type ApiTokenFindByIDRow struct {
 	ID          string
-	AgentID     int64
+	AgentId     int64
 	QueueID     int64
 	Permissions []string
 	ExpireAt    int64
@@ -43,7 +43,7 @@ func (q *Queries) ApiTokenFindByID(ctx context.Context, db DBTX, id string) (*Ap
 	var i ApiTokenFindByIDRow
 	err := row.Scan(
 		&i.ID,
-		&i.AgentID,
+		&i.AgentId,
 		&i.QueueID,
 		&i.Permissions,
 		&i.ExpireAt,
@@ -72,7 +72,7 @@ INSERT INTO api_tokens(
 
 type ApiTokenInsertParams struct {
 	ID          string
-	AgentID     int64
+	AgentId     int64
 	ExpireAt    int64
 	CreatedBy   string
 	Permissions []string
@@ -82,7 +82,7 @@ type ApiTokenInsertParams struct {
 func (q *Queries) ApiTokenInsert(ctx context.Context, db DBTX, arg *ApiTokenInsertParams) (*ApiToken, error) {
 	row := db.QueryRow(ctx, apiTokenInsert,
 		arg.ID,
-		arg.AgentID,
+		arg.AgentId,
 		arg.ExpireAt,
 		arg.CreatedBy,
 		arg.Permissions,
@@ -91,7 +91,7 @@ func (q *Queries) ApiTokenInsert(ctx context.Context, db DBTX, arg *ApiTokenInse
 	var i ApiToken
 	err := row.Scan(
 		&i.ID,
-		&i.AgentID,
+		&i.AgentId,
 		&i.ExpireAt,
 		&i.CreatedBy,
 		&i.CreatedAt,
@@ -124,7 +124,7 @@ type ApiTokenListByPageParams struct {
 
 type ApiTokenListByPageRow struct {
 	ID          string
-	AgentID     int64
+	AgentId     int64
 	QueueID     int64
 	Permissions []string
 	CreatedAt   int64
@@ -144,7 +144,7 @@ func (q *Queries) ApiTokenListByPage(ctx context.Context, db DBTX, arg *ApiToken
 		var i ApiTokenListByPageRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.AgentID,
+			&i.AgentId,
 			&i.QueueID,
 			&i.Permissions,
 			&i.CreatedAt,

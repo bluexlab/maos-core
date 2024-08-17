@@ -65,7 +65,7 @@ type Agent struct {
 
 type ApiToken struct {
 	ID          string
-	AgentID     int64
+	AgentId     int64
 	ExpireAt    int64
 	CreatedBy   string
 	CreatedAt   int64
@@ -74,7 +74,7 @@ type ApiToken struct {
 
 type Config struct {
 	ID              int64
-	AgentID         int64
+	AgentId         int64
 	ConfigSuiteID   *int64
 	Content         []byte
 	MinAgentVersion *string

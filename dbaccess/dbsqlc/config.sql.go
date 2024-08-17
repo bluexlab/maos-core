@@ -9,41 +9,29 @@ import (
 	"context"
 )
 
-const configFindByAgentId = `-- name: ConfigFindByAgentId :many
+const configFindByAgentId = `-- name: ConfigFindByAgentId :one
 SELECT id, agent_id, config_suite_id, content, min_agent_version, created_by, created_at, updated_by, updated_at
 FROM configs
 WHERE agent_id = $1
-ORDER BY created_at DESC
+ORDER BY created_at DESC, id DESC
+LIMIT 1
 `
 
-func (q *Queries) ConfigFindByAgentId(ctx context.Context, db DBTX, agentID int64) ([]*Config, error) {
-	rows, err := db.Query(ctx, configFindByAgentId, agentID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []*Config
-	for rows.Next() {
-		var i Config
-		if err := rows.Scan(
-			&i.ID,
-			&i.AgentID,
-			&i.ConfigSuiteID,
-			&i.Content,
-			&i.MinAgentVersion,
-			&i.CreatedBy,
-			&i.CreatedAt,
-			&i.UpdatedBy,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, &i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+func (q *Queries) ConfigFindByAgentId(ctx context.Context, db DBTX, agentID int64) (*Config, error) {
+	row := db.QueryRow(ctx, configFindByAgentId, agentID)
+	var i Config
+	err := row.Scan(
+		&i.ID,
+		&i.AgentId,
+		&i.ConfigSuiteID,
+		&i.Content,
+		&i.MinAgentVersion,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
+	)
+	return &i, err
 }
 
 const configInsert = `-- name: ConfigInsert :one
@@ -61,7 +49,7 @@ INSERT INTO configs(
 `
 
 type ConfigInsertParams struct {
-	AgentID         int64
+	AgentId         int64
 	Content         []byte
 	CreatedBy       string
 	MinAgentVersion *string
@@ -69,7 +57,7 @@ type ConfigInsertParams struct {
 
 func (q *Queries) ConfigInsert(ctx context.Context, db DBTX, arg *ConfigInsertParams) (*Config, error) {
 	row := db.QueryRow(ctx, configInsert,
-		arg.AgentID,
+		arg.AgentId,
 		arg.Content,
 		arg.CreatedBy,
 		arg.MinAgentVersion,
@@ -77,7 +65,7 @@ func (q *Queries) ConfigInsert(ctx context.Context, db DBTX, arg *ConfigInsertPa
 	var i Config
 	err := row.Scan(
 		&i.ID,
-		&i.AgentID,
+		&i.AgentId,
 		&i.ConfigSuiteID,
 		&i.Content,
 		&i.MinAgentVersion,

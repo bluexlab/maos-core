@@ -1071,14 +1071,6 @@ paths:
                 required:
                   - data
                   - meta
-              example:
-                data:
-                  - id: 16888
-                    name: agent-16888
-                    created_at: 1640995200
-                  - id: 16889
-                    name: agent-16889
-                    created_at: 1640999200
         '401':
           description: Unauthorized
         '500':
@@ -1265,7 +1257,7 @@ paths:
               properties:
                 content:
                   type: object
-                minAgentVersion:
+                min_agent_version:
                   type: string
                 user:
                   type: string
@@ -1282,6 +1274,96 @@ paths:
           description: Unauthorized
         '404':
           description: Agent not found
+        '500':
+          $ref: '#/components/responses/500'
+  /v1/admin/deployments:
+    get:
+      summary: List Deployments
+      operationId: adminListDeployments
+      tags:
+        - Admin
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+          description: Page number (default 1)
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+          description: Page number (default 10)
+        - in: query
+          name: name
+          schema:
+            type: string
+          description: Filter by deployment name
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Deployment'
+                  meta:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                        format: int64
+                        description: Total number of deployments
+                      page:
+                        type: integer
+                        description: Current page number
+                      page_size:
+                        type: integer
+                        description: Number of deployments per page
+                    required:
+                      - total
+                      - page
+                      - page_size
+                required:
+                  - data
+                  - meta
+        '401':
+          description: Unauthorized
+        '500':
+          $ref: '#/components/responses/500'
+    post:
+      summary: Create a new Deployment
+      operationId: adminCreateDeployment
+      tags:
+        - Admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                user:
+                  type: string
+              required:
+                - name
+                - user
+      responses:
+        '201':
+          description: Successfully created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Deployment'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          description: Unauthorized
         '500':
           $ref: '#/components/responses/500'
 components:
@@ -1627,6 +1709,9 @@ components:
     Config:
       type: object
       properties:
+        id:
+          type: integer
+          format: int64
         agentId:
           type: integer
           format: int64
@@ -1640,8 +1725,47 @@ components:
         created_by:
           type: string
       required:
+        - id
         - agentId
         - content
+        - created_at
+        - created_by
+    Deployment:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        status:
+          type: string
+          enum:
+            - draft
+            - reviewing
+            - approved
+            - rejected
+            - deployed
+            - cancelled
+        created_at:
+          type: integer
+          format: int64
+        created_by:
+          type: string
+        approved_at:
+          type: integer
+          format: int64
+        approved_by:
+          type: string
+        finished_at:
+          type: integer
+          format: int64
+        finished_by:
+          type: string
+      required:
+        - id
+        - name
+        - status
         - created_at
         - created_by
   responses:

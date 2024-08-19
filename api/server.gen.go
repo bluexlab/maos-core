@@ -62,13 +62,23 @@ const (
 	L2      CollectionIndexMetricType = "L2"
 )
 
+// Defines values for DeploymentStatus.
+const (
+	DeploymentStatusApproved  DeploymentStatus = "approved"
+	DeploymentStatusCancelled DeploymentStatus = "cancelled"
+	DeploymentStatusDeployed  DeploymentStatus = "deployed"
+	DeploymentStatusDraft     DeploymentStatus = "draft"
+	DeploymentStatusRejected  DeploymentStatus = "rejected"
+	DeploymentStatusReviewing DeploymentStatus = "reviewing"
+)
+
 // Defines values for InvocationState.
 const (
-	Available InvocationState = "available"
-	Cancelled InvocationState = "cancelled"
-	Completed InvocationState = "completed"
-	Discarded InvocationState = "discarded"
-	Running   InvocationState = "running"
+	InvocationStateAvailable InvocationState = "available"
+	InvocationStateCancelled InvocationState = "cancelled"
+	InvocationStateCompleted InvocationState = "completed"
+	InvocationStateDiscarded InvocationState = "discarded"
+	InvocationStateRunning   InvocationState = "running"
 )
 
 // Defines values for MessageRole.
@@ -167,11 +177,28 @@ type Config struct {
 	Content         map[string]interface{} `json:"content"`
 	CreatedAt       int64                  `json:"created_at"`
 	CreatedBy       string                 `json:"created_by"`
+	Id              int64                  `json:"id"`
 	MinAgentVersion *string                `json:"minAgentVersion,omitempty"`
 }
 
 // Configuration A key-value structure representing the caller's configuration
 type Configuration map[string]string
+
+// Deployment defines model for Deployment.
+type Deployment struct {
+	ApprovedAt *int64           `json:"approved_at,omitempty"`
+	ApprovedBy *string          `json:"approved_by,omitempty"`
+	CreatedAt  int64            `json:"created_at"`
+	CreatedBy  string           `json:"created_by"`
+	FinishedAt *int64           `json:"finished_at,omitempty"`
+	FinishedBy *string          `json:"finished_by,omitempty"`
+	Id         int64            `json:"id"`
+	Name       string           `json:"name"`
+	Status     DeploymentStatus `json:"status"`
+}
+
+// DeploymentStatus defines model for Deployment.Status.
+type DeploymentStatus string
 
 // Embedding defines model for Embedding.
 type Embedding struct {
@@ -306,7 +333,7 @@ type AdminUpdateAgentJSONBody struct {
 // AdminUpdateAgentConfigJSONBody defines parameters for AdminUpdateAgentConfig.
 type AdminUpdateAgentConfigJSONBody struct {
 	Content         map[string]interface{} `json:"content"`
-	MinAgentVersion *string                `json:"minAgentVersion,omitempty"`
+	MinAgentVersion *string                `json:"min_agent_version,omitempty"`
 	User            string                 `json:"user"`
 }
 
@@ -323,6 +350,24 @@ type AdminListApiTokensParams struct {
 
 	// CreatedBy Filter by creator
 	CreatedBy *string `form:"created_by,omitempty" json:"created_by,omitempty"`
+}
+
+// AdminListDeploymentsParams defines parameters for AdminListDeployments.
+type AdminListDeploymentsParams struct {
+	// Page Page number (default 1)
+	Page *int `form:"page,omitempty" json:"page,omitempty"`
+
+	// PageSize Page number (default 10)
+	PageSize *int `form:"page_size,omitempty" json:"page_size,omitempty"`
+
+	// Name Filter by deployment name
+	Name *string `form:"name,omitempty" json:"name,omitempty"`
+}
+
+// AdminCreateDeploymentJSONBody defines parameters for AdminCreateDeployment.
+type AdminCreateDeploymentJSONBody struct {
+	Name string `json:"name"`
+	User string `json:"user"`
 }
 
 // CreateCompletionJSONBody defines parameters for CreateCompletion.
@@ -448,6 +493,9 @@ type AdminUpdateAgentConfigJSONRequestBody AdminUpdateAgentConfigJSONBody
 
 // AdminCreateApiTokenJSONRequestBody defines body for AdminCreateApiToken for application/json ContentType.
 type AdminCreateApiTokenJSONRequestBody = ApiTokenCreate
+
+// AdminCreateDeploymentJSONRequestBody defines body for AdminCreateDeployment for application/json ContentType.
+type AdminCreateDeploymentJSONRequestBody AdminCreateDeploymentJSONBody
 
 // CreateCompletionJSONRequestBody defines body for CreateCompletion for application/json ContentType.
 type CreateCompletionJSONRequestBody CreateCompletionJSONBody
@@ -596,6 +644,12 @@ type ServerInterface interface {
 	// Create a new API token
 	// (POST /v1/admin/api_tokens)
 	AdminCreateApiToken(w http.ResponseWriter, r *http.Request)
+	// List Deployments
+	// (GET /v1/admin/deployments)
+	AdminListDeployments(w http.ResponseWriter, r *http.Request, params AdminListDeploymentsParams)
+	// Create a new Deployment
+	// (POST /v1/admin/deployments)
+	AdminCreateDeployment(w http.ResponseWriter, r *http.Request)
 	// Generate text completion.
 	// (POST /v1/completion)
 	CreateCompletion(w http.ResponseWriter, r *http.Request)
@@ -963,6 +1017,73 @@ func (siw *ServerInterfaceWrapper) AdminCreateApiToken(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminCreateApiToken(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// AdminListDeployments operation middleware
+func (siw *ServerInterfaceWrapper) AdminListDeployments(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var err error
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AdminListDeploymentsParams
+
+	// ------------- Optional query parameter "page" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "page", r.URL.Query(), &params.Page)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "page_size" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "page_size", r.URL.Query(), &params.PageSize)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page_size", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "name" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "name", r.URL.Query(), &params.Name)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminListDeployments(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// AdminCreateDeployment operation middleware
+func (siw *ServerInterfaceWrapper) AdminCreateDeployment(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminCreateDeployment(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1599,6 +1720,10 @@ func HandlerWithOptions(si ServerInterface, options GorillaServerOptions) http.H
 
 	r.HandleFunc(options.BaseURL+"/v1/admin/api_tokens", wrapper.AdminCreateApiToken).Methods("POST")
 
+	r.HandleFunc(options.BaseURL+"/v1/admin/deployments", wrapper.AdminListDeployments).Methods("GET")
+
+	r.HandleFunc(options.BaseURL+"/v1/admin/deployments", wrapper.AdminCreateDeployment).Methods("POST")
+
 	r.HandleFunc(options.BaseURL+"/v1/completion", wrapper.CreateCompletion).Methods("POST")
 
 	r.HandleFunc(options.BaseURL+"/v1/completion/models", wrapper.ListCompletionModels).Methods("GET")
@@ -2061,6 +2186,95 @@ func (response AdminCreateApiToken401Response) VisitAdminCreateApiTokenResponse(
 type AdminCreateApiToken500JSONResponse struct{ N500JSONResponse }
 
 func (response AdminCreateApiToken500JSONResponse) VisitAdminCreateApiTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminListDeploymentsRequestObject struct {
+	Params AdminListDeploymentsParams
+}
+
+type AdminListDeploymentsResponseObject interface {
+	VisitAdminListDeploymentsResponse(w http.ResponseWriter) error
+}
+
+type AdminListDeployments200JSONResponse struct {
+	Data []Deployment `json:"data"`
+	Meta struct {
+		// Page Current page number
+		Page int `json:"page"`
+
+		// PageSize Number of deployments per page
+		PageSize int `json:"page_size"`
+
+		// Total Total number of deployments
+		Total int64 `json:"total"`
+	} `json:"meta"`
+}
+
+func (response AdminListDeployments200JSONResponse) VisitAdminListDeploymentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminListDeployments401Response struct {
+}
+
+func (response AdminListDeployments401Response) VisitAdminListDeploymentsResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type AdminListDeployments500JSONResponse struct{ N500JSONResponse }
+
+func (response AdminListDeployments500JSONResponse) VisitAdminListDeploymentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminCreateDeploymentRequestObject struct {
+	Body *AdminCreateDeploymentJSONRequestBody
+}
+
+type AdminCreateDeploymentResponseObject interface {
+	VisitAdminCreateDeploymentResponse(w http.ResponseWriter) error
+}
+
+type AdminCreateDeployment201JSONResponse Deployment
+
+func (response AdminCreateDeployment201JSONResponse) VisitAdminCreateDeploymentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminCreateDeployment400JSONResponse struct{ N400JSONResponse }
+
+func (response AdminCreateDeployment400JSONResponse) VisitAdminCreateDeploymentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminCreateDeployment401Response struct {
+}
+
+func (response AdminCreateDeployment401Response) VisitAdminCreateDeploymentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type AdminCreateDeployment500JSONResponse struct{ N500JSONResponse }
+
+func (response AdminCreateDeployment500JSONResponse) VisitAdminCreateDeploymentResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
 
@@ -2744,6 +2958,12 @@ type StrictServerInterface interface {
 	// Create a new API token
 	// (POST /v1/admin/api_tokens)
 	AdminCreateApiToken(ctx context.Context, request AdminCreateApiTokenRequestObject) (AdminCreateApiTokenResponseObject, error)
+	// List Deployments
+	// (GET /v1/admin/deployments)
+	AdminListDeployments(ctx context.Context, request AdminListDeploymentsRequestObject) (AdminListDeploymentsResponseObject, error)
+	// Create a new Deployment
+	// (POST /v1/admin/deployments)
+	AdminCreateDeployment(ctx context.Context, request AdminCreateDeploymentRequestObject) (AdminCreateDeploymentResponseObject, error)
 	// Generate text completion.
 	// (POST /v1/completion)
 	CreateCompletion(ctx context.Context, request CreateCompletionRequestObject) (CreateCompletionResponseObject, error)
@@ -3104,6 +3324,63 @@ func (sh *strictHandler) AdminCreateApiToken(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminCreateApiTokenResponseObject); ok {
 		if err := validResponse.VisitAdminCreateApiTokenResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminListDeployments operation middleware
+func (sh *strictHandler) AdminListDeployments(w http.ResponseWriter, r *http.Request, params AdminListDeploymentsParams) {
+	var request AdminListDeploymentsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminListDeployments(ctx, request.(AdminListDeploymentsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminListDeployments")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminListDeploymentsResponseObject); ok {
+		if err := validResponse.VisitAdminListDeploymentsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminCreateDeployment operation middleware
+func (sh *strictHandler) AdminCreateDeployment(w http.ResponseWriter, r *http.Request) {
+	var request AdminCreateDeploymentRequestObject
+
+	var body AdminCreateDeploymentJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminCreateDeployment(ctx, request.(AdminCreateDeploymentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminCreateDeployment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminCreateDeploymentResponseObject); ok {
+		if err := validResponse.VisitAdminCreateDeploymentResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

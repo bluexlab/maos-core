@@ -1,5 +1,8 @@
 type: object
 properties:
+  id:
+    type: integer
+    format: int64
   agentId:
     type: integer
     format: int64
@@ -14,6 +17,7 @@ properties:
     type: string
 
 required:
+  - id
   - agentId
   - content
   - created_at

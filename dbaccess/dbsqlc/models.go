@@ -9,6 +9,53 @@ import (
 	"fmt"
 )
 
+type DeploymentStatus string
+
+const (
+	DeploymentStatusDraft     DeploymentStatus = "draft"
+	DeploymentStatusReviewing DeploymentStatus = "reviewing"
+	DeploymentStatusApproved  DeploymentStatus = "approved"
+	DeploymentStatusDeployed  DeploymentStatus = "deployed"
+	DeploymentStatusRejected  DeploymentStatus = "rejected"
+	DeploymentStatusRetired   DeploymentStatus = "retired"
+	DeploymentStatusCancelled DeploymentStatus = "cancelled"
+)
+
+func (e *DeploymentStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = DeploymentStatus(s)
+	case string:
+		*e = DeploymentStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for DeploymentStatus: %T", src)
+	}
+	return nil
+}
+
+type NullDeploymentStatus struct {
+	DeploymentStatus DeploymentStatus
+	Valid            bool // Valid is true if DeploymentStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullDeploymentStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.DeploymentStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.DeploymentStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullDeploymentStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.DeploymentStatus), nil
+}
+
 type InvocationState string
 
 const (
@@ -92,6 +139,20 @@ type ConfigSuite struct {
 	UpdatedBy  *string
 	UpdatedAt  *int64
 	DeployedAt *int64
+}
+
+type Deployment struct {
+	ID            int64
+	Name          string
+	Status        DeploymentStatus
+	Reviewers     []string
+	ConfigSuiteID *int64
+	CreatedBy     string
+	CreatedAt     int64
+	ApprovedBy    *string
+	ApprovedAt    *int64
+	FinishedBy    *string
+	FinishedAt    *int64
 }
 
 type Invocation struct {

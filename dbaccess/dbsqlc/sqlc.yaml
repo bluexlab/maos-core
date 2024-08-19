@@ -7,6 +7,7 @@ sql:
       - queue.sql
       - agent.sql
       - config.sql
+      - deployment.sql
       - api_token.sql
       - invocation.sql
       - notify.sql
@@ -28,6 +29,7 @@ sql:
           queues: "Queue"
           configs: "Config"
           config_suites: "ConfigSuite"
+          deployments: "Deployment"
           api_tokens: "ApiToken"
           invocations: "Invocation"
           agent_id: "AgentId"

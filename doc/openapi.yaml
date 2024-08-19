@@ -75,6 +75,9 @@ paths:
   /v1/admin/agents/{id}/config:
     $ref: "./resources/admin/agent_config.yaml"
 
+  /v1/admin/deployments:
+    $ref: "./resources/admin/deployments.yaml"
+
 components:
   securitySchemes:
     bearerAuth:

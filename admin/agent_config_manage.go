@@ -7,12 +7,15 @@ import (
 	"log/slog"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/samber/lo"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess/dbsqlc"
 )
 
 func AdminGetAgentConfig(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminGetAgentConfigRequestObject) (api.AdminGetAgentConfigResponseObject, error) {
+	logger.Info("AdminGetAgentConfig", "agentId", request.Id)
+
 	config, err := accessor.Querier().ConfigFindByAgentId(ctx, accessor.Pool(), int64(request.Id))
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -36,6 +39,7 @@ func AdminGetAgentConfig(ctx context.Context, logger *slog.Logger, accessor dbac
 
 	return api.AdminGetAgentConfig200JSONResponse{
 		Data: api.Config{
+			Id:              config.ID,
 			AgentId:         config.AgentId,
 			Content:         content,
 			MinAgentVersion: config.MinAgentVersion,
@@ -46,6 +50,12 @@ func AdminGetAgentConfig(ctx context.Context, logger *slog.Logger, accessor dbac
 }
 
 func AdminUpdateAgentConfig(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminUpdateAgentConfigRequestObject) (api.AdminUpdateAgentConfigResponseObject, error) {
+	logger.Info("AdminUpdateAgentConfig",
+		"agentId", request.Id,
+		"content", request.Body.Content,
+		"minAgentVersion", lo.FromPtrOr(request.Body.MinAgentVersion, "nil"),
+		"user", request.Body.User)
+
 	// Marshal the content to JSON
 	contentJSON, err := json.Marshal(request.Body.Content)
 	if err != nil {

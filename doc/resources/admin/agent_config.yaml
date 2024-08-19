@@ -52,7 +52,7 @@ post:
           properties:
             content:
               type: object
-            minAgentVersion:
+            min_agent_version:
               type: string
             user:
               type: string

@@ -23,6 +23,8 @@ var (
 		"AdminUpdateAgentConfig":   {"admin"},
 		"AdminListApiTokens":       {"admin"},
 		"AdminCreateApiToken":      {"admin"},
+		"AdminListDeployments":     {"admin"},
+		"AdminCreateDeployment":    {"admin"},
 	}
 )
 

@@ -269,8 +269,7 @@ func TestAdminGetAgentEndpoint(t *testing.T) {
 }
 
 func TestAdminUpdateAgentEndpoint(t *testing.T) {
-	// t.Parallel()
-
+	t.Parallel()
 	ctx := context.Background()
 	tests := []struct {
 		name           string

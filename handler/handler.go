@@ -211,6 +211,24 @@ func (s *APIHandler) AdminCreateApiToken(ctx context.Context, request api.AdminC
 	return admin.CreateApiToken(ctx, s.accessor, request)
 }
 
+func (s *APIHandler) AdminListDeployments(ctx context.Context, request api.AdminListDeploymentsRequestObject) (api.AdminListDeploymentsResponseObject, error) {
+	token := ValidatePermissions(ctx, "AdminListDeployments")
+	if token == nil {
+		return api.AdminListDeployments401Response{}, nil
+	}
+
+	return admin.ListDeployments(ctx, s.logger, s.accessor, request)
+}
+
+func (s *APIHandler) AdminCreateDeployment(ctx context.Context, request api.AdminCreateDeploymentRequestObject) (api.AdminCreateDeploymentResponseObject, error) {
+	token := ValidatePermissions(ctx, "AdminCreateDeployment")
+	if token == nil {
+		return api.AdminCreateDeployment401Response{}, nil
+	}
+
+	return admin.CreateDeployment(ctx, s.logger, s.accessor, request)
+}
+
 func (s *APIHandler) GetHealth(ctx context.Context, request api.GetHealthRequestObject) (api.GetHealthResponseObject, error) {
 	return api.GetHealth200JSONResponse{Status: "healthy"}, nil
 }

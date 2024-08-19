@@ -20,6 +20,8 @@ type Querier interface {
 	ApiTokenListByPage(ctx context.Context, db DBTX, arg *ApiTokenListByPageParams) ([]*ApiTokenListByPageRow, error)
 	ConfigFindByAgentId(ctx context.Context, db DBTX, agentID int64) (*Config, error)
 	ConfigInsert(ctx context.Context, db DBTX, arg *ConfigInsertParams) (*Config, error)
+	DeploymentInsert(ctx context.Context, db DBTX, arg *DeploymentInsertParams) (*Deployment, error)
+	DeploymentListPaginated(ctx context.Context, db DBTX, arg *DeploymentListPaginatedParams) ([]*DeploymentListPaginatedRow, error)
 	InvocationFindById(ctx context.Context, db DBTX, id int64) (*Invocation, error)
 	InvocationGetAvailable(ctx context.Context, db DBTX, arg *InvocationGetAvailableParams) ([]*Invocation, error)
 	InvocationInsert(ctx context.Context, db DBTX, arg *InvocationInsertParams) (*InvocationInsertRow, error)

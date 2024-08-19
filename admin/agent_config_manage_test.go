@@ -47,6 +47,7 @@ func TestAdminGetAgentConfig(t *testing.T) {
 		require.IsType(t, api.AdminGetAgentConfig200JSONResponse{}, response)
 
 		jsonResponse := response.(api.AdminGetAgentConfig200JSONResponse)
+		assert.Equal(t, config.ID, jsonResponse.Data.Id)
 		assert.Equal(t, config.AgentId, jsonResponse.Data.AgentId)
 		assert.Equal(t, content, jsonResponse.Data.Content)
 		assert.NotZero(t, jsonResponse.Data.CreatedAt)

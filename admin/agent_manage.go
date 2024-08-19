@@ -47,7 +47,7 @@ func ListAgents(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acce
 }
 
 func CreateAgent(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminCreateAgentRequestObject) (api.AdminCreateAgentResponseObject, error) {
-	logger.Info("CreateAgent", "request", request)
+	logger.Info("CreateAgent", "request", request.Body)
 
 	if request.Body.Name == "" {
 		return api.AdminCreateAgent400JSONResponse{
@@ -85,7 +85,7 @@ func CreateAgent(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acc
 }
 
 func GetAgent(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminGetAgentRequestObject) (api.AdminGetAgentResponseObject, error) {
-	logger.Info("GetAgent", "request", request)
+	logger.Info("GetAgent", "agentId", request.Id)
 
 	agent, err := accessor.Querier().AgentFindById(ctx, accessor.Source(), int64(request.Id))
 	if err != nil {
@@ -113,7 +113,7 @@ func GetAgent(ctx context.Context, logger *slog.Logger, accessor dbaccess.Access
 }
 
 func UpdateAgent(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminUpdateAgentRequestObject) (api.AdminUpdateAgentResponseObject, error) {
-	logger.Info("UpdateAgent", "request", request)
+	logger.Info("UpdateAgent", "agentId", request.Id, "name", lo.FromPtrOr(request.Body.Name, "<nil>"))
 
 	agent, err := accessor.Querier().AgentUpdate(ctx, accessor.Source(), &dbsqlc.AgentUpdateParams{
 		ID:   int64(request.Id),
@@ -140,7 +140,7 @@ func UpdateAgent(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acc
 }
 
 func DeleteAgent(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminDeleteAgentRequestObject) (api.AdminDeleteAgentResponseObject, error) {
-	logger.Info("DeleteAgent", "request", request)
+	logger.Info("DeleteAgent", "agentId", request.Id)
 
 	agent, err := accessor.Querier().AgentDelete(ctx, accessor.Source(), int64(request.Id))
 	if err != nil {

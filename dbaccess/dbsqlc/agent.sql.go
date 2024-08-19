@@ -92,14 +92,21 @@ func (q *Queries) AgentInsert(ctx context.Context, db DBTX, arg *AgentInsertPara
 }
 
 const agentListPagenated = `-- name: AgentListPagenated :many
+WITH agent_token_count AS (
+    SELECT agent_id, COUNT(*) AS token_count
+    FROM api_tokens
+    GROUP BY agent_id
+)
 SELECT
-  id,
-  name,
-  queue_id,
-  created_at,
-  COUNT(*) OVER() AS total_count
+  agents.id,
+  agents.name,
+  agents.queue_id,
+  agents.created_at,
+  COUNT(*) OVER() AS total_count,
+  CASE WHEN atc.token_count IS NULL OR atc.token_count = 0 THEN true ELSE false END AS updatable
 FROM agents
-ORDER BY name
+LEFT JOIN agent_token_count atc ON agents.id = atc.agent_id
+ORDER BY agents.name
 LIMIT $1::bigint
 OFFSET $1 * ($2::bigint - 1)
 `
@@ -115,6 +122,7 @@ type AgentListPagenatedRow struct {
 	QueueID    int64
 	CreatedAt  int64
 	TotalCount int64
+	Updatable  bool
 }
 
 func (q *Queries) AgentListPagenated(ctx context.Context, db DBTX, arg *AgentListPagenatedParams) ([]*AgentListPagenatedRow, error) {
@@ -132,6 +140,7 @@ func (q *Queries) AgentListPagenated(ctx context.Context, db DBTX, arg *AgentLis
 			&i.QueueID,
 			&i.CreatedAt,
 			&i.TotalCount,
+			&i.Updatable,
 		); err != nil {
 			return nil, err
 		}

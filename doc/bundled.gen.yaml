@@ -1257,6 +1257,8 @@ paths:
               properties:
                 content:
                   type: object
+                  additionalProperties:
+                    type: string
                 min_agent_version:
                   type: string
                 user:
@@ -1359,11 +1361,131 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Deployment'
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Deployment'
+                required:
+                  - data
         '400':
           $ref: '#/components/responses/400'
         '401':
           description: Unauthorized
+        '500':
+          $ref: '#/components/responses/500'
+  /v1/admin/deployments/{id}:
+    get:
+      summary: Get a specific Deployment.
+      operationId: adminGetDeployment
+      tags:
+        - Admin
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: Deployment ID
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeploymentDetail'
+              required:
+                - data
+        '401':
+          description: Unauthorized
+        '404':
+          description: Deployment not found
+        '500':
+          $ref: '#/components/responses/500'
+    patch:
+      summary: Update a specific Deployment. Only draft deployments can be updated.
+      operationId: adminUpdateDeployment
+      tags:
+        - Admin
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: Deployment ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user:
+                  type: string
+                name:
+                  type: string
+                reviewers:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Deployment'
+                required:
+                  - data
+        '401':
+          description: Unauthorized
+        '404':
+          description: Deployment not found
+        '500':
+          $ref: '#/components/responses/500'
+    delete:
+      summary: Delete a specific Deployment. Only draft deployments can be deleted.
+      operationId: adminDeleteDeployment
+      tags:
+        - Admin
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: Deployment ID
+      responses:
+        '200':
+          description: Deployment deleted successfully
+        '401':
+          description: Unauthorized
+        '404':
+          description: Deployment not found
+        '500':
+          $ref: '#/components/responses/500'
+  /v1/admin/deployments/{id}/submit:
+    post:
+      summary: >-
+        Submit the Deployment for reviewing. Only draft deployments can be
+        submitted. After submitting, the deployment will be in `reviewing`
+        status. Reviewers will be notified.
+      operationId: adminSubmitDeployment
+      tags:
+        - Admin
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: Deployment ID
+      responses:
+        '200':
+          description: Successful response
+        '401':
+          description: Unauthorized
+        '404':
+          description: Deployment not found
         '500':
           $ref: '#/components/responses/500'
 components:
@@ -1686,12 +1808,15 @@ components:
           format: int64
         name:
           type: string
+        updatable:
+          type: boolean
         created_at:
           type: integer
           format: int64
       required:
         - id
         - name
+        - updatable
         - created_at
       example:
         id: 16888
@@ -1712,9 +1837,11 @@ components:
         id:
           type: integer
           format: int64
-        agentId:
+        agent_id:
           type: integer
           format: int64
+        agent_name:
+          type: string
         minAgentVersion:
           type: string
         content:
@@ -1726,7 +1853,8 @@ components:
           type: string
       required:
         - id
-        - agentId
+        - agent_id
+        - agent_name
         - content
         - created_at
         - created_by
@@ -1762,6 +1890,48 @@ components:
           format: int64
         finished_by:
           type: string
+      required:
+        - id
+        - name
+        - status
+        - created_at
+        - created_by
+    DeploymentDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        status:
+          type: string
+          enum:
+            - draft
+            - reviewing
+            - approved
+            - rejected
+            - deployed
+            - cancelled
+        created_at:
+          type: integer
+          format: int64
+        created_by:
+          type: string
+        approved_at:
+          type: integer
+          format: int64
+        approved_by:
+          type: string
+        finished_at:
+          type: integer
+          format: int64
+        finished_by:
+          type: string
+        configs:
+          type: array
+          items:
+            $ref: '#/components/schemas/Config'
       required:
         - id
         - name

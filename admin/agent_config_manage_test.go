@@ -49,6 +49,7 @@ func TestAdminGetAgentConfig(t *testing.T) {
 		jsonResponse := response.(api.AdminGetAgentConfig200JSONResponse)
 		assert.Equal(t, config.ID, jsonResponse.Data.Id)
 		assert.Equal(t, config.AgentId, jsonResponse.Data.AgentId)
+		assert.Equal(t, agent.Name, jsonResponse.Data.AgentName)
 		assert.Equal(t, content, jsonResponse.Data.Content)
 		assert.NotZero(t, jsonResponse.Data.CreatedAt)
 	})
@@ -88,9 +89,9 @@ func TestAdminUpdateAgentConfig(t *testing.T) {
 
 	t.Run("Successful update agent config", func(t *testing.T) {
 		agent := fixture.InsertAgent(t, ctx, dbPool, "TestAgent")
-		content := map[string]interface{}{
+		content := map[string]string{
 			"key1": "value1",
-			"key2": 42.0,
+			"key2": "42.0",
 		}
 		minAgentVersion := "1.0.0"
 		user := "testuser"
@@ -113,39 +114,19 @@ func TestAdminUpdateAgentConfig(t *testing.T) {
 		config, err := accessor.Querier().ConfigFindByAgentId(ctx, accessor.Pool(), agent.ID)
 		assert.NoError(t, err)
 		assert.Equal(t, agent.ID, config.AgentId)
+		assert.Equal(t, agent.Name, config.AgentName)
 		assert.Equal(t, minAgentVersion, *config.MinAgentVersion)
 		assert.Equal(t, user, config.CreatedBy)
 
-		var insertedContent map[string]interface{}
+		var insertedContent map[string]string
 		err = json.Unmarshal(config.Content, &insertedContent)
 		assert.NoError(t, err)
 		assert.Equal(t, content, insertedContent)
 	})
 
-	t.Run("Invalid content", func(t *testing.T) {
-		agent := fixture.InsertAgent(t, ctx, dbPool, "TestAgent2")
-		invalidContent := map[string]interface{}{
-			"key": make(chan int), // channels are not JSON serializable
-		}
-		user := "testuser"
-
-		request := api.AdminUpdateAgentConfigRequestObject{
-			Id: agent.ID,
-			Body: &api.AdminUpdateAgentConfigJSONRequestBody{
-				Content: invalidContent,
-				User:    user,
-			},
-		}
-
-		response, err := admin.AdminUpdateAgentConfig(ctx, logger, accessor, request)
-
-		assert.NoError(t, err)
-		assert.IsType(t, api.AdminUpdateAgentConfig500JSONResponse{}, response)
-	})
-
 	t.Run("Database error", func(t *testing.T) {
 		agent := fixture.InsertAgent(t, ctx, dbPool, "TestAgent3")
-		content := map[string]interface{}{
+		content := map[string]string{
 			"key": "value",
 		}
 		user := "testuser"

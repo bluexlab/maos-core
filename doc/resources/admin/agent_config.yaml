@@ -52,6 +52,8 @@ post:
           properties:
             content:
               type: object
+              additionalProperties:
+                type: string
             min_agent_version:
               type: string
             user:

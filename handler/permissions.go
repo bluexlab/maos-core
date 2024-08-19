@@ -24,7 +24,11 @@ var (
 		"AdminListApiTokens":       {"admin"},
 		"AdminCreateApiToken":      {"admin"},
 		"AdminListDeployments":     {"admin"},
+		"AdminGetDeployment":       {"admin"},
 		"AdminCreateDeployment":    {"admin"},
+		"AdminUpdateDeployment":    {"admin"},
+		"AdminDeleteDeployment":    {"admin"},
+		"AdminSubmitDeployment":    {"admin"},
 	}
 )
 

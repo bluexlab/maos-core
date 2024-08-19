@@ -3,9 +3,11 @@ properties:
   id:
     type: integer
     format: int64
-  agentId:
+  agent_id:
     type: integer
     format: int64
+  agent_name:
+    type: string
   minAgentVersion:
     type: string
   content:
@@ -18,7 +20,8 @@ properties:
 
 required:
   - id
-  - agentId
+  - agent_id
+  - agent_name
   - content
   - created_at
   - created_by

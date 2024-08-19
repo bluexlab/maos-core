@@ -41,6 +41,7 @@ func AdminGetAgentConfig(ctx context.Context, logger *slog.Logger, accessor dbac
 		Data: api.Config{
 			Id:              config.ID,
 			AgentId:         config.AgentId,
+			AgentName:       config.AgentName,
 			Content:         content,
 			MinAgentVersion: config.MinAgentVersion,
 			CreatedAt:       config.CreatedAt,

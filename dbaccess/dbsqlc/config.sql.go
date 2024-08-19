@@ -10,16 +10,30 @@ import (
 )
 
 const configFindByAgentId = `-- name: ConfigFindByAgentId :one
-SELECT id, agent_id, config_suite_id, content, min_agent_version, created_by, created_at, updated_by, updated_at
+SELECT configs.id, configs.agent_id, configs.config_suite_id, configs.content, configs.min_agent_version, configs.created_by, configs.created_at, configs.updated_by, configs.updated_at, agents.name AS agent_name
 FROM configs
-WHERE agent_id = $1
-ORDER BY created_at DESC, id DESC
+JOIN agents ON configs.agent_id = agents.id
+WHERE configs.agent_id = $1
+ORDER BY configs.created_at DESC, configs.id DESC
 LIMIT 1
 `
 
-func (q *Queries) ConfigFindByAgentId(ctx context.Context, db DBTX, agentID int64) (*Config, error) {
+type ConfigFindByAgentIdRow struct {
+	ID              int64
+	AgentId         int64
+	ConfigSuiteID   *int64
+	Content         []byte
+	MinAgentVersion *string
+	CreatedBy       string
+	CreatedAt       int64
+	UpdatedBy       *string
+	UpdatedAt       *int64
+	AgentName       string
+}
+
+func (q *Queries) ConfigFindByAgentId(ctx context.Context, db DBTX, agentID int64) (*ConfigFindByAgentIdRow, error) {
 	row := db.QueryRow(ctx, configFindByAgentId, agentID)
-	var i Config
+	var i ConfigFindByAgentIdRow
 	err := row.Scan(
 		&i.ID,
 		&i.AgentId,
@@ -30,6 +44,7 @@ func (q *Queries) ConfigFindByAgentId(ctx context.Context, db DBTX, agentID int6
 		&i.CreatedAt,
 		&i.UpdatedBy,
 		&i.UpdatedAt,
+		&i.AgentName,
 	)
 	return &i, err
 }

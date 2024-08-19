@@ -81,7 +81,12 @@ post:
       content:
         application/json:
           schema:
-            $ref: "../../schemas/Deployment.yaml"
+            type: object
+            properties:
+              data:
+                $ref: "../../schemas/Deployment.yaml"
+            required:
+              - data
     "401":
       description: Unauthorized
     "400":

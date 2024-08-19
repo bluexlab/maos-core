@@ -36,6 +36,7 @@ func ListAgents(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acce
 				Id:        row.ID,
 				Name:      row.Name,
 				CreatedAt: row.CreatedAt,
+				Updatable: row.Updatable,
 			}
 		},
 	)

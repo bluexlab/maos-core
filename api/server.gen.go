@@ -72,13 +72,23 @@ const (
 	DeploymentStatusReviewing DeploymentStatus = "reviewing"
 )
 
+// Defines values for DeploymentDetailStatus.
+const (
+	DeploymentDetailStatusApproved  DeploymentDetailStatus = "approved"
+	DeploymentDetailStatusCancelled DeploymentDetailStatus = "cancelled"
+	DeploymentDetailStatusDeployed  DeploymentDetailStatus = "deployed"
+	DeploymentDetailStatusDraft     DeploymentDetailStatus = "draft"
+	DeploymentDetailStatusRejected  DeploymentDetailStatus = "rejected"
+	DeploymentDetailStatusReviewing DeploymentDetailStatus = "reviewing"
+)
+
 // Defines values for InvocationState.
 const (
-	InvocationStateAvailable InvocationState = "available"
-	InvocationStateCancelled InvocationState = "cancelled"
-	InvocationStateCompleted InvocationState = "completed"
-	InvocationStateDiscarded InvocationState = "discarded"
-	InvocationStateRunning   InvocationState = "running"
+	Available InvocationState = "available"
+	Cancelled InvocationState = "cancelled"
+	Completed InvocationState = "completed"
+	Discarded InvocationState = "discarded"
+	Running   InvocationState = "running"
 )
 
 // Defines values for MessageRole.
@@ -102,6 +112,7 @@ type Agent struct {
 	CreatedAt int64  `json:"created_at"`
 	Id        int64  `json:"id"`
 	Name      string `json:"name"`
+	Updatable bool   `json:"updatable"`
 }
 
 // AgentCreate defines model for AgentCreate.
@@ -173,7 +184,8 @@ type CollectionIndexMetricType string
 
 // Config defines model for Config.
 type Config struct {
-	AgentId         int64                  `json:"agentId"`
+	AgentId         int64                  `json:"agent_id"`
+	AgentName       string                 `json:"agent_name"`
 	Content         map[string]interface{} `json:"content"`
 	CreatedAt       int64                  `json:"created_at"`
 	CreatedBy       string                 `json:"created_by"`
@@ -199,6 +211,23 @@ type Deployment struct {
 
 // DeploymentStatus defines model for Deployment.Status.
 type DeploymentStatus string
+
+// DeploymentDetail defines model for DeploymentDetail.
+type DeploymentDetail struct {
+	ApprovedAt *int64                 `json:"approved_at,omitempty"`
+	ApprovedBy *string                `json:"approved_by,omitempty"`
+	Configs    *[]Config              `json:"configs,omitempty"`
+	CreatedAt  int64                  `json:"created_at"`
+	CreatedBy  string                 `json:"created_by"`
+	FinishedAt *int64                 `json:"finished_at,omitempty"`
+	FinishedBy *string                `json:"finished_by,omitempty"`
+	Id         int64                  `json:"id"`
+	Name       string                 `json:"name"`
+	Status     DeploymentDetailStatus `json:"status"`
+}
+
+// DeploymentDetailStatus defines model for DeploymentDetail.Status.
+type DeploymentDetailStatus string
 
 // Embedding defines model for Embedding.
 type Embedding struct {
@@ -332,9 +361,9 @@ type AdminUpdateAgentJSONBody struct {
 
 // AdminUpdateAgentConfigJSONBody defines parameters for AdminUpdateAgentConfig.
 type AdminUpdateAgentConfigJSONBody struct {
-	Content         map[string]interface{} `json:"content"`
-	MinAgentVersion *string                `json:"min_agent_version,omitempty"`
-	User            string                 `json:"user"`
+	Content         map[string]string `json:"content"`
+	MinAgentVersion *string           `json:"min_agent_version,omitempty"`
+	User            string            `json:"user"`
 }
 
 // AdminListApiTokensParams defines parameters for AdminListApiTokens.
@@ -368,6 +397,13 @@ type AdminListDeploymentsParams struct {
 type AdminCreateDeploymentJSONBody struct {
 	Name string `json:"name"`
 	User string `json:"user"`
+}
+
+// AdminUpdateDeploymentJSONBody defines parameters for AdminUpdateDeployment.
+type AdminUpdateDeploymentJSONBody struct {
+	Name      *string   `json:"name,omitempty"`
+	Reviewers *[]string `json:"reviewers,omitempty"`
+	User      *string   `json:"user,omitempty"`
 }
 
 // CreateCompletionJSONBody defines parameters for CreateCompletion.
@@ -496,6 +532,9 @@ type AdminCreateApiTokenJSONRequestBody = ApiTokenCreate
 
 // AdminCreateDeploymentJSONRequestBody defines body for AdminCreateDeployment for application/json ContentType.
 type AdminCreateDeploymentJSONRequestBody AdminCreateDeploymentJSONBody
+
+// AdminUpdateDeploymentJSONRequestBody defines body for AdminUpdateDeployment for application/json ContentType.
+type AdminUpdateDeploymentJSONRequestBody AdminUpdateDeploymentJSONBody
 
 // CreateCompletionJSONRequestBody defines body for CreateCompletion for application/json ContentType.
 type CreateCompletionJSONRequestBody CreateCompletionJSONBody
@@ -650,6 +689,18 @@ type ServerInterface interface {
 	// Create a new Deployment
 	// (POST /v1/admin/deployments)
 	AdminCreateDeployment(w http.ResponseWriter, r *http.Request)
+	// Delete a specific Deployment. Only draft deployments can be deleted.
+	// (DELETE /v1/admin/deployments/{id})
+	AdminDeleteDeployment(w http.ResponseWriter, r *http.Request, id int)
+	// Get a specific Deployment.
+	// (GET /v1/admin/deployments/{id})
+	AdminGetDeployment(w http.ResponseWriter, r *http.Request, id int)
+	// Update a specific Deployment. Only draft deployments can be updated.
+	// (PATCH /v1/admin/deployments/{id})
+	AdminUpdateDeployment(w http.ResponseWriter, r *http.Request, id int)
+	// Submit the Deployment for reviewing. Only draft deployments can be submitted. After submitting, the deployment will be in `reviewing` status. Reviewers will be notified.
+	// (POST /v1/admin/deployments/{id}/submit)
+	AdminSubmitDeployment(w http.ResponseWriter, r *http.Request, id int)
 	// Generate text completion.
 	// (POST /v1/completion)
 	CreateCompletion(w http.ResponseWriter, r *http.Request)
@@ -1084,6 +1135,126 @@ func (siw *ServerInterfaceWrapper) AdminCreateDeployment(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminCreateDeployment(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// AdminDeleteDeployment operation middleware
+func (siw *ServerInterfaceWrapper) AdminDeleteDeployment(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: false})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminDeleteDeployment(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// AdminGetDeployment operation middleware
+func (siw *ServerInterfaceWrapper) AdminGetDeployment(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: false})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminGetDeployment(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// AdminUpdateDeployment operation middleware
+func (siw *ServerInterfaceWrapper) AdminUpdateDeployment(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: false})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminUpdateDeployment(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// AdminSubmitDeployment operation middleware
+func (siw *ServerInterfaceWrapper) AdminSubmitDeployment(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: false})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminSubmitDeployment(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1724,6 +1895,14 @@ func HandlerWithOptions(si ServerInterface, options GorillaServerOptions) http.H
 
 	r.HandleFunc(options.BaseURL+"/v1/admin/deployments", wrapper.AdminCreateDeployment).Methods("POST")
 
+	r.HandleFunc(options.BaseURL+"/v1/admin/deployments/{id}", wrapper.AdminDeleteDeployment).Methods("DELETE")
+
+	r.HandleFunc(options.BaseURL+"/v1/admin/deployments/{id}", wrapper.AdminGetDeployment).Methods("GET")
+
+	r.HandleFunc(options.BaseURL+"/v1/admin/deployments/{id}", wrapper.AdminUpdateDeployment).Methods("PATCH")
+
+	r.HandleFunc(options.BaseURL+"/v1/admin/deployments/{id}/submit", wrapper.AdminSubmitDeployment).Methods("POST")
+
 	r.HandleFunc(options.BaseURL+"/v1/completion", wrapper.CreateCompletion).Methods("POST")
 
 	r.HandleFunc(options.BaseURL+"/v1/completion/models", wrapper.ListCompletionModels).Methods("GET")
@@ -2246,7 +2425,9 @@ type AdminCreateDeploymentResponseObject interface {
 	VisitAdminCreateDeploymentResponse(w http.ResponseWriter) error
 }
 
-type AdminCreateDeployment201JSONResponse Deployment
+type AdminCreateDeployment201JSONResponse struct {
+	Data Deployment `json:"data"`
+}
 
 func (response AdminCreateDeployment201JSONResponse) VisitAdminCreateDeploymentResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
@@ -2275,6 +2456,175 @@ func (response AdminCreateDeployment401Response) VisitAdminCreateDeploymentRespo
 type AdminCreateDeployment500JSONResponse struct{ N500JSONResponse }
 
 func (response AdminCreateDeployment500JSONResponse) VisitAdminCreateDeploymentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminDeleteDeploymentRequestObject struct {
+	Id int `json:"id,omitempty"`
+}
+
+type AdminDeleteDeploymentResponseObject interface {
+	VisitAdminDeleteDeploymentResponse(w http.ResponseWriter) error
+}
+
+type AdminDeleteDeployment200Response struct {
+}
+
+func (response AdminDeleteDeployment200Response) VisitAdminDeleteDeploymentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(200)
+	return nil
+}
+
+type AdminDeleteDeployment401Response struct {
+}
+
+func (response AdminDeleteDeployment401Response) VisitAdminDeleteDeploymentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type AdminDeleteDeployment404Response struct {
+}
+
+func (response AdminDeleteDeployment404Response) VisitAdminDeleteDeploymentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type AdminDeleteDeployment500JSONResponse struct{ N500JSONResponse }
+
+func (response AdminDeleteDeployment500JSONResponse) VisitAdminDeleteDeploymentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminGetDeploymentRequestObject struct {
+	Id int `json:"id,omitempty"`
+}
+
+type AdminGetDeploymentResponseObject interface {
+	VisitAdminGetDeploymentResponse(w http.ResponseWriter) error
+}
+
+type AdminGetDeployment200JSONResponse DeploymentDetail
+
+func (response AdminGetDeployment200JSONResponse) VisitAdminGetDeploymentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminGetDeployment401Response struct {
+}
+
+func (response AdminGetDeployment401Response) VisitAdminGetDeploymentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type AdminGetDeployment404Response struct {
+}
+
+func (response AdminGetDeployment404Response) VisitAdminGetDeploymentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type AdminGetDeployment500JSONResponse struct{ N500JSONResponse }
+
+func (response AdminGetDeployment500JSONResponse) VisitAdminGetDeploymentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminUpdateDeploymentRequestObject struct {
+	Id   int `json:"id,omitempty"`
+	Body *AdminUpdateDeploymentJSONRequestBody
+}
+
+type AdminUpdateDeploymentResponseObject interface {
+	VisitAdminUpdateDeploymentResponse(w http.ResponseWriter) error
+}
+
+type AdminUpdateDeployment200JSONResponse struct {
+	Data Deployment `json:"data"`
+}
+
+func (response AdminUpdateDeployment200JSONResponse) VisitAdminUpdateDeploymentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminUpdateDeployment401Response struct {
+}
+
+func (response AdminUpdateDeployment401Response) VisitAdminUpdateDeploymentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type AdminUpdateDeployment404Response struct {
+}
+
+func (response AdminUpdateDeployment404Response) VisitAdminUpdateDeploymentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type AdminUpdateDeployment500JSONResponse struct{ N500JSONResponse }
+
+func (response AdminUpdateDeployment500JSONResponse) VisitAdminUpdateDeploymentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminSubmitDeploymentRequestObject struct {
+	Id int `json:"id,omitempty"`
+}
+
+type AdminSubmitDeploymentResponseObject interface {
+	VisitAdminSubmitDeploymentResponse(w http.ResponseWriter) error
+}
+
+type AdminSubmitDeployment200Response struct {
+}
+
+func (response AdminSubmitDeployment200Response) VisitAdminSubmitDeploymentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(200)
+	return nil
+}
+
+type AdminSubmitDeployment401Response struct {
+}
+
+func (response AdminSubmitDeployment401Response) VisitAdminSubmitDeploymentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type AdminSubmitDeployment404Response struct {
+}
+
+func (response AdminSubmitDeployment404Response) VisitAdminSubmitDeploymentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type AdminSubmitDeployment500JSONResponse struct{ N500JSONResponse }
+
+func (response AdminSubmitDeployment500JSONResponse) VisitAdminSubmitDeploymentResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
 
@@ -2964,6 +3314,18 @@ type StrictServerInterface interface {
 	// Create a new Deployment
 	// (POST /v1/admin/deployments)
 	AdminCreateDeployment(ctx context.Context, request AdminCreateDeploymentRequestObject) (AdminCreateDeploymentResponseObject, error)
+	// Delete a specific Deployment. Only draft deployments can be deleted.
+	// (DELETE /v1/admin/deployments/{id})
+	AdminDeleteDeployment(ctx context.Context, request AdminDeleteDeploymentRequestObject) (AdminDeleteDeploymentResponseObject, error)
+	// Get a specific Deployment.
+	// (GET /v1/admin/deployments/{id})
+	AdminGetDeployment(ctx context.Context, request AdminGetDeploymentRequestObject) (AdminGetDeploymentResponseObject, error)
+	// Update a specific Deployment. Only draft deployments can be updated.
+	// (PATCH /v1/admin/deployments/{id})
+	AdminUpdateDeployment(ctx context.Context, request AdminUpdateDeploymentRequestObject) (AdminUpdateDeploymentResponseObject, error)
+	// Submit the Deployment for reviewing. Only draft deployments can be submitted. After submitting, the deployment will be in `reviewing` status. Reviewers will be notified.
+	// (POST /v1/admin/deployments/{id}/submit)
+	AdminSubmitDeployment(ctx context.Context, request AdminSubmitDeploymentRequestObject) (AdminSubmitDeploymentResponseObject, error)
 	// Generate text completion.
 	// (POST /v1/completion)
 	CreateCompletion(ctx context.Context, request CreateCompletionRequestObject) (CreateCompletionResponseObject, error)
@@ -3381,6 +3743,117 @@ func (sh *strictHandler) AdminCreateDeployment(w http.ResponseWriter, r *http.Re
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminCreateDeploymentResponseObject); ok {
 		if err := validResponse.VisitAdminCreateDeploymentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminDeleteDeployment operation middleware
+func (sh *strictHandler) AdminDeleteDeployment(w http.ResponseWriter, r *http.Request, id int) {
+	var request AdminDeleteDeploymentRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminDeleteDeployment(ctx, request.(AdminDeleteDeploymentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminDeleteDeployment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminDeleteDeploymentResponseObject); ok {
+		if err := validResponse.VisitAdminDeleteDeploymentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminGetDeployment operation middleware
+func (sh *strictHandler) AdminGetDeployment(w http.ResponseWriter, r *http.Request, id int) {
+	var request AdminGetDeploymentRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminGetDeployment(ctx, request.(AdminGetDeploymentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminGetDeployment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminGetDeploymentResponseObject); ok {
+		if err := validResponse.VisitAdminGetDeploymentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminUpdateDeployment operation middleware
+func (sh *strictHandler) AdminUpdateDeployment(w http.ResponseWriter, r *http.Request, id int) {
+	var request AdminUpdateDeploymentRequestObject
+
+	request.Id = id
+
+	var body AdminUpdateDeploymentJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminUpdateDeployment(ctx, request.(AdminUpdateDeploymentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminUpdateDeployment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminUpdateDeploymentResponseObject); ok {
+		if err := validResponse.VisitAdminUpdateDeploymentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminSubmitDeployment operation middleware
+func (sh *strictHandler) AdminSubmitDeployment(w http.ResponseWriter, r *http.Request, id int) {
+	var request AdminSubmitDeploymentRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminSubmitDeployment(ctx, request.(AdminSubmitDeploymentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminSubmitDeployment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminSubmitDeploymentResponseObject); ok {
+		if err := validResponse.VisitAdminSubmitDeploymentResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -70,13 +70,19 @@ paths:
     $ref: "./resources/admin/agents.yaml"
 
   /v1/admin/agents/{id}:
-    $ref: "./resources/admin/one_agent.yaml"
+    $ref: "./resources/admin/agent.yaml"
 
   /v1/admin/agents/{id}/config:
     $ref: "./resources/admin/agent_config.yaml"
 
   /v1/admin/deployments:
     $ref: "./resources/admin/deployments.yaml"
+
+  /v1/admin/deployments/{id}:
+    $ref: "./resources/admin/deployment.yaml"
+
+  /v1/admin/deployments/{id}/submit:
+    $ref: "./resources/admin/deployment_submit.yaml"
 
 components:
   securitySchemes:

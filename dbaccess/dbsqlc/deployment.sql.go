@@ -9,6 +9,116 @@ import (
 	"context"
 )
 
+const deploymentDelete = `-- name: DeploymentDelete :one
+DELETE FROM deployments
+WHERE id = $1::bigint AND status = 'draft'
+RETURNING id, name, status, reviewers, config_suite_id, created_by, created_at, approved_by, approved_at, finished_by, finished_at
+`
+
+func (q *Queries) DeploymentDelete(ctx context.Context, db DBTX, id int64) (*Deployment, error) {
+	row := db.QueryRow(ctx, deploymentDelete, id)
+	var i Deployment
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Status,
+		&i.Reviewers,
+		&i.ConfigSuiteID,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.ApprovedBy,
+		&i.ApprovedAt,
+		&i.FinishedBy,
+		&i.FinishedAt,
+	)
+	return &i, err
+}
+
+const deploymentGetById = `-- name: DeploymentGetById :one
+SELECT id, name, status, reviewers, config_suite_id, created_by, created_at, approved_by, approved_at, finished_by, finished_at
+FROM deployments
+WHERE id = $1::bigint
+LIMIT 1
+`
+
+func (q *Queries) DeploymentGetById(ctx context.Context, db DBTX, id int64) (*Deployment, error) {
+	row := db.QueryRow(ctx, deploymentGetById, id)
+	var i Deployment
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Status,
+		&i.Reviewers,
+		&i.ConfigSuiteID,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.ApprovedBy,
+		&i.ApprovedAt,
+		&i.FinishedBy,
+		&i.FinishedAt,
+	)
+	return &i, err
+}
+
+const deploymentGetWithConfigs = `-- name: DeploymentGetWithConfigs :one
+SELECT deployments.id, deployments.name, deployments.status, deployments.reviewers, deployments.config_suite_id, deployments.created_by, deployments.created_at, deployments.approved_by, deployments.approved_at, deployments.finished_by, deployments.finished_at, configs.id, configs.agent_id, configs.config_suite_id, configs.content, configs.min_agent_version, configs.created_by, configs.created_at, configs.updated_by, configs.updated_at
+FROM deployments
+LEFT JOIN configs ON deployments.id = configs.deployment_id
+WHERE deployments.id = $1::bigint
+LIMIT 1
+`
+
+type DeploymentGetWithConfigsRow struct {
+	ID              int64
+	Name            string
+	Status          DeploymentStatus
+	Reviewers       []string
+	ConfigSuiteID   *int64
+	CreatedBy       string
+	CreatedAt       int64
+	ApprovedBy      *string
+	ApprovedAt      *int64
+	FinishedBy      *string
+	FinishedAt      *int64
+	ID_2            *int64
+	AgentId         *int64
+	ConfigSuiteID_2 *int64
+	Content         []byte
+	MinAgentVersion *string
+	CreatedBy_2     *string
+	CreatedAt_2     *int64
+	UpdatedBy       *string
+	UpdatedAt       *int64
+}
+
+func (q *Queries) DeploymentGetWithConfigs(ctx context.Context, db DBTX, id int64) (*DeploymentGetWithConfigsRow, error) {
+	row := db.QueryRow(ctx, deploymentGetWithConfigs, id)
+	var i DeploymentGetWithConfigsRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Status,
+		&i.Reviewers,
+		&i.ConfigSuiteID,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.ApprovedBy,
+		&i.ApprovedAt,
+		&i.FinishedBy,
+		&i.FinishedAt,
+		&i.ID_2,
+		&i.AgentId,
+		&i.ConfigSuiteID_2,
+		&i.Content,
+		&i.MinAgentVersion,
+		&i.CreatedBy_2,
+		&i.CreatedAt_2,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
+	)
+	return &i, err
+}
+
 const deploymentInsert = `-- name: DeploymentInsert :one
 INSERT INTO deployments (
   name,
@@ -121,4 +231,64 @@ func (q *Queries) DeploymentListPaginated(ctx context.Context, db DBTX, arg *Dep
 		return nil, err
 	}
 	return items, nil
+}
+
+const deploymentSubmitForReview = `-- name: DeploymentSubmitForReview :one
+UPDATE deployments
+SET status = 'reviewing'
+WHERE id = $1::bigint AND status = 'draft'
+RETURNING id, name, status, reviewers, config_suite_id, created_by, created_at, approved_by, approved_at, finished_by, finished_at
+`
+
+func (q *Queries) DeploymentSubmitForReview(ctx context.Context, db DBTX, id int64) (*Deployment, error) {
+	row := db.QueryRow(ctx, deploymentSubmitForReview, id)
+	var i Deployment
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Status,
+		&i.Reviewers,
+		&i.ConfigSuiteID,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.ApprovedBy,
+		&i.ApprovedAt,
+		&i.FinishedBy,
+		&i.FinishedAt,
+	)
+	return &i, err
+}
+
+const deploymentUpdate = `-- name: DeploymentUpdate :one
+UPDATE deployments
+SET
+  name = COALESCE($1::text, name),
+  reviewers = COALESCE($2::text[], reviewers)
+WHERE id = $3::bigint AND status = 'draft'
+RETURNING id, name, status, reviewers, config_suite_id, created_by, created_at, approved_by, approved_at, finished_by, finished_at
+`
+
+type DeploymentUpdateParams struct {
+	Name      *string
+	Reviewers []string
+	ID        int64
+}
+
+func (q *Queries) DeploymentUpdate(ctx context.Context, db DBTX, arg *DeploymentUpdateParams) (*Deployment, error) {
+	row := db.QueryRow(ctx, deploymentUpdate, arg.Name, arg.Reviewers, arg.ID)
+	var i Deployment
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Status,
+		&i.Reviewers,
+		&i.ConfigSuiteID,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.ApprovedBy,
+		&i.ApprovedAt,
+		&i.FinishedBy,
+		&i.FinishedAt,
+	)
+	return &i, err
 }

@@ -3,8 +3,11 @@ package admin_test
 import (
 	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -141,15 +144,15 @@ func TestCreateDeployment(t *testing.T) {
 		require.IsType(t, api.AdminCreateDeployment201JSONResponse{}, response)
 
 		createdDeployment := response.(api.AdminCreateDeployment201JSONResponse)
-		assert.NotEmpty(t, createdDeployment.Id)
-		assert.Equal(t, "test-deployment", createdDeployment.Name)
-		assert.Equal(t, "test-user", createdDeployment.CreatedBy)
-		assert.NotZero(t, createdDeployment.CreatedAt)
-		assert.Equal(t, api.DeploymentStatus("draft"), createdDeployment.Status)
-		assert.Nil(t, createdDeployment.ApprovedBy)
-		assert.Zero(t, createdDeployment.ApprovedAt)
-		assert.Nil(t, createdDeployment.FinishedBy)
-		assert.Zero(t, createdDeployment.FinishedAt)
+		assert.NotEmpty(t, createdDeployment.Data.Id)
+		assert.Equal(t, "test-deployment", createdDeployment.Data.Name)
+		assert.Equal(t, "test-user", createdDeployment.Data.CreatedBy)
+		assert.NotZero(t, createdDeployment.Data.CreatedAt)
+		assert.Equal(t, api.DeploymentStatus("draft"), createdDeployment.Data.Status)
+		assert.Nil(t, createdDeployment.Data.ApprovedBy)
+		assert.Zero(t, createdDeployment.Data.ApprovedAt)
+		assert.Nil(t, createdDeployment.Data.FinishedBy)
+		assert.Zero(t, createdDeployment.Data.FinishedAt)
 
 		// Verify the deployment was actually inserted in the database using DeploymentList
 		listRequest := api.AdminListDeploymentsRequestObject{
@@ -166,16 +169,16 @@ func TestCreateDeployment(t *testing.T) {
 		assert.NotEmpty(t, listJsonResponse.Data)
 
 		foundDeployment, found := lo.Find(listJsonResponse.Data, func(d api.Deployment) bool {
-			return d.Id == createdDeployment.Id
+			return d.Id == createdDeployment.Data.Id
 		})
 
 		require.True(t, found)
 		require.NotNil(t, foundDeployment)
-		assert.Equal(t, createdDeployment.Id, foundDeployment.Id)
-		assert.Equal(t, createdDeployment.Name, foundDeployment.Name)
-		assert.Equal(t, createdDeployment.CreatedBy, foundDeployment.CreatedBy)
-		assert.Equal(t, createdDeployment.CreatedAt, foundDeployment.CreatedAt)
-		assert.Equal(t, createdDeployment.Status, foundDeployment.Status)
+		assert.Equal(t, createdDeployment.Data.Id, foundDeployment.Id)
+		assert.Equal(t, createdDeployment.Data.Name, foundDeployment.Name)
+		assert.Equal(t, createdDeployment.Data.CreatedBy, foundDeployment.CreatedBy)
+		assert.Equal(t, createdDeployment.Data.CreatedAt, foundDeployment.CreatedAt)
+		assert.Equal(t, createdDeployment.Data.Status, foundDeployment.Status)
 	})
 
 	t.Run("Database error", func(t *testing.T) {
@@ -200,5 +203,411 @@ func TestCreateDeployment(t *testing.T) {
 
 		errorResponse := response.(api.AdminCreateDeployment500JSONResponse)
 		assert.Contains(t, errorResponse.Error, "Cannot create deployment")
+	})
+}
+
+func TestUpdateDeployment(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	t.Run("Successful update", func(t *testing.T) {
+		t.Parallel()
+		dbPool := testhelper.TestDB(ctx, t)
+		accessor := dbaccess.New(dbPool)
+
+		// First, create a deployment to update
+		createdDeployment, err := accessor.Querier().DeploymentInsert(ctx, accessor.Source(), &dbsqlc.DeploymentInsertParams{
+			Name:      "test-deployment",
+			CreatedBy: "test-user",
+		})
+		require.NoError(t, err)
+		require.NotNil(t, createdDeployment)
+
+		// Update the deployment
+		updateRequest := api.AdminUpdateDeploymentRequestObject{
+			Id: int(createdDeployment.ID),
+			Body: &api.AdminUpdateDeploymentJSONRequestBody{
+				Name:      lo.ToPtr("updated-deployment"),
+				Reviewers: &[]string{"reviewer1", "reviewer2"},
+			},
+		}
+		updateResponse, err := admin.UpdateDeployment(ctx, logger, accessor, updateRequest)
+		assert.NoError(t, err)
+		require.IsType(t, api.AdminUpdateDeployment200JSONResponse{}, updateResponse)
+
+		updatedDeployment := updateResponse.(api.AdminUpdateDeployment200JSONResponse)
+		assert.Equal(t, "updated-deployment", updatedDeployment.Data.Name)
+		assert.EqualValues(t, createdDeployment.Status, updatedDeployment.Data.Status)
+		assert.Equal(t, createdDeployment.CreatedBy, updatedDeployment.Data.CreatedBy)
+		assert.Equal(t, createdDeployment.CreatedAt, updatedDeployment.Data.CreatedAt)
+		assert.Equal(t, createdDeployment.ApprovedBy, updatedDeployment.Data.ApprovedBy)
+		assert.Equal(t, createdDeployment.ApprovedAt, updatedDeployment.Data.ApprovedAt)
+		assert.Equal(t, createdDeployment.FinishedBy, updatedDeployment.Data.FinishedBy)
+		assert.Equal(t, createdDeployment.FinishedAt, updatedDeployment.Data.FinishedAt)
+
+		// Get deployment from DB and compare
+		dbDeployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), createdDeployment.ID)
+		require.NoError(t, err)
+		assert.Equal(t, "updated-deployment", dbDeployment.Name)
+		assert.Equal(t, []string{"reviewer1", "reviewer2"}, dbDeployment.Reviewers)
+	})
+
+	t.Run("Update without name", func(t *testing.T) {
+		t.Parallel()
+		dbPool := testhelper.TestDB(ctx, t)
+		accessor := dbaccess.New(dbPool)
+
+		// First, create a deployment to update
+		createdDeployment, err := accessor.Querier().DeploymentInsert(ctx, accessor.Source(), &dbsqlc.DeploymentInsertParams{
+			Name:      "test-deployment",
+			CreatedBy: "test-user",
+		})
+		require.NoError(t, err)
+		require.NotNil(t, createdDeployment)
+
+		// Update the deployment without name
+		updateRequest := api.AdminUpdateDeploymentRequestObject{
+			Id: int(createdDeployment.ID),
+			Body: &api.AdminUpdateDeploymentJSONRequestBody{
+				Reviewers: &[]string{"reviewer1", "reviewer2"},
+			},
+		}
+		updateResponse, err := admin.UpdateDeployment(ctx, logger, accessor, updateRequest)
+		assert.NoError(t, err)
+		require.IsType(t, api.AdminUpdateDeployment200JSONResponse{}, updateResponse)
+
+		updatedDeployment := updateResponse.(api.AdminUpdateDeployment200JSONResponse)
+		assert.Equal(t, "test-deployment", updatedDeployment.Data.Name)
+		assert.EqualValues(t, createdDeployment.Status, updatedDeployment.Data.Status)
+		assert.Equal(t, createdDeployment.CreatedBy, updatedDeployment.Data.CreatedBy)
+		assert.Equal(t, createdDeployment.CreatedAt, updatedDeployment.Data.CreatedAt)
+		assert.Equal(t, createdDeployment.ApprovedBy, updatedDeployment.Data.ApprovedBy)
+		assert.Equal(t, createdDeployment.ApprovedAt, updatedDeployment.Data.ApprovedAt)
+		assert.Equal(t, createdDeployment.FinishedBy, updatedDeployment.Data.FinishedBy)
+		assert.Equal(t, createdDeployment.FinishedAt, updatedDeployment.Data.FinishedAt)
+
+		// Get deployment from DB and compare
+		dbDeployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), createdDeployment.ID)
+		require.NoError(t, err)
+		assert.Equal(t, "test-deployment", dbDeployment.Name)
+		assert.Equal(t, []string{"reviewer1", "reviewer2"}, dbDeployment.Reviewers)
+	})
+
+	t.Run("Update without reviewers", func(t *testing.T) {
+		t.Parallel()
+		dbPool := testhelper.TestDB(ctx, t)
+		accessor := dbaccess.New(dbPool)
+
+		// First, create a deployment to update
+		createdDeployment, err := accessor.Querier().DeploymentInsert(ctx, accessor.Source(), &dbsqlc.DeploymentInsertParams{
+			Name:      "test-deployment",
+			CreatedBy: "test-user",
+			Reviewers: []string{"initial-reviewer1", "initial-reviewer2"},
+		})
+		require.NoError(t, err)
+		require.NotNil(t, createdDeployment)
+
+		// Update the deployment without reviewers
+		updateRequest := api.AdminUpdateDeploymentRequestObject{
+			Id: int(createdDeployment.ID),
+			Body: &api.AdminUpdateDeploymentJSONRequestBody{
+				Name: lo.ToPtr("updated-deployment"),
+			},
+		}
+		updateResponse, err := admin.UpdateDeployment(ctx, logger, accessor, updateRequest)
+		assert.NoError(t, err)
+		require.IsType(t, api.AdminUpdateDeployment200JSONResponse{}, updateResponse)
+
+		updatedDeployment := updateResponse.(api.AdminUpdateDeployment200JSONResponse)
+		assert.Equal(t, "updated-deployment", updatedDeployment.Data.Name)
+		assert.EqualValues(t, createdDeployment.Status, updatedDeployment.Data.Status)
+		assert.Equal(t, createdDeployment.CreatedBy, updatedDeployment.Data.CreatedBy)
+		assert.Equal(t, createdDeployment.CreatedAt, updatedDeployment.Data.CreatedAt)
+		assert.Equal(t, createdDeployment.ApprovedBy, updatedDeployment.Data.ApprovedBy)
+		assert.Equal(t, createdDeployment.ApprovedAt, updatedDeployment.Data.ApprovedAt)
+		assert.Equal(t, createdDeployment.FinishedBy, updatedDeployment.Data.FinishedBy)
+		assert.Equal(t, createdDeployment.FinishedAt, updatedDeployment.Data.FinishedAt)
+
+		// Get deployment from DB and compare
+		dbDeployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), createdDeployment.ID)
+		require.NoError(t, err)
+		assert.Equal(t, "updated-deployment", dbDeployment.Name)
+		assert.Equal(t, []string{"initial-reviewer1", "initial-reviewer2"}, dbDeployment.Reviewers)
+	})
+
+	t.Run("Only draft deployment can be updated", func(t *testing.T) {
+		t.Parallel()
+		dbPool := testhelper.TestDB(ctx, t)
+		accessor := dbaccess.New(dbPool)
+
+		// First, create a deployment to update
+		createRequest := api.AdminCreateDeploymentRequestObject{
+			Body: &api.AdminCreateDeploymentJSONRequestBody{
+				Name: "test-deployment",
+				User: "test-user",
+			},
+		}
+		createResponse, err := admin.CreateDeployment(ctx, logger, accessor, createRequest)
+		require.NoError(t, err)
+		createdDeployment := createResponse.(api.AdminCreateDeployment201JSONResponse)
+
+		// Submit the deployment for review to change its status
+		_, err = accessor.Querier().DeploymentSubmitForReview(ctx, accessor.Source(), int64(createdDeployment.Data.Id))
+		require.NoError(t, err)
+
+		// Attempt to update the deployment
+		updateRequest := api.AdminUpdateDeploymentRequestObject{
+			Id: int(createdDeployment.Data.Id),
+			Body: &api.AdminUpdateDeploymentJSONRequestBody{
+				Name: lo.ToPtr("updated-deployment"),
+			},
+		}
+		updateResponse, err := admin.UpdateDeployment(ctx, logger, accessor, updateRequest)
+		assert.NoError(t, err)
+		require.IsType(t, api.AdminUpdateDeployment404Response{}, updateResponse)
+
+		// Get deployment from DB and compare
+		dbDeployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), int64(createdDeployment.Data.Id))
+		require.NoError(t, err)
+		assert.Equal(t, "test-deployment", dbDeployment.Name)
+		assert.EqualValues(t, "reviewing", dbDeployment.Status)
+	})
+
+	t.Run("Database error", func(t *testing.T) {
+		t.Parallel()
+		dbPool := testhelper.TestDB(ctx, t)
+		accessor := dbaccess.New(dbPool)
+
+		// First, create a deployment to update
+		createdDeployment, err := accessor.Querier().DeploymentInsert(ctx, accessor.Source(), &dbsqlc.DeploymentInsertParams{
+			Name:      "test-deployment",
+			CreatedBy: "test-user",
+		})
+		require.NoError(t, err)
+		require.NotNil(t, createdDeployment)
+
+		// Close the database pool to simulate a database error
+		dbPool.Close()
+
+		// Attempt to update the deployment
+		updateRequest := api.AdminUpdateDeploymentRequestObject{
+			Id: int(createdDeployment.ID),
+			Body: &api.AdminUpdateDeploymentJSONRequestBody{
+				Name: lo.ToPtr("updated-deployment"),
+			},
+		}
+		updateResponse, err := admin.UpdateDeployment(ctx, logger, accessor, updateRequest)
+		assert.NoError(t, err)
+		require.IsType(t, api.AdminUpdateDeployment500JSONResponse{}, updateResponse)
+
+		errorResponse := updateResponse.(api.AdminUpdateDeployment500JSONResponse)
+		assert.Contains(t, errorResponse.Error, "Cannot update deployment")
+	})
+}
+
+func TestSubmitDeployment(t *testing.T) {
+	ctx := context.Background()
+	logger := slog.Default()
+
+	t.Run("Submit draft deployment successfully", func(t *testing.T) {
+		t.Parallel()
+		dbPool := testhelper.TestDB(ctx, t)
+		accessor := dbaccess.New(dbPool)
+
+		// Create a draft deployment
+		createdDeployment, err := accessor.Querier().DeploymentInsert(ctx, accessor.Source(), &dbsqlc.DeploymentInsertParams{
+			Name:      "test-deployment",
+			CreatedBy: "test-user",
+		})
+		require.NoError(t, err)
+		require.NotNil(t, createdDeployment)
+
+		// Submit the deployment for review
+		submitRequest := api.AdminSubmitDeploymentRequestObject{Id: int(createdDeployment.ID)}
+		submitResponse, err := admin.SubmitDeployment(ctx, logger, accessor, submitRequest)
+		assert.NoError(t, err)
+		require.IsType(t, api.AdminSubmitDeployment200Response{}, submitResponse)
+
+		// Get deployment from DB and verify status
+		dbDeployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), int64(createdDeployment.ID))
+		require.NoError(t, err)
+		assert.EqualValues(t, "reviewing", dbDeployment.Status)
+	})
+
+	t.Run("Submit non-existent deployment", func(t *testing.T) {
+		t.Parallel()
+		dbPool := testhelper.TestDB(ctx, t)
+		accessor := dbaccess.New(dbPool)
+
+		// Attempt to submit a non-existent deployment
+		submitRequest := api.AdminSubmitDeploymentRequestObject{
+			Id: 999999, // Non-existent ID
+		}
+		submitResponse, err := admin.SubmitDeployment(ctx, logger, accessor, submitRequest)
+		assert.NoError(t, err)
+		require.IsType(t, api.AdminSubmitDeployment404Response{}, submitResponse)
+	})
+
+	t.Run("Submit non-draft deployment", func(t *testing.T) {
+		t.Parallel()
+		dbPool := testhelper.TestDB(ctx, t)
+		accessor := dbaccess.New(dbPool)
+
+		// Create a deployment with 'reviewing' status
+		createdDeployment, err := accessor.Querier().DeploymentInsert(ctx, accessor.Source(), &dbsqlc.DeploymentInsertParams{
+			Name:      "test-deployment",
+			CreatedBy: "test-user",
+			Status:    dbsqlc.NullDeploymentStatus{DeploymentStatus: "reviewing", Valid: true},
+		})
+		require.NoError(t, err)
+		require.NotNil(t, createdDeployment)
+
+		// Attempt to submit the non-draft deployment
+		submitRequest := api.AdminSubmitDeploymentRequestObject{Id: int(createdDeployment.ID)}
+		submitResponse, err := admin.SubmitDeployment(ctx, logger, accessor, submitRequest)
+		assert.NoError(t, err)
+		require.IsType(t, api.AdminSubmitDeployment404Response{}, submitResponse)
+
+		// Verify that the status hasn't changed
+		dbDeployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), int64(createdDeployment.ID))
+		require.NoError(t, err)
+		assert.EqualValues(t, "reviewing", dbDeployment.Status)
+	})
+
+	t.Run("Database error", func(t *testing.T) {
+		t.Parallel()
+		dbPool := testhelper.TestDB(ctx, t)
+		accessor := dbaccess.New(dbPool)
+
+		// Create a draft deployment
+		createdDeployment, err := accessor.Querier().DeploymentInsert(ctx, accessor.Source(), &dbsqlc.DeploymentInsertParams{
+			Name:      "test-deployment",
+			CreatedBy: "test-user",
+			Status:    dbsqlc.NullDeploymentStatus{DeploymentStatus: "draft", Valid: true},
+		})
+		require.NoError(t, err)
+		require.NotNil(t, createdDeployment)
+
+		// Close the database pool to simulate a database error
+		dbPool.Close()
+
+		// Attempt to submit the deployment
+		submitRequest := api.AdminSubmitDeploymentRequestObject{Id: int(createdDeployment.ID)}
+		submitResponse, err := admin.SubmitDeployment(ctx, logger, accessor, submitRequest)
+		assert.NoError(t, err)
+		require.IsType(t, api.AdminSubmitDeployment500JSONResponse{}, submitResponse)
+
+		errorResponse := submitResponse.(api.AdminSubmitDeployment500JSONResponse)
+		assert.Contains(t, errorResponse.Error, "Cannot submit deployment")
+	})
+}
+
+func TestDeleteDeployment(t *testing.T) {
+	ctx := context.Background()
+	logger := slog.Default()
+
+	t.Run("Successfully delete draft deployment", func(t *testing.T) {
+		t.Parallel()
+		dbPool := testhelper.TestDB(ctx, t)
+		accessor := dbaccess.New(dbPool)
+
+		// Create a draft deployment
+		createdDeployment, err := accessor.Querier().DeploymentInsert(ctx, accessor.Source(), &dbsqlc.DeploymentInsertParams{
+			Name:      "test-deployment",
+			CreatedBy: "test-user",
+			Status:    dbsqlc.NullDeploymentStatus{DeploymentStatus: "draft", Valid: true},
+		})
+		require.NoError(t, err)
+		require.NotNil(t, createdDeployment)
+
+		// Delete the deployment
+		deleteRequest := api.AdminDeleteDeploymentRequestObject{Id: int(createdDeployment.ID)}
+		deleteResponse, err := admin.DeleteDeployment(ctx, logger, accessor, deleteRequest)
+		assert.NoError(t, err)
+		require.IsType(t, api.AdminDeleteDeployment200Response{}, deleteResponse)
+
+		// Verify that the deployment no longer exists
+		_, err = accessor.Querier().DeploymentGetById(ctx, accessor.Source(), int64(createdDeployment.ID))
+		assert.Error(t, err)
+		assert.Equal(t, pgx.ErrNoRows, err)
+	})
+
+	t.Run("Attempt to delete non-draft deployment", func(t *testing.T) {
+		t.Parallel()
+		dbPool := testhelper.TestDB(ctx, t)
+		accessor := dbaccess.New(dbPool)
+
+		// Create a deployment with 'reviewing' status
+		createdDeployment, err := accessor.Querier().DeploymentInsert(ctx, accessor.Source(), &dbsqlc.DeploymentInsertParams{
+			Name:      "test-deployment",
+			CreatedBy: "test-user",
+			Status:    dbsqlc.NullDeploymentStatus{DeploymentStatus: "reviewing", Valid: true},
+		})
+		require.NoError(t, err)
+		require.NotNil(t, createdDeployment)
+
+		rows, err := accessor.Source().Query(ctx, "SELECT id,name,status FROM deployments")
+		require.NoError(t, err)
+		defer rows.Close()
+
+		for rows.Next() {
+			var id int64
+			var name, status string
+			err := rows.Scan(&id, &name, &status)
+			require.NoError(t, err)
+			t.Logf("Deployment: ID=%d, Name=%s, Status=%s", id, name, status)
+		}
+		require.NoError(t, rows.Err())
+
+		// Attempt to delete the non-draft deployment
+		deleteRequest := api.AdminDeleteDeploymentRequestObject{Id: int(createdDeployment.ID)}
+		deleteResponse, err := admin.DeleteDeployment(ctx, logger, accessor, deleteRequest)
+		assert.NoError(t, err)
+		require.IsType(t, api.AdminDeleteDeployment404Response{}, deleteResponse)
+
+		// Verify that the deployment still exists
+		dbDeployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), int64(createdDeployment.ID))
+		require.NoError(t, err)
+		assert.EqualValues(t, "reviewing", dbDeployment.Status)
+	})
+
+	t.Run("Attempt to delete non-existent deployment", func(t *testing.T) {
+		t.Parallel()
+		dbPool := testhelper.TestDB(ctx, t)
+		accessor := dbaccess.New(dbPool)
+
+		// Attempt to delete a non-existent deployment
+		deleteRequest := api.AdminDeleteDeploymentRequestObject{Id: 9999}
+		deleteResponse, err := admin.DeleteDeployment(ctx, logger, accessor, deleteRequest)
+		assert.NoError(t, err)
+		require.IsType(t, api.AdminDeleteDeployment404Response{}, deleteResponse)
+	})
+
+	t.Run("Database error", func(t *testing.T) {
+		t.Parallel()
+		dbPool := testhelper.TestDB(ctx, t)
+		accessor := dbaccess.New(dbPool)
+
+		// Create a draft deployment
+		createdDeployment, err := accessor.Querier().DeploymentInsert(ctx, accessor.Source(), &dbsqlc.DeploymentInsertParams{
+			Name:      "test-deployment",
+			CreatedBy: "test-user",
+			Status:    dbsqlc.NullDeploymentStatus{DeploymentStatus: "draft", Valid: true},
+		})
+		require.NoError(t, err)
+		require.NotNil(t, createdDeployment)
+
+		// Close the database pool to simulate a database error
+		dbPool.Close()
+
+		// Attempt to delete the deployment
+		deleteRequest := api.AdminDeleteDeploymentRequestObject{Id: int(createdDeployment.ID)}
+		deleteResponse, err := admin.DeleteDeployment(ctx, logger, accessor, deleteRequest)
+		assert.NoError(t, err)
+		require.IsType(t, api.AdminDeleteDeployment500JSONResponse{}, deleteResponse)
+
+		errorResponse := deleteResponse.(api.AdminDeleteDeployment500JSONResponse)
+		assert.Contains(t, errorResponse.Error, "Cannot delete deployment")
 	})
 }

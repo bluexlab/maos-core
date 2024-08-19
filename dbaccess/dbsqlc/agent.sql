@@ -1,12 +1,19 @@
 -- name: AgentListPagenated :many
+WITH agent_token_count AS (
+    SELECT agent_id, COUNT(*) AS token_count
+    FROM api_tokens
+    GROUP BY agent_id
+)
 SELECT
-  id,
-  name,
-  queue_id,
-  created_at,
-  COUNT(*) OVER() AS total_count
+  agents.id,
+  agents.name,
+  agents.queue_id,
+  agents.created_at,
+  COUNT(*) OVER() AS total_count,
+  CASE WHEN atc.token_count IS NULL OR atc.token_count = 0 THEN true ELSE false END AS updatable
 FROM agents
-ORDER BY name
+LEFT JOIN agent_token_count atc ON agents.id = atc.agent_id
+ORDER BY agents.name
 LIMIT sqlc.arg(page_size)::bigint
 OFFSET sqlc.arg(page_size) * (sqlc.arg(page)::bigint - 1);
 

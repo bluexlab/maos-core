@@ -220,6 +220,10 @@ func (s *APIHandler) AdminListDeployments(ctx context.Context, request api.Admin
 	return admin.ListDeployments(ctx, s.logger, s.accessor, request)
 }
 
+func (s *APIHandler) AdminGetDeployment(ctx context.Context, request api.AdminGetDeploymentRequestObject) (api.AdminGetDeploymentResponseObject, error) {
+	panic("not implemented")
+}
+
 func (s *APIHandler) AdminCreateDeployment(ctx context.Context, request api.AdminCreateDeploymentRequestObject) (api.AdminCreateDeploymentResponseObject, error) {
 	token := ValidatePermissions(ctx, "AdminCreateDeployment")
 	if token == nil {
@@ -227,6 +231,30 @@ func (s *APIHandler) AdminCreateDeployment(ctx context.Context, request api.Admi
 	}
 
 	return admin.CreateDeployment(ctx, s.logger, s.accessor, request)
+}
+
+func (s *APIHandler) AdminUpdateDeployment(ctx context.Context, request api.AdminUpdateDeploymentRequestObject) (api.AdminUpdateDeploymentResponseObject, error) {
+	token := ValidatePermissions(ctx, "AdminUpdateDeployment")
+	if token == nil {
+		return api.AdminUpdateDeployment401Response{}, nil
+	}
+	return admin.UpdateDeployment(ctx, s.logger, s.accessor, request)
+}
+
+func (s *APIHandler) AdminSubmitDeployment(ctx context.Context, request api.AdminSubmitDeploymentRequestObject) (api.AdminSubmitDeploymentResponseObject, error) {
+	token := ValidatePermissions(ctx, "AdminSubmitDeployment")
+	if token == nil {
+		return api.AdminSubmitDeployment401Response{}, nil
+	}
+	return admin.SubmitDeployment(ctx, s.logger, s.accessor, request)
+}
+
+func (s *APIHandler) AdminDeleteDeployment(ctx context.Context, request api.AdminDeleteDeploymentRequestObject) (api.AdminDeleteDeploymentResponseObject, error) {
+	token := ValidatePermissions(ctx, "AdminDeleteDeployment")
+	if token == nil {
+		return api.AdminDeleteDeployment401Response{}, nil
+	}
+	return admin.DeleteDeployment(ctx, s.logger, s.accessor, request)
 }
 
 func (s *APIHandler) GetHealth(ctx context.Context, request api.GetHealthRequestObject) (api.GetHealthResponseObject, error) {

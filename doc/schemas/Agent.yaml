@@ -5,6 +5,8 @@ properties:
     format: int64
   name:
     type: string
+  updatable:
+    type: boolean
   created_at:
     type: integer
     format: int64
@@ -12,6 +14,7 @@ properties:
 required:
   - id
   - name
+  - updatable
   - created_at
 example:
   id: 16888

@@ -1,8 +1,9 @@
 -- name: ConfigFindByAgentId :one
-SELECT *
+SELECT configs.*, agents.name AS agent_name
 FROM configs
-WHERE agent_id = @agent_id
-ORDER BY created_at DESC, id DESC
+JOIN agents ON configs.agent_id = agents.id
+WHERE configs.agent_id = @agent_id
+ORDER BY configs.created_at DESC, configs.id DESC
 LIMIT 1;
 
 -- name: ConfigInsert :one

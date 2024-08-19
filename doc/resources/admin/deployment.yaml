@@ -1,0 +1,92 @@
+get:
+  summary: Get a specific Deployment.
+  operationId: adminGetDeployment
+  tags:
+    - Admin
+  parameters:
+    - in: path
+      name: id
+      schema:
+        type: integer
+      description: Deployment ID
+  responses:
+    "200":
+      description: Successful response
+      content:
+        application/json:
+          schema:
+            $ref: "../../schemas/DeploymentDetail.yaml"
+          required:
+            - data
+    "401":
+      description: Unauthorized
+    "404":
+      description: Deployment not found
+    "500":
+      $ref: "../../responses/500.yaml"
+
+patch:
+  summary: Update a specific Deployment. Only draft deployments can be updated.
+  operationId: adminUpdateDeployment
+  tags:
+    - Admin
+  parameters:
+    - in: path
+      name: id
+      schema:
+        type: integer
+      description: Deployment ID
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            user:
+              type: string
+            name:
+              type: string
+            reviewers:
+              type: array
+              items:
+                type: string
+  responses:
+    "200":
+      description: Successful response
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: "../../schemas/Deployment.yaml"
+            required:
+              - data
+    "401":
+      description: Unauthorized
+    "404":
+      description: Deployment not found
+    "500":
+      $ref: "../../responses/500.yaml"
+
+delete:
+  summary: Delete a specific Deployment. Only draft deployments can be deleted.
+  operationId: adminDeleteDeployment
+  tags:
+    - Admin
+  parameters:
+    - in: path
+      name: id
+      schema:
+        type: integer
+      description: Deployment ID
+  responses:
+    "200":
+      description: Deployment deleted successfully
+    "401":
+      description: Unauthorized
+    "404":
+      description: Deployment not found
+    "500":
+      $ref: "../../responses/500.yaml"

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,99 +19,135 @@ import (
 func TestListAgentsWithDB(t *testing.T) {
 	t.Parallel()
 	logger := testhelper.Logger(t)
+	ctx := context.Background()
 
-	type testCase struct {
-		name          string
-		setupAgents   func(context.Context, *pgxpool.Pool) []*dbsqlc.Agent
-		request       api.AdminListAgentsRequestObject
-		expectedLen   int
-		expectedNames []string
-		expectedPages int
-		expectedError string
-	}
+	t.Run("Successful listing", func(t *testing.T) {
+		t.Parallel()
+		dbPool := testhelper.TestDB(ctx, t)
+		defer dbPool.Close()
 
-	tests := []testCase{
-		{
-			name: "Successful listing",
-			setupAgents: func(ctx context.Context, dbPool *pgxpool.Pool) []*dbsqlc.Agent {
-				return []*dbsqlc.Agent{
-					fixture.InsertAgent(t, ctx, dbPool, "agent1"),
-					fixture.InsertAgent(t, ctx, dbPool, "agent2"),
-				}
-			},
-			request:       api.AdminListAgentsRequestObject{},
-			expectedLen:   2,
-			expectedNames: []string{"agent1", "agent2"},
-			expectedPages: 1,
-		},
-		{
-			name: "Custom page and page size",
-			setupAgents: func(ctx context.Context, dbPool *pgxpool.Pool) []*dbsqlc.Agent {
-				return lo.RepeatBy(21, func(i int) *dbsqlc.Agent {
-					return fixture.InsertAgent(t, ctx, dbPool, fmt.Sprintf("agent-%03d", i))
-				})
-			},
-			request: api.AdminListAgentsRequestObject{
-				Params: api.AdminListAgentsParams{
-					Page:     lo.ToPtr(2),
-					PageSize: lo.ToPtr(10),
-				},
-			},
-			expectedLen:   10,
-			expectedNames: lo.Map(lo.Range(10), func(i int, _ int) string { return fmt.Sprintf("agent-%03d", i+10) }),
-			expectedPages: 3,
-		},
-		{
-			name: "Database pool closed",
-			setupAgents: func(ctx context.Context, dbPool *pgxpool.Pool) []*dbsqlc.Agent {
-				agents := []*dbsqlc.Agent{
-					fixture.InsertAgent(t, ctx, dbPool, "agent1"),
-				}
-				dbPool.Close()
-				return agents
-			},
-			request:       api.AdminListAgentsRequestObject{},
-			expectedError: "closed pool",
-		},
-	}
+		accessor := dbaccess.New(dbPool)
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			ctx := context.Background()
-			dbPool := testhelper.TestDB(ctx, t)
-			defer dbPool.Close()
+		// Setup agents
+		fixture.InsertAgent(t, ctx, dbPool, "agent1")
+		fixture.InsertAgent(t, ctx, dbPool, "agent2")
 
-			accessor := dbaccess.New(dbPool)
+		request := api.AdminListAgentsRequestObject{}
 
-			_ = tt.setupAgents(ctx, dbPool)
+		response, err := admin.ListAgents(ctx, logger, accessor, request)
 
-			response, err := admin.ListAgents(ctx, logger, accessor, tt.request)
+		assert.NoError(t, err)
+		require.IsType(t, api.AdminListAgents200JSONResponse{}, response)
 
-			if tt.expectedError != "" {
-				assert.NoError(t, err)
-				assert.IsType(t, api.AdminListAgents500JSONResponse{}, response)
-			} else {
-				assert.NoError(t, err)
-				require.IsType(t, api.AdminListAgents200JSONResponse{}, response)
+		jsonResponse := response.(api.AdminListAgents200JSONResponse)
+		assert.NotNil(t, jsonResponse.Data)
+		assert.Len(t, jsonResponse.Data, 2)
+		assert.Equal(t, 1, jsonResponse.Meta.TotalPages)
 
-				jsonResponse := response.(api.AdminListAgents200JSONResponse)
-				assert.NotNil(t, jsonResponse.Data)
-				assert.Len(t, jsonResponse.Data, tt.expectedLen)
-				assert.Equal(t, tt.expectedPages, jsonResponse.Meta.TotalPages)
+		actualNames := lo.Map(jsonResponse.Data, func(a api.Agent, _ int) string { return a.Name })
+		assert.Equal(t, []string{"agent1", "agent2"}, actualNames)
 
-				actualNames := lo.Map(jsonResponse.Data, func(a api.Agent, _ int) string { return a.Name })
-				assert.Equal(t, tt.expectedNames, actualNames)
+		for _, agent := range jsonResponse.Data {
+			assert.NotEmpty(t, agent.Id)
+			assert.NotEmpty(t, agent.Name)
+			assert.NotZero(t, agent.CreatedAt)
+			assert.True(t, agent.Updatable)
+		}
+	})
 
-				for _, agent := range jsonResponse.Data {
-					assert.NotEmpty(t, agent.Id)
-					assert.NotEmpty(t, agent.Name)
-					assert.NotZero(t, agent.CreatedAt)
-				}
-			}
+	t.Run("Custom page and page size", func(t *testing.T) {
+		t.Parallel()
+		dbPool := testhelper.TestDB(ctx, t)
+		defer dbPool.Close()
+
+		accessor := dbaccess.New(dbPool)
+
+		// Setup agents
+		lo.RepeatBy(21, func(i int) *dbsqlc.Agent {
+			return fixture.InsertAgent(t, ctx, dbPool, fmt.Sprintf("agent-%03d", i))
 		})
-	}
+
+		request := api.AdminListAgentsRequestObject{
+			Params: api.AdminListAgentsParams{
+				Page:     lo.ToPtr(2),
+				PageSize: lo.ToPtr(10),
+			},
+		}
+
+		response, err := admin.ListAgents(ctx, logger, accessor, request)
+
+		assert.NoError(t, err)
+		require.IsType(t, api.AdminListAgents200JSONResponse{}, response)
+
+		jsonResponse := response.(api.AdminListAgents200JSONResponse)
+		assert.NotNil(t, jsonResponse.Data)
+		assert.Len(t, jsonResponse.Data, 10)
+		assert.Equal(t, 3, jsonResponse.Meta.TotalPages)
+
+		expectedNames := lo.Map(lo.Range(10), func(i int, _ int) string { return fmt.Sprintf("agent-%03d", i+10) })
+		actualNames := lo.Map(jsonResponse.Data, func(a api.Agent, _ int) string { return a.Name })
+		assert.Equal(t, expectedNames, actualNames)
+
+		for _, agent := range jsonResponse.Data {
+			assert.NotEmpty(t, agent.Id)
+			assert.NotEmpty(t, agent.Name)
+			assert.NotZero(t, agent.CreatedAt)
+			assert.True(t, agent.Updatable)
+		}
+	})
+
+	t.Run("Agent with API token is not updatable", func(t *testing.T) {
+		t.Parallel()
+		dbPool := testhelper.TestDB(ctx, t)
+		defer dbPool.Close()
+
+		accessor := dbaccess.New(dbPool)
+
+		// Setup agent
+		agent := fixture.InsertAgent(t, ctx, dbPool, "agent-with-token")
+
+		// Add API token to the agent
+		_, err := accessor.Querier().ApiTokenInsert(ctx, accessor.Source(), &dbsqlc.ApiTokenInsertParams{
+			ID:          "test-token",
+			AgentId:     agent.ID,
+			Permissions: []string{"read"},
+		})
+		assert.NoError(t, err)
+
+		request := api.AdminListAgentsRequestObject{}
+		response, err := admin.ListAgents(ctx, logger, accessor, request)
+
+		assert.NoError(t, err)
+		require.IsType(t, api.AdminListAgents200JSONResponse{}, response)
+
+		jsonResponse := response.(api.AdminListAgents200JSONResponse)
+		assert.NotNil(t, jsonResponse.Data)
+		assert.Len(t, jsonResponse.Data, 1)
+
+		agentResponse := jsonResponse.Data[0]
+		assert.Equal(t, agent.ID, agentResponse.Id)
+		assert.Equal(t, agent.Name, agentResponse.Name)
+		assert.False(t, agentResponse.Updatable)
+	})
+
+	t.Run("Database pool closed", func(t *testing.T) {
+		t.Parallel()
+		dbPool := testhelper.TestDB(ctx, t)
+
+		accessor := dbaccess.New(dbPool)
+
+		fixture.InsertAgent(t, ctx, dbPool, "agent1")
+		dbPool.Close()
+
+		request := api.AdminListAgentsRequestObject{}
+
+		response, err := admin.ListAgents(ctx, logger, accessor, request)
+
+		assert.NoError(t, err)
+		assert.IsType(t, api.AdminListAgents500JSONResponse{}, response)
+		errorResponse := response.(api.AdminListAgents500JSONResponse)
+		assert.Contains(t, errorResponse.Error, "closed pool")
+	})
 }
 
 func TestCreateAgentWithDB(t *testing.T) {

@@ -8,6 +8,7 @@ get:
       name: id
       schema:
         type: integer
+        format: int64
       description: Deployment ID
   responses:
     "200":
@@ -16,8 +17,6 @@ get:
         application/json:
           schema:
             $ref: "../../schemas/DeploymentDetail.yaml"
-          required:
-            - data
     "401":
       description: Unauthorized
     "404":
@@ -35,6 +34,7 @@ patch:
       name: id
       schema:
         type: integer
+        format: int64
       description: Deployment ID
   requestBody:
     required: true
@@ -80,6 +80,7 @@ delete:
       name: id
       schema:
         type: integer
+        format: int64
       description: Deployment ID
   responses:
     "200":

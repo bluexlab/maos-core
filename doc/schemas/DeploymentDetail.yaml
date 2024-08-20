@@ -13,7 +13,12 @@ properties:
       - approved
       - rejected
       - deployed
+      - retired
       - cancelled
+  reviewers:
+    type: array
+    items:
+      type: string
   created_at:
     type: integer
     format: int64
@@ -38,5 +43,6 @@ required:
   - id
   - name
   - status
+  - reviewers
   - created_at
   - created_by

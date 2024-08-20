@@ -8,6 +8,7 @@ sql:
       - agent.sql
       - config.sql
       - deployment.sql
+      - config_suite.sql
       - api_token.sql
       - invocation.sql
       - notify.sql

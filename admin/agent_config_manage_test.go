@@ -2,8 +2,6 @@ package admin_test
 
 import (
 	"context"
-	"encoding/json"
-	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -28,11 +26,11 @@ func TestAdminGetAgentConfig(t *testing.T) {
 	t.Run("Successful get agent config", func(t *testing.T) {
 		agent := fixture.InsertAgent(t, ctx, dbPool, "TestAgent")
 		agent2 := fixture.InsertAgent(t, ctx, dbPool, "TestAgent2")
-		content := map[string]interface{}{
+		content := map[string]string{
 			"key1": "value1",
 			"key2": "42",
 		}
-		content0 := map[string]interface{}{"key1": "value2"}
+		content0 := map[string]string{"key1": "value2"}
 		fixture.InsertConfig(t, ctx, dbPool, agent.ID, content0)
 		fixture.InsertConfig(t, ctx, dbPool, agent2.ID, content0)
 		config := fixture.InsertConfig(t, ctx, dbPool, agent.ID, content)
@@ -76,74 +74,5 @@ func TestAdminGetAgentConfig(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminGetAgentConfig500JSONResponse{}, response)
-	})
-}
-
-func TestAdminUpdateAgentConfig(t *testing.T) {
-	ctx := context.Background()
-	logger := slog.Default()
-	dbPool := testhelper.TestDB(ctx, t)
-	defer dbPool.Close()
-
-	accessor := dbaccess.New(dbPool)
-
-	t.Run("Successful update agent config", func(t *testing.T) {
-		agent := fixture.InsertAgent(t, ctx, dbPool, "TestAgent")
-		content := map[string]string{
-			"key1": "value1",
-			"key2": "42.0",
-		}
-		minAgentVersion := "1.0.0"
-		user := "testuser"
-
-		request := api.AdminUpdateAgentConfigRequestObject{
-			Id: agent.ID,
-			Body: &api.AdminUpdateAgentConfigJSONRequestBody{
-				Content:         content,
-				MinAgentVersion: &minAgentVersion,
-				User:            user,
-			},
-		}
-
-		response, err := admin.AdminUpdateAgentConfig(ctx, logger, accessor, request)
-
-		assert.NoError(t, err)
-		assert.IsType(t, api.AdminUpdateAgentConfig201Response{}, response)
-
-		// Verify the config was inserted correctly
-		config, err := accessor.Querier().ConfigFindByAgentId(ctx, accessor.Pool(), agent.ID)
-		assert.NoError(t, err)
-		assert.Equal(t, agent.ID, config.AgentId)
-		assert.Equal(t, agent.Name, config.AgentName)
-		assert.Equal(t, minAgentVersion, *config.MinAgentVersion)
-		assert.Equal(t, user, config.CreatedBy)
-
-		var insertedContent map[string]string
-		err = json.Unmarshal(config.Content, &insertedContent)
-		assert.NoError(t, err)
-		assert.Equal(t, content, insertedContent)
-	})
-
-	t.Run("Database error", func(t *testing.T) {
-		agent := fixture.InsertAgent(t, ctx, dbPool, "TestAgent3")
-		content := map[string]string{
-			"key": "value",
-		}
-		user := "testuser"
-
-		request := api.AdminUpdateAgentConfigRequestObject{
-			Id: agent.ID,
-			Body: &api.AdminUpdateAgentConfigJSONRequestBody{
-				Content: content,
-				User:    user,
-			},
-		}
-
-		dbPool.Close() // Simulate database error by closing the connection
-
-		response, err := admin.AdminUpdateAgentConfig(ctx, logger, accessor, request)
-
-		assert.NoError(t, err)
-		assert.IsType(t, api.AdminUpdateAgentConfig500JSONResponse{}, response)
 	})
 }

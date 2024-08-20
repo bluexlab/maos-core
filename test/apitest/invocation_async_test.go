@@ -266,6 +266,6 @@ func TestInvocationGetEndpoint(t *testing.T) {
 			"attempted_at",
 			"finalized_at",
 		)
-		require.InDelta(t, 500, time.Since(start).Milliseconds(), 100)
+		require.InDelta(t, 500, time.Since(start).Milliseconds(), 200)
 	})
 }

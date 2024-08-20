@@ -3,11 +3,10 @@ package admin_test
 import (
 	"context"
 	"fmt"
-	"io"
-	"log/slog"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -121,6 +120,120 @@ func TestListDeploymentsWithDB(t *testing.T) {
 	})
 }
 
+func TestGetDeployment(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	logger := testhelper.Logger(t)
+
+	t.Run("Successful retrieval", func(t *testing.T) {
+		t.Parallel()
+		dbPool := testhelper.TestDB(ctx, t)
+		accessor := dbaccess.New(dbPool)
+
+		// Create two agents
+		agent1 := fixture.InsertAgent(t, ctx, dbPool, "agent1")
+		agent2 := fixture.InsertAgent(t, ctx, dbPool, "agent2")
+
+		// Create a config suite
+		createResponse, err := admin.CreateDeployment(ctx, logger, accessor, api.AdminCreateDeploymentRequestObject{
+			Body: &api.AdminCreateDeploymentJSONRequestBody{
+				Name:      "test-deployment",
+				User:      "test-user",
+				Reviewers: &[]string{"reviewer1", "reviewer2"},
+			},
+		})
+		require.NoError(t, err)
+		createdDeployment := createResponse.(api.AdminCreateDeployment201JSONResponse).Data
+
+		// Create configs for each agent
+		config1Content := map[string]string{"key1": "value1", "key2": "value2"}
+		config2Content := map[string]string{"key3": "value3", "key4": "value4"}
+		fixture.InsertConfig2(t, ctx, dbPool, agent1.ID, createdDeployment.ConfigSuiteId, "testuser", config1Content)
+		fixture.InsertConfig2(t, ctx, dbPool, agent2.ID, createdDeployment.ConfigSuiteId, "testuser", config2Content)
+
+		request := api.AdminGetDeploymentRequestObject{Id: createdDeployment.Id}
+		response, err := admin.GetDeployment(ctx, logger, accessor, request)
+
+		assert.NoError(t, err)
+		require.IsType(t, api.AdminGetDeployment200JSONResponse{}, response)
+
+		retrievedDeployment := response.(api.AdminGetDeployment200JSONResponse)
+		assert.Equal(t, createdDeployment.Id, retrievedDeployment.Id)
+		assert.Equal(t, createdDeployment.Name, retrievedDeployment.Name)
+		assert.Equal(t, createdDeployment.CreatedBy, retrievedDeployment.CreatedBy)
+		assert.Equal(t, createdDeployment.CreatedAt, retrievedDeployment.CreatedAt)
+		assert.Equal(t, string(createdDeployment.Status), string(retrievedDeployment.Status))
+		assert.Equal(t, createdDeployment.Reviewers, retrievedDeployment.Reviewers)
+		assert.Equal(t, createdDeployment.ApprovedBy, retrievedDeployment.ApprovedBy)
+		assert.Equal(t, createdDeployment.ApprovedAt, retrievedDeployment.ApprovedAt)
+		assert.Equal(t, createdDeployment.FinishedBy, retrievedDeployment.FinishedBy)
+		assert.Equal(t, createdDeployment.FinishedAt, retrievedDeployment.FinishedAt)
+
+		// Check configs
+		require.NotNil(t, retrievedDeployment.Configs)
+		assert.Len(t, *retrievedDeployment.Configs, 2)
+
+		configMap := make(map[int64]api.Config)
+		for _, config := range *retrievedDeployment.Configs {
+			configMap[config.AgentId] = config
+		}
+
+		// Check config for agent1
+		config1 := configMap[agent1.ID]
+		assert.NotZero(t, config1.Id)
+		assert.Equal(t, agent1.ID, config1.AgentId)
+		assert.Equal(t, agent1.Name, config1.AgentName)
+		assert.Equal(t, config1Content, config1.Content)
+		assert.NotZero(t, config1.CreatedAt)
+		assert.NotEmpty(t, config1.CreatedBy)
+
+		// Check config for agent2
+		config2 := configMap[agent2.ID]
+		assert.NotZero(t, config2.Id)
+		assert.Equal(t, agent2.ID, config2.AgentId)
+		assert.Equal(t, agent2.Name, config2.AgentName)
+		assert.Equal(t, config2Content, config2.Content)
+		assert.NotZero(t, config2.CreatedAt)
+		assert.NotEmpty(t, config2.CreatedBy)
+	})
+
+	t.Run("Deployment not found", func(t *testing.T) {
+		t.Parallel()
+		dbPool := testhelper.TestDB(ctx, t)
+		accessor := dbaccess.New(dbPool)
+
+		request := api.AdminGetDeploymentRequestObject{
+			Id: 999999, // Non-existent ID
+		}
+
+		response, err := admin.GetDeployment(ctx, logger, accessor, request)
+
+		assert.NoError(t, err)
+		assert.IsType(t, api.AdminGetDeployment404Response{}, response)
+	})
+
+	t.Run("Database error", func(t *testing.T) {
+		t.Parallel()
+		dbPool := testhelper.TestDB(ctx, t)
+		accessor := dbaccess.New(dbPool)
+
+		// Close the database pool to simulate a database error
+		dbPool.Close()
+
+		request := api.AdminGetDeploymentRequestObject{
+			Id: 1,
+		}
+
+		response, err := admin.GetDeployment(ctx, logger, accessor, request)
+
+		assert.NoError(t, err)
+		require.IsType(t, api.AdminGetDeployment500JSONResponse{}, response)
+
+		errorResponse := response.(api.AdminGetDeployment500JSONResponse)
+		assert.Contains(t, errorResponse.Error, "Cannot get deployment")
+	})
+}
+
 func TestCreateDeployment(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -179,6 +292,99 @@ func TestCreateDeployment(t *testing.T) {
 		assert.Equal(t, createdDeployment.Data.CreatedBy, foundDeployment.CreatedBy)
 		assert.Equal(t, createdDeployment.Data.CreatedAt, foundDeployment.CreatedAt)
 		assert.Equal(t, createdDeployment.Data.Status, foundDeployment.Status)
+
+		// Check if config suite was created
+		configSuite, err := accessor.Querier().ConfigSuiteGetById(ctx, accessor.Source(), *createdDeployment.Data.ConfigSuiteId)
+		require.NoError(t, err)
+		assert.NotNil(t, configSuite)
+		assert.Equal(t, createdDeployment.Data.CreatedBy, configSuite.CreatedBy)
+
+		// Get all agents
+		agents, err := accessor.Querier().AgentListPagenated(ctx, accessor.Source(), &dbsqlc.AgentListPagenatedParams{Page: 1, PageSize: 1000})
+		require.NoError(t, err)
+
+		// Check if configs were created for all agents
+		for _, agent := range agents {
+			config, err := accessor.Querier().ConfigFindByAgentIdAndSuiteId(ctx, accessor.Source(), &dbsqlc.ConfigFindByAgentIdAndSuiteIdParams{
+				AgentId:       agent.ID,
+				ConfigSuiteID: *createdDeployment.Data.ConfigSuiteId,
+			})
+			require.NoError(t, err)
+			assert.NotNil(t, config)
+			assert.Equal(t, createdDeployment.Data.CreatedBy, config.CreatedBy)
+		}
+	})
+
+	t.Run("Create deployment with existing configs", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+		dbPool := testhelper.TestDB(ctx, t)
+		accessor := dbaccess.New(dbPool)
+		logger := testhelper.Logger(t)
+
+		// Create 3 agents
+		agent1 := fixture.InsertAgent(t, ctx, dbPool, "agent1")
+		agent2 := fixture.InsertAgent(t, ctx, dbPool, "agent2")
+		agent3 := fixture.InsertAgent(t, ctx, dbPool, "agent3")
+
+		// Create existing configs for agent1 and agent2
+		existingContent1 := []byte(`{"key": "value1"}`)
+		existingContent2 := []byte(`{"key": "value2"}`)
+		_, err := accessor.Querier().ConfigInsert(ctx, accessor.Source(), &dbsqlc.ConfigInsertParams{
+			AgentId:         agent1.ID,
+			Content:         existingContent1,
+			MinAgentVersion: lo.ToPtr("1.0.0"),
+			CreatedBy:       "test-user",
+		})
+		require.NoError(t, err)
+		_, err = accessor.Querier().ConfigInsert(ctx, accessor.Source(), &dbsqlc.ConfigInsertParams{
+			AgentId:   agent2.ID,
+			Content:   existingContent2,
+			CreatedBy: "test-user",
+		})
+		require.NoError(t, err)
+
+		// Create a new deployment
+		request := api.AdminCreateDeploymentRequestObject{
+			Body: &api.AdminCreateDeploymentJSONRequestBody{
+				Name: "test-deployment",
+				User: "test-user",
+			},
+		}
+
+		response, err := admin.CreateDeployment(ctx, logger, accessor, request)
+		assert.NoError(t, err)
+		require.IsType(t, api.AdminCreateDeployment201JSONResponse{}, response)
+
+		createdDeployment := response.(api.AdminCreateDeployment201JSONResponse)
+		assert.NotEmpty(t, createdDeployment.Data.Id)
+		assert.NotEmpty(t, createdDeployment.Data.ConfigSuiteId)
+
+		// Check if configs were created for all agents
+		config1, err := accessor.Querier().ConfigFindByAgentIdAndSuiteId(ctx, accessor.Source(), &dbsqlc.ConfigFindByAgentIdAndSuiteIdParams{
+			AgentId:       agent1.ID,
+			ConfigSuiteID: *createdDeployment.Data.ConfigSuiteId,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, existingContent1, config1.Content)
+		assert.Equal(t, "1.0.0", *config1.MinAgentVersion)
+
+		config2, err := accessor.Querier().ConfigFindByAgentIdAndSuiteId(ctx, accessor.Source(), &dbsqlc.ConfigFindByAgentIdAndSuiteIdParams{
+			AgentId:       agent2.ID,
+			ConfigSuiteID: *createdDeployment.Data.ConfigSuiteId,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, existingContent2, config2.Content)
+		assert.Nil(t, config2.MinAgentVersion)
+
+		config3, err := accessor.Querier().ConfigFindByAgentIdAndSuiteId(ctx, accessor.Source(), &dbsqlc.ConfigFindByAgentIdAndSuiteIdParams{
+			AgentId:       agent3.ID,
+			ConfigSuiteID: *createdDeployment.Data.ConfigSuiteId,
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, config3)
+		assert.Equal(t, []byte("{}"), config3.Content) // New config should have empty JSON object
+		assert.Nil(t, config3.MinAgentVersion)
 	})
 
 	t.Run("Database error", func(t *testing.T) {
@@ -191,7 +397,7 @@ func TestCreateDeployment(t *testing.T) {
 
 		request := api.AdminCreateDeploymentRequestObject{
 			Body: &api.AdminCreateDeploymentJSONRequestBody{
-				Name: "test-deployment",
+				Name: "te								st-deployment",
 				User: "test-user",
 			},
 		}
@@ -209,7 +415,7 @@ func TestCreateDeployment(t *testing.T) {
 func TestUpdateDeployment(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := testhelper.Logger(t)
 
 	t.Run("Successful update", func(t *testing.T) {
 		t.Parallel()
@@ -226,7 +432,7 @@ func TestUpdateDeployment(t *testing.T) {
 
 		// Update the deployment
 		updateRequest := api.AdminUpdateDeploymentRequestObject{
-			Id: int(createdDeployment.ID),
+			Id: createdDeployment.ID,
 			Body: &api.AdminUpdateDeploymentJSONRequestBody{
 				Name:      lo.ToPtr("updated-deployment"),
 				Reviewers: &[]string{"reviewer1", "reviewer2"},
@@ -268,7 +474,7 @@ func TestUpdateDeployment(t *testing.T) {
 
 		// Update the deployment without name
 		updateRequest := api.AdminUpdateDeploymentRequestObject{
-			Id: int(createdDeployment.ID),
+			Id: createdDeployment.ID,
 			Body: &api.AdminUpdateDeploymentJSONRequestBody{
 				Reviewers: &[]string{"reviewer1", "reviewer2"},
 			},
@@ -310,7 +516,7 @@ func TestUpdateDeployment(t *testing.T) {
 
 		// Update the deployment without reviewers
 		updateRequest := api.AdminUpdateDeploymentRequestObject{
-			Id: int(createdDeployment.ID),
+			Id: createdDeployment.ID,
 			Body: &api.AdminUpdateDeploymentJSONRequestBody{
 				Name: lo.ToPtr("updated-deployment"),
 			},
@@ -358,7 +564,7 @@ func TestUpdateDeployment(t *testing.T) {
 
 		// Attempt to update the deployment
 		updateRequest := api.AdminUpdateDeploymentRequestObject{
-			Id: int(createdDeployment.Data.Id),
+			Id: createdDeployment.Data.Id,
 			Body: &api.AdminUpdateDeploymentJSONRequestBody{
 				Name: lo.ToPtr("updated-deployment"),
 			},
@@ -392,7 +598,7 @@ func TestUpdateDeployment(t *testing.T) {
 
 		// Attempt to update the deployment
 		updateRequest := api.AdminUpdateDeploymentRequestObject{
-			Id: int(createdDeployment.ID),
+			Id: createdDeployment.ID,
 			Body: &api.AdminUpdateDeploymentJSONRequestBody{
 				Name: lo.ToPtr("updated-deployment"),
 			},
@@ -407,8 +613,9 @@ func TestUpdateDeployment(t *testing.T) {
 }
 
 func TestSubmitDeployment(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
-	logger := slog.Default()
+	logger := testhelper.Logger(t)
 
 	t.Run("Submit draft deployment successfully", func(t *testing.T) {
 		t.Parallel()
@@ -503,9 +710,132 @@ func TestSubmitDeployment(t *testing.T) {
 	})
 }
 
+func TestPublishDeployment(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	logger := testhelper.Logger(t)
+
+	setupDeploymentTest := func(t *testing.T, status string) (*pgxpool.Pool, dbaccess.Accessor, *dbsqlc.Deployment, *dbsqlc.Agent, *dbsqlc.Agent) {
+		t.Helper()
+		dbPool := testhelper.TestDB(ctx, t)
+		accessor := dbaccess.New(dbPool)
+
+		// Create two agents
+		agent1 := fixture.InsertAgent(t, ctx, dbPool, "agent1")
+		agent2 := fixture.InsertAgent(t, ctx, dbPool, "agent2")
+
+		// Create a deployment and a config suite
+		createdDeployment, err := accessor.Querier().DeploymentInsertWithConfigSuite(ctx, accessor.Source(), &dbsqlc.DeploymentInsertWithConfigSuiteParams{
+			CreatedBy: "test-user",
+			Name:      "test-deployment",
+			Reviewers: []string{"reviewer1", "reviewer2"},
+		})
+		require.NoError(t, err)
+		require.NotNil(t, createdDeployment)
+
+		// update deployment status
+		_, err = dbPool.Exec(ctx, "UPDATE deployments SET status = $1 WHERE id = $2", status, createdDeployment.ID)
+		require.NoError(t, err)
+
+		// Create configs for each agent
+		config1 := fixture.InsertConfig2(t, ctx, dbPool, agent1.ID, createdDeployment.ConfigSuiteID, "test-user", map[string]string{"key": "value1"})
+		config2 := fixture.InsertConfig2(t, ctx, dbPool, agent2.ID, createdDeployment.ConfigSuiteID, "test-user", map[string]string{"key": "value2"})
+		require.NotNil(t, config1)
+		require.NotNil(t, config2)
+
+		deployment := &dbsqlc.Deployment{
+			ID:            createdDeployment.ID,
+			Name:          createdDeployment.Name,
+			Status:        createdDeployment.Status,
+			Reviewers:     createdDeployment.Reviewers,
+			ConfigSuiteID: createdDeployment.ConfigSuiteID,
+			CreatedBy:     createdDeployment.CreatedBy,
+			CreatedAt:     createdDeployment.CreatedAt,
+		}
+		return dbPool, accessor, deployment, agent1, agent2
+	}
+
+	t.Run("Successfully publish reviewing deployment", func(t *testing.T) {
+		t.Parallel()
+		_, accessor, createdDeployment, _, _ := setupDeploymentTest(t, "reviewing")
+
+		// Publish the deployment
+		publishRequest := api.AdminPublishDeploymentRequestObject{
+			Id:   int(createdDeployment.ID),
+			Body: &api.AdminPublishDeploymentJSONRequestBody{User: "admin"},
+		}
+		publishResponse, err := admin.PublishDeployment(ctx, logger, accessor, publishRequest)
+		assert.NoError(t, err)
+		require.IsType(t, api.AdminPublishDeployment201Response{}, publishResponse)
+
+		// Verify that the status has changed to 'deployed'
+		dbDeployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), int64(createdDeployment.ID))
+		require.NoError(t, err)
+		assert.EqualValues(t, "deployed", dbDeployment.Status)
+	})
+
+	t.Run("Successfully publish draft deployment", func(t *testing.T) {
+		t.Parallel()
+		_, accessor, createdDeployment, _, _ := setupDeploymentTest(t, "draft")
+
+		// Publish the deployment
+		publishRequest := api.AdminPublishDeploymentRequestObject{
+			Id:   int(createdDeployment.ID),
+			Body: &api.AdminPublishDeploymentJSONRequestBody{User: "admin"},
+		}
+		publishResponse, err := admin.PublishDeployment(ctx, logger, accessor, publishRequest)
+		assert.NoError(t, err)
+		require.IsType(t, api.AdminPublishDeployment201Response{}, publishResponse)
+
+		// Verify that the status has changed to 'deployed'
+		dbDeployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), int64(createdDeployment.ID))
+		require.NoError(t, err)
+		assert.EqualValues(t, "deployed", dbDeployment.Status)
+	})
+
+	t.Run("Attempt to publish already deployed deployment", func(t *testing.T) {
+		t.Parallel()
+		_, accessor, createdDeployment, _, _ := setupDeploymentTest(t, "deployed")
+
+		// Attempt to publish the already deployed deployment
+		publishRequest := api.AdminPublishDeploymentRequestObject{
+			Id:   int(createdDeployment.ID),
+			Body: &api.AdminPublishDeploymentJSONRequestBody{User: "admin"},
+		}
+		publishResponse, err := admin.PublishDeployment(ctx, logger, accessor, publishRequest)
+		assert.NoError(t, err)
+		require.IsType(t, api.AdminPublishDeployment400JSONResponse{}, publishResponse)
+
+		// Verify that the status hasn't changed
+		dbDeployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), int64(createdDeployment.ID))
+		require.NoError(t, err)
+		assert.EqualValues(t, "deployed", dbDeployment.Status)
+	})
+
+	t.Run("Database error", func(t *testing.T) {
+		t.Parallel()
+		dbPool, accessor, createdDeployment, _, _ := setupDeploymentTest(t, "reviewing")
+
+		// Close the database pool to simulate a database error
+		dbPool.Close()
+
+		// Attempt to publish the deployment
+		publishRequest := api.AdminPublishDeploymentRequestObject{
+			Id:   int(createdDeployment.ID),
+			Body: &api.AdminPublishDeploymentJSONRequestBody{User: "admin"},
+		}
+		publishResponse, err := admin.PublishDeployment(ctx, logger, accessor, publishRequest)
+		assert.NoError(t, err)
+		require.IsType(t, api.AdminPublishDeployment500JSONResponse{}, publishResponse)
+
+		errorResponse := publishResponse.(api.AdminPublishDeployment500JSONResponse)
+		assert.Contains(t, errorResponse.Error, "Cannot publish deployment")
+	})
+}
+
 func TestDeleteDeployment(t *testing.T) {
 	ctx := context.Background()
-	logger := slog.Default()
+	logger := testhelper.Logger(t)
 
 	t.Run("Successfully delete draft deployment", func(t *testing.T) {
 		t.Parallel()
@@ -522,13 +852,13 @@ func TestDeleteDeployment(t *testing.T) {
 		require.NotNil(t, createdDeployment)
 
 		// Delete the deployment
-		deleteRequest := api.AdminDeleteDeploymentRequestObject{Id: int(createdDeployment.ID)}
+		deleteRequest := api.AdminDeleteDeploymentRequestObject{Id: createdDeployment.ID}
 		deleteResponse, err := admin.DeleteDeployment(ctx, logger, accessor, deleteRequest)
 		assert.NoError(t, err)
 		require.IsType(t, api.AdminDeleteDeployment200Response{}, deleteResponse)
 
 		// Verify that the deployment no longer exists
-		_, err = accessor.Querier().DeploymentGetById(ctx, accessor.Source(), int64(createdDeployment.ID))
+		_, err = accessor.Querier().DeploymentGetById(ctx, accessor.Source(), createdDeployment.ID)
 		assert.Error(t, err)
 		assert.Equal(t, pgx.ErrNoRows, err)
 	})
@@ -561,13 +891,13 @@ func TestDeleteDeployment(t *testing.T) {
 		require.NoError(t, rows.Err())
 
 		// Attempt to delete the non-draft deployment
-		deleteRequest := api.AdminDeleteDeploymentRequestObject{Id: int(createdDeployment.ID)}
+		deleteRequest := api.AdminDeleteDeploymentRequestObject{Id: createdDeployment.ID}
 		deleteResponse, err := admin.DeleteDeployment(ctx, logger, accessor, deleteRequest)
 		assert.NoError(t, err)
 		require.IsType(t, api.AdminDeleteDeployment404Response{}, deleteResponse)
 
 		// Verify that the deployment still exists
-		dbDeployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), int64(createdDeployment.ID))
+		dbDeployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), createdDeployment.ID)
 		require.NoError(t, err)
 		assert.EqualValues(t, "reviewing", dbDeployment.Status)
 	})
@@ -602,7 +932,7 @@ func TestDeleteDeployment(t *testing.T) {
 		dbPool.Close()
 
 		// Attempt to delete the deployment
-		deleteRequest := api.AdminDeleteDeploymentRequestObject{Id: int(createdDeployment.ID)}
+		deleteRequest := api.AdminDeleteDeploymentRequestObject{Id: createdDeployment.ID}
 		deleteResponse, err := admin.DeleteDeployment(ctx, logger, accessor, deleteRequest)
 		assert.NoError(t, err)
 		require.IsType(t, api.AdminDeleteDeployment500JSONResponse{}, deleteResponse)

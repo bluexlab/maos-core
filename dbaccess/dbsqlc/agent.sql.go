@@ -108,11 +108,11 @@ FROM agents
 LEFT JOIN agent_token_count atc ON agents.id = atc.agent_id
 ORDER BY agents.name
 LIMIT $1::bigint
-OFFSET $1 * ($2::bigint - 1)
+OFFSET $1::bigint * ($2::bigint - 1)
 `
 
 type AgentListPagenatedParams struct {
-	PageSize interface{}
+	PageSize int64
 	Page     int64
 }
 

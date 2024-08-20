@@ -20,15 +20,16 @@ var (
 		"AdminUpdateAgent":         {"admin"},
 		"AdminDeleteAgent":         {"admin"},
 		"AdminGetAgentConfig":      {"admin"},
-		"AdminUpdateAgentConfig":   {"admin"},
 		"AdminListApiTokens":       {"admin"},
 		"AdminCreateApiToken":      {"admin"},
+		"AdminUpdateConfig":        {"admin"},
 		"AdminListDeployments":     {"admin"},
 		"AdminGetDeployment":       {"admin"},
 		"AdminCreateDeployment":    {"admin"},
 		"AdminUpdateDeployment":    {"admin"},
 		"AdminDeleteDeployment":    {"admin"},
 		"AdminSubmitDeployment":    {"admin"},
+		"AdminPublishDeployment":   {"admin"},
 	}
 )
 

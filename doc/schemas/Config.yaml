@@ -8,14 +8,21 @@ properties:
     format: int64
   agent_name:
     type: string
-  minAgentVersion:
+  min_agent_version:
     type: string
   content:
     type: object
+    additionalProperties:
+      type: string
   created_at:
     type: integer
     format: int64
   created_by:
+    type: string
+  updated_at:
+    type: integer
+    format: int64
+  updated_by:
     type: string
 
 required:

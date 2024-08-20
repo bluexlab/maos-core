@@ -407,7 +407,7 @@ func TestAdminDeleteAgentEndpoint(t *testing.T) {
 			agentID: 1,
 			token:   "admin-token",
 			setupFunc: func(ctx context.Context, t *testing.T, accessor dbaccess.Accessor, agentID int64) {
-				fixture.InsertConfig(t, ctx, accessor.Source(), agentID, map[string]interface{}{"key": "value"})
+				fixture.InsertConfig(t, ctx, accessor.Source(), agentID, map[string]string{"key": "value"})
 			},
 			expectedStatus: http.StatusConflict,
 			expectedBody:   "Agent has associated configs",

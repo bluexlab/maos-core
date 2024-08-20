@@ -1233,51 +1233,6 @@ paths:
           description: Agent not found
         '500':
           $ref: '#/components/responses/500'
-    post:
-      summary: Add/Update one specific Agent
-      description: >-
-        Add/Update the latest config of the Agent. Because config is immutable,
-        it will create a new config if the agent already has one.
-      operationId: adminUpdateAgentConfig
-      tags:
-        - Admin
-      parameters:
-        - in: path
-          name: id
-          schema:
-            type: integer
-            format: int64
-          description: Agent ID
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                content:
-                  type: object
-                  additionalProperties:
-                    type: string
-                min_agent_version:
-                  type: string
-                user:
-                  type: string
-              description: Config data to update
-              required:
-                - content
-                - user
-      responses:
-        '201':
-          description: Successful created
-        '400':
-          $ref: '#/components/responses/400'
-        '401':
-          description: Unauthorized
-        '404':
-          description: Agent not found
-        '500':
-          $ref: '#/components/responses/500'
   /v1/admin/deployments:
     get:
       summary: List Deployments
@@ -1350,6 +1305,10 @@ paths:
               properties:
                 name:
                   type: string
+                reviewers:
+                  type: array
+                  items:
+                    type: string
                 user:
                   type: string
               required:
@@ -1384,6 +1343,7 @@ paths:
           name: id
           schema:
             type: integer
+            format: int64
           description: Deployment ID
       responses:
         '200':
@@ -1392,8 +1352,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DeploymentDetail'
-              required:
-                - data
         '401':
           description: Unauthorized
         '404':
@@ -1410,6 +1368,7 @@ paths:
           name: id
           schema:
             type: integer
+            format: int64
           description: Deployment ID
       requestBody:
         required: true
@@ -1454,6 +1413,7 @@ paths:
           name: id
           schema:
             type: integer
+            format: int64
           description: Deployment ID
       responses:
         '200':
@@ -1486,6 +1446,91 @@ paths:
           description: Unauthorized
         '404':
           description: Deployment not found
+        '500':
+          $ref: '#/components/responses/500'
+  /v1/admin/deployments/{id}/publish:
+    post:
+      summary: >-
+        Publish the Deployment. Only draft deployments can be published. After
+        publishing, the deployment will be in `deployed` status.
+      operationId: adminPublishDeployment
+      tags:
+        - Admin
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: Deployment ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user:
+                  type: string
+                  description: who is publishing the deployment
+              required:
+                - user
+      responses:
+        '201':
+          description: Successful response
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Deployment not found
+        '500':
+          $ref: '#/components/responses/500'
+  /v1/admin/configs/{id}:
+    patch:
+      summary: Update a specific Config. Only draft configs can be updated.
+      operationId: adminUpdateConfig
+      tags:
+        - Admin
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          description: Config ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user:
+                  type: string
+                min_agent_version:
+                  type: string
+                content:
+                  type: object
+                  additionalProperties:
+                    type: string
+              required:
+                - user
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Config'
+                required:
+                  - data
+        '401':
+          description: Unauthorized
+        '404':
+          description: Config not found
         '500':
           $ref: '#/components/responses/500'
 components:
@@ -1842,14 +1887,21 @@ components:
           format: int64
         agent_name:
           type: string
-        minAgentVersion:
+        min_agent_version:
           type: string
         content:
           type: object
+          additionalProperties:
+            type: string
         created_at:
           type: integer
           format: int64
         created_by:
+          type: string
+        updated_at:
+          type: integer
+          format: int64
+        updated_by:
           type: string
       required:
         - id
@@ -1874,7 +1926,15 @@ components:
             - approved
             - rejected
             - deployed
+            - retired
             - cancelled
+        reviewers:
+          type: array
+          items:
+            type: string
+        config_suite_id:
+          type: integer
+          format: int64
         created_at:
           type: integer
           format: int64
@@ -1894,6 +1954,7 @@ components:
         - id
         - name
         - status
+        - reviewers
         - created_at
         - created_by
     DeploymentDetail:
@@ -1912,7 +1973,12 @@ components:
             - approved
             - rejected
             - deployed
+            - retired
             - cancelled
+        reviewers:
+          type: array
+          items:
+            type: string
         created_at:
           type: integer
           format: int64
@@ -1936,6 +2002,7 @@ components:
         - id
         - name
         - status
+        - reviewers
         - created_at
         - created_by
   responses:

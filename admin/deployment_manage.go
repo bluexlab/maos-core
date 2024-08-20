@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 
@@ -57,6 +58,76 @@ func ListDeployments(ctx context.Context, logger *slog.Logger, accessor dbaccess
 	return response, nil
 }
 
+func GetDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminGetDeploymentRequestObject) (api.AdminGetDeploymentResponseObject, error) {
+	logger.Info("AdminGetDeployment", "id", request.Id)
+
+	deployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), int64(request.Id))
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return api.AdminGetDeployment404Response{}, nil
+		}
+
+		logger.Error("Cannot get deployment", "error", err)
+		return api.AdminGetDeployment500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot get deployment: %v", err)},
+		}, nil
+	}
+
+	if deployment.ConfigSuiteID == nil {
+		return api.AdminGetDeployment200JSONResponse{
+			Id:         deployment.ID,
+			Name:       deployment.Name,
+			Status:     api.DeploymentDetailStatus(deployment.Status),
+			Reviewers:  deployment.Reviewers,
+			CreatedBy:  deployment.CreatedBy,
+			CreatedAt:  deployment.CreatedAt,
+			ApprovedBy: deployment.ApprovedBy,
+			ApprovedAt: deployment.ApprovedAt,
+			FinishedBy: deployment.FinishedBy,
+			FinishedAt: deployment.FinishedAt,
+		}, nil
+	}
+
+	configs, err := accessor.Querier().ConfigListBySuiteIdGroupByAgent(ctx, accessor.Source(), *deployment.ConfigSuiteID)
+	if err != nil {
+		logger.Error("Cannot get configs", "error", err)
+		return api.AdminGetDeployment500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot get configs: %v", err)},
+		}, nil
+	}
+
+	resultConfigs := lo.Map(configs, func(row *dbsqlc.ConfigListBySuiteIdGroupByAgentRow, _ int) api.Config {
+		var content map[string]string
+		err := json.Unmarshal(row.Content, &content)
+		if err != nil {
+			logger.Error("Cannot unmarshal content", "error", err)
+		}
+		return api.Config{
+			Id:              row.ID,
+			AgentId:         row.AgentId,
+			AgentName:       row.AgentName,
+			MinAgentVersion: row.MinAgentVersion,
+			CreatedAt:       row.CreatedAt,
+			CreatedBy:       row.CreatedBy,
+			Content:         content,
+		}
+	})
+
+	return api.AdminGetDeployment200JSONResponse{
+		Id:         deployment.ID,
+		Name:       deployment.Name,
+		Status:     api.DeploymentDetailStatus(deployment.Status),
+		Reviewers:  deployment.Reviewers,
+		CreatedBy:  deployment.CreatedBy,
+		CreatedAt:  deployment.CreatedAt,
+		ApprovedBy: deployment.ApprovedBy,
+		ApprovedAt: deployment.ApprovedAt,
+		FinishedBy: deployment.FinishedBy,
+		FinishedAt: deployment.FinishedAt,
+		Configs:    &resultConfigs,
+	}, nil
+}
+
 func CreateDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminCreateDeploymentRequestObject) (api.AdminCreateDeploymentResponseObject, error) {
 	logger.Info("AdminCreateDeployment", "request", request.Body)
 
@@ -66,8 +137,9 @@ func CreateDeployment(ctx context.Context, logger *slog.Logger, accessor dbacces
 		}, nil
 	}
 
-	deployment, err := accessor.Querier().DeploymentInsert(ctx, accessor.Source(), &dbsqlc.DeploymentInsertParams{
+	deployment, err := accessor.Querier().DeploymentInsertWithConfigSuite(ctx, accessor.Source(), &dbsqlc.DeploymentInsertWithConfigSuiteParams{
 		Name:      request.Body.Name,
+		Reviewers: lo.FromPtrOr(request.Body.Reviewers, nil),
 		CreatedBy: request.Body.User,
 	})
 	if err != nil {
@@ -79,15 +151,17 @@ func CreateDeployment(ctx context.Context, logger *slog.Logger, accessor dbacces
 
 	return api.AdminCreateDeployment201JSONResponse{
 		Data: api.Deployment{
-			Id:         deployment.ID,
-			Name:       deployment.Name,
-			Status:     api.DeploymentStatus(deployment.Status),
-			CreatedBy:  deployment.CreatedBy,
-			CreatedAt:  deployment.CreatedAt,
-			ApprovedBy: deployment.ApprovedBy,
-			ApprovedAt: deployment.ApprovedAt,
-			FinishedBy: deployment.FinishedBy,
-			FinishedAt: deployment.FinishedAt,
+			Id:            deployment.ID,
+			Name:          deployment.Name,
+			Status:        api.DeploymentStatus(deployment.Status),
+			Reviewers:     deployment.Reviewers,
+			ConfigSuiteId: deployment.ConfigSuiteID,
+			CreatedBy:     deployment.CreatedBy,
+			CreatedAt:     deployment.CreatedAt,
+			ApprovedBy:    deployment.ApprovedBy,
+			ApprovedAt:    deployment.ApprovedAt,
+			FinishedBy:    deployment.FinishedBy,
+			FinishedAt:    deployment.FinishedAt,
 		},
 	}, nil
 }
@@ -114,15 +188,16 @@ func UpdateDeployment(ctx context.Context, logger *slog.Logger, accessor dbacces
 
 	return api.AdminUpdateDeployment200JSONResponse{
 		Data: api.Deployment{
-			Id:         deployment.ID,
-			Name:       deployment.Name,
-			Status:     api.DeploymentStatus(deployment.Status),
-			CreatedBy:  deployment.CreatedBy,
-			CreatedAt:  deployment.CreatedAt,
-			ApprovedBy: deployment.ApprovedBy,
-			ApprovedAt: deployment.ApprovedAt,
-			FinishedBy: deployment.FinishedBy,
-			FinishedAt: deployment.FinishedAt,
+			Id:            deployment.ID,
+			Name:          deployment.Name,
+			Status:        api.DeploymentStatus(deployment.Status),
+			ConfigSuiteId: deployment.ConfigSuiteID,
+			CreatedBy:     deployment.CreatedBy,
+			CreatedAt:     deployment.CreatedAt,
+			ApprovedBy:    deployment.ApprovedBy,
+			ApprovedAt:    deployment.ApprovedAt,
+			FinishedBy:    deployment.FinishedBy,
+			FinishedAt:    deployment.FinishedAt,
 		},
 	}, nil
 }
@@ -146,6 +221,75 @@ func SubmitDeployment(ctx context.Context, logger *slog.Logger, accessor dbacces
 
 	logger.Info("Deployment submitted successfully", "id", deployment.ID, "status", deployment.Status)
 	return api.AdminSubmitDeployment200Response{}, nil
+}
+
+func PublishDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminPublishDeploymentRequestObject) (api.AdminPublishDeploymentResponseObject, error) {
+	logger.Info("AdminPublishDeployment", "id", request.Id)
+
+	if request.Body == nil || request.Body.User == "" {
+		return api.AdminPublishDeployment400JSONResponse{
+			N400JSONResponse: api.N400JSONResponse{Error: "Missing required field"},
+		}, nil
+	}
+
+	tx, err := accessor.Source().Begin(ctx)
+	if err != nil {
+		logger.Error("Cannot start transaction", "error", err)
+		return api.AdminPublishDeployment500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot publish deployment. Cannot start transaction: %v", err)},
+		}, nil
+	}
+	defer tx.Rollback(ctx)
+
+	// Query deployment and check status
+	deployment, err := accessor.Querier().DeploymentGetById(ctx, tx, int64(request.Id))
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return api.AdminPublishDeployment404Response{}, nil
+		}
+		logger.Error("Cannot get deployment", "error", err)
+		return api.AdminPublishDeployment500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot publish deployment. Cannot get deployment: %v", err)},
+		}, nil
+	}
+
+	if deployment.Status != "draft" && deployment.Status != "reviewing" {
+		return api.AdminPublishDeployment400JSONResponse{
+			N400JSONResponse: api.N400JSONResponse{Error: "Deployment must be in draft or reviewing status to be published"},
+		}, nil
+	}
+
+	if deployment.ConfigSuiteID == nil {
+		logger.Error("Cannot publish deployment", "error", "Deployment has no config suite", "id", deployment.ID)
+		return api.AdminPublishDeployment500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: "Cannot publish deployment. Deployment has no config suite"},
+		}, nil
+	}
+
+	// Activate config suite
+	err = accessor.Querier().ConfigSuiteActivate(ctx, tx, *deployment.ConfigSuiteID)
+	if err != nil {
+		logger.Error("Cannot activate config suite", "error", err)
+		return api.AdminPublishDeployment500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot publish deployment. Cannot activate config suite: %v", err)},
+		}, nil
+	}
+
+	// Update deployment status to deployed
+	_, err = accessor.Querier().DeploymentPublish(ctx, tx, &dbsqlc.DeploymentPublishParams{
+		ID:         int64(request.Id),
+		ApprovedBy: request.Body.User,
+	})
+	if err != nil {
+		logger.Error("Cannot publish deployment", "error", err)
+		return api.AdminPublishDeployment500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot publish deployment: %v", err)},
+		}, nil
+	}
+
+	tx.Commit(ctx)
+
+	return api.AdminPublishDeployment201Response{}, nil
 }
 
 func DeleteDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminDeleteDeploymentRequestObject) (api.AdminDeleteDeploymentResponseObject, error) {

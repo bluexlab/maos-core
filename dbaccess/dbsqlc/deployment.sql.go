@@ -60,65 +60,6 @@ func (q *Queries) DeploymentGetById(ctx context.Context, db DBTX, id int64) (*De
 	return &i, err
 }
 
-const deploymentGetWithConfigs = `-- name: DeploymentGetWithConfigs :one
-SELECT deployments.id, deployments.name, deployments.status, deployments.reviewers, deployments.config_suite_id, deployments.created_by, deployments.created_at, deployments.approved_by, deployments.approved_at, deployments.finished_by, deployments.finished_at, configs.id, configs.agent_id, configs.config_suite_id, configs.content, configs.min_agent_version, configs.created_by, configs.created_at, configs.updated_by, configs.updated_at
-FROM deployments
-LEFT JOIN configs ON deployments.id = configs.deployment_id
-WHERE deployments.id = $1::bigint
-LIMIT 1
-`
-
-type DeploymentGetWithConfigsRow struct {
-	ID              int64
-	Name            string
-	Status          DeploymentStatus
-	Reviewers       []string
-	ConfigSuiteID   *int64
-	CreatedBy       string
-	CreatedAt       int64
-	ApprovedBy      *string
-	ApprovedAt      *int64
-	FinishedBy      *string
-	FinishedAt      *int64
-	ID_2            *int64
-	AgentId         *int64
-	ConfigSuiteID_2 *int64
-	Content         []byte
-	MinAgentVersion *string
-	CreatedBy_2     *string
-	CreatedAt_2     *int64
-	UpdatedBy       *string
-	UpdatedAt       *int64
-}
-
-func (q *Queries) DeploymentGetWithConfigs(ctx context.Context, db DBTX, id int64) (*DeploymentGetWithConfigsRow, error) {
-	row := db.QueryRow(ctx, deploymentGetWithConfigs, id)
-	var i DeploymentGetWithConfigsRow
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.Status,
-		&i.Reviewers,
-		&i.ConfigSuiteID,
-		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.ApprovedBy,
-		&i.ApprovedAt,
-		&i.FinishedBy,
-		&i.FinishedAt,
-		&i.ID_2,
-		&i.AgentId,
-		&i.ConfigSuiteID_2,
-		&i.Content,
-		&i.MinAgentVersion,
-		&i.CreatedBy_2,
-		&i.CreatedAt_2,
-		&i.UpdatedBy,
-		&i.UpdatedAt,
-	)
-	return &i, err
-}
-
 const deploymentInsert = `-- name: DeploymentInsert :one
 INSERT INTO deployments (
   name,
@@ -166,6 +107,93 @@ func (q *Queries) DeploymentInsert(ctx context.Context, db DBTX, arg *Deployment
 	return &i, err
 }
 
+const deploymentInsertWithConfigSuite = `-- name: DeploymentInsertWithConfigSuite :one
+WITH inserted_config_suite AS (
+  INSERT INTO config_suites (created_by)
+  VALUES ($1::text)
+  RETURNING id
+),
+inserted_deployment AS (
+  INSERT INTO deployments (
+    name,
+    status,
+    reviewers,
+    created_by,
+    config_suite_id
+  )
+  VALUES (
+    $2::text,
+    'draft',
+    COALESCE($3::text[], '{}'),
+    $1::text,
+    (SELECT id FROM inserted_config_suite)
+  )
+  RETURNING id, name, status, reviewers, config_suite_id, created_by, created_at, approved_by, approved_at, finished_by, finished_at
+),
+agent_configs AS (
+  INSERT INTO configs (agent_id, config_suite_id, created_by, min_agent_version, content)
+  SELECT
+    agents.id,
+    (SELECT id FROM inserted_config_suite),
+    $1::text,
+    COALESCE(
+      (SELECT min_agent_version FROM configs WHERE agent_id = agents.id ORDER BY created_at DESC LIMIT 1),
+      NULL
+    ),
+    COALESCE(
+      (SELECT content FROM configs WHERE agent_id = agents.id ORDER BY created_at DESC LIMIT 1),
+      '{}'::jsonb
+    )
+  FROM agents
+)
+SELECT id, name, status, reviewers, config_suite_id, created_by, created_at, approved_by, approved_at, finished_by, finished_at FROM inserted_deployment
+`
+
+type DeploymentInsertWithConfigSuiteParams struct {
+	CreatedBy string
+	Name      string
+	Reviewers []string
+}
+
+type DeploymentInsertWithConfigSuiteRow struct {
+	ID            int64
+	Name          string
+	Status        DeploymentStatus
+	Reviewers     []string
+	ConfigSuiteID *int64
+	CreatedBy     string
+	CreatedAt     int64
+	ApprovedBy    *string
+	ApprovedAt    *int64
+	FinishedBy    *string
+	FinishedAt    *int64
+}
+
+// Create a new deployment with an associated config suite.
+// For each agent:
+//  1. If the agent has an existing config, duplicate its latest config.
+//  2. If the agent has no existing config, create a new config with default values.
+//
+// Associate all these new configs with the newly created deployment and config suite.
+func (q *Queries) DeploymentInsertWithConfigSuite(ctx context.Context, db DBTX, arg *DeploymentInsertWithConfigSuiteParams) (*DeploymentInsertWithConfigSuiteRow, error) {
+	row := db.QueryRow(ctx, deploymentInsertWithConfigSuite, arg.CreatedBy, arg.Name, arg.Reviewers)
+	var i DeploymentInsertWithConfigSuiteRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Status,
+		&i.Reviewers,
+		&i.ConfigSuiteID,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.ApprovedBy,
+		&i.ApprovedAt,
+		&i.FinishedBy,
+		&i.FinishedAt,
+	)
+	return &i, err
+}
+
 const deploymentListPaginated = `-- name: DeploymentListPaginated :many
 SELECT
   id,
@@ -179,7 +207,7 @@ SELECT
   finished_by,
   COUNT(*) OVER() AS total_count
 FROM deployments
-ORDER BY created_at DESC, id DESC
+ORDER BY status,created_at DESC, id DESC
 LIMIT $1::bigint
 OFFSET $1 * ($2::bigint - 1)
 `
@@ -231,6 +259,48 @@ func (q *Queries) DeploymentListPaginated(ctx context.Context, db DBTX, arg *Dep
 		return nil, err
 	}
 	return items, nil
+}
+
+const deploymentPublish = `-- name: DeploymentPublish :one
+WITH current_deployed AS (
+  UPDATE deployments
+  SET status = 'retired',
+    finished_at = EXTRACT(EPOCH FROM NOW()),
+    finished_by = $1::text
+  WHERE status = 'deployed'
+  RETURNING id
+)
+UPDATE deployments
+SET status = 'deployed',
+approved_at = EXTRACT(EPOCH FROM NOW()),
+approved_by = $1::text
+WHERE id = $2::bigint AND (status = 'reviewing' OR status = 'draft')
+RETURNING id, name, status, reviewers, config_suite_id, created_by, created_at, approved_by, approved_at, finished_by, finished_at
+`
+
+type DeploymentPublishParams struct {
+	ApprovedBy string
+	ID         int64
+}
+
+// it sets current deployed deployment status to retired and the new deployment status to deployed
+func (q *Queries) DeploymentPublish(ctx context.Context, db DBTX, arg *DeploymentPublishParams) (*Deployment, error) {
+	row := db.QueryRow(ctx, deploymentPublish, arg.ApprovedBy, arg.ID)
+	var i Deployment
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Status,
+		&i.Reviewers,
+		&i.ConfigSuiteID,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.ApprovedBy,
+		&i.ApprovedAt,
+		&i.FinishedBy,
+		&i.FinishedAt,
+	)
+	return &i, err
 }
 
 const deploymentSubmitForReview = `-- name: DeploymentSubmitForReview :one

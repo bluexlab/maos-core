@@ -187,13 +187,13 @@ func (s *APIHandler) AdminGetAgentConfig(ctx context.Context, request api.AdminG
 	return admin.AdminGetAgentConfig(ctx, s.logger, s.accessor, request)
 }
 
-func (s *APIHandler) AdminUpdateAgentConfig(ctx context.Context, request api.AdminUpdateAgentConfigRequestObject) (api.AdminUpdateAgentConfigResponseObject, error) {
-	token := ValidatePermissions(ctx, "AdminUpdateAgentConfig")
-	if token == nil {
-		return api.AdminUpdateAgentConfig401Response{}, nil
-	}
-	return admin.AdminUpdateAgentConfig(ctx, s.logger, s.accessor, request)
-}
+// func (s *APIHandler) AdminUpdateAgentConfig(ctx context.Context, request api.AdminUpdateAgentConfigRequestObject) (api.AdminUpdateAgentConfigResponseObject, error) {
+// 	token := ValidatePermissions(ctx, "AdminUpdateAgentConfig")
+// 	if token == nil {
+// 		return api.AdminUpdateAgentConfig401Response{}, nil
+// 	}
+// 	return admin.AdminUpdateAgentConfig(ctx, s.logger, s.accessor, request)
+// }
 
 func (s *APIHandler) AdminListApiTokens(ctx context.Context, request api.AdminListApiTokensRequestObject) (api.AdminListApiTokensResponseObject, error) {
 	token := ValidatePermissions(ctx, "AdminListApiTokens")
@@ -221,7 +221,12 @@ func (s *APIHandler) AdminListDeployments(ctx context.Context, request api.Admin
 }
 
 func (s *APIHandler) AdminGetDeployment(ctx context.Context, request api.AdminGetDeploymentRequestObject) (api.AdminGetDeploymentResponseObject, error) {
-	panic("not implemented")
+	token := ValidatePermissions(ctx, "AdminGetDeployment")
+	if token == nil {
+		return api.AdminGetDeployment401Response{}, nil
+	}
+
+	return admin.GetDeployment(ctx, s.logger, s.accessor, request)
 }
 
 func (s *APIHandler) AdminCreateDeployment(ctx context.Context, request api.AdminCreateDeploymentRequestObject) (api.AdminCreateDeploymentResponseObject, error) {
@@ -249,12 +254,28 @@ func (s *APIHandler) AdminSubmitDeployment(ctx context.Context, request api.Admi
 	return admin.SubmitDeployment(ctx, s.logger, s.accessor, request)
 }
 
+func (s *APIHandler) AdminPublishDeployment(ctx context.Context, request api.AdminPublishDeploymentRequestObject) (api.AdminPublishDeploymentResponseObject, error) {
+	token := ValidatePermissions(ctx, "AdminPublishDeployment")
+	if token == nil {
+		return api.AdminPublishDeployment401Response{}, nil
+	}
+	return admin.PublishDeployment(ctx, s.logger, s.accessor, request)
+}
+
 func (s *APIHandler) AdminDeleteDeployment(ctx context.Context, request api.AdminDeleteDeploymentRequestObject) (api.AdminDeleteDeploymentResponseObject, error) {
 	token := ValidatePermissions(ctx, "AdminDeleteDeployment")
 	if token == nil {
 		return api.AdminDeleteDeployment401Response{}, nil
 	}
 	return admin.DeleteDeployment(ctx, s.logger, s.accessor, request)
+}
+
+func (s *APIHandler) AdminUpdateConfig(ctx context.Context, request api.AdminUpdateConfigRequestObject) (api.AdminUpdateConfigResponseObject, error) {
+	token := ValidatePermissions(ctx, "AdminUpdateConfig")
+	if token == nil {
+		return api.AdminUpdateConfig401Response{}, nil
+	}
+	return admin.UpdateConfig(ctx, s.logger, s.accessor, request)
 }
 
 func (s *APIHandler) GetHealth(ctx context.Context, request api.GetHealthRequestObject) (api.GetHealthResponseObject, error) {

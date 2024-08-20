@@ -84,6 +84,12 @@ paths:
   /v1/admin/deployments/{id}/submit:
     $ref: "./resources/admin/deployment_submit.yaml"
 
+  /v1/admin/deployments/{id}/publish:
+    $ref: "./resources/admin/deployment_publish.yaml"
+
+  /v1/admin/configs/{id}:
+    $ref: "./resources/admin/config.yaml"
+
 components:
   securitySchemes:
     bearerAuth:

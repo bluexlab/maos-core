@@ -15,7 +15,7 @@ FROM agents
 LEFT JOIN agent_token_count atc ON agents.id = atc.agent_id
 ORDER BY agents.name
 LIMIT sqlc.arg(page_size)::bigint
-OFFSET sqlc.arg(page_size) * (sqlc.arg(page)::bigint - 1);
+OFFSET sqlc.arg(page_size)::bigint * (sqlc.arg(page)::bigint - 1);
 
 -- name: AgentFindById :one
 SELECT *

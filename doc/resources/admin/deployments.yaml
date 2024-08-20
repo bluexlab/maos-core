@@ -70,6 +70,10 @@ post:
           properties:
             name:
               type: string
+            reviewers:
+              type: array
+              items:
+                type: string
             user:
               type: string
           required:

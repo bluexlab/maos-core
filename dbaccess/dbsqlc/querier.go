@@ -19,12 +19,25 @@ type Querier interface {
 	ApiTokenInsert(ctx context.Context, db DBTX, arg *ApiTokenInsertParams) (*ApiToken, error)
 	ApiTokenListByPage(ctx context.Context, db DBTX, arg *ApiTokenListByPageParams) ([]*ApiTokenListByPageRow, error)
 	ConfigFindByAgentId(ctx context.Context, db DBTX, agentID int64) (*ConfigFindByAgentIdRow, error)
+	ConfigFindByAgentIdAndSuiteId(ctx context.Context, db DBTX, arg *ConfigFindByAgentIdAndSuiteIdParams) (*ConfigFindByAgentIdAndSuiteIdRow, error)
 	ConfigInsert(ctx context.Context, db DBTX, arg *ConfigInsertParams) (*Config, error)
+	ConfigListBySuiteIdGroupByAgent(ctx context.Context, db DBTX, configSuiteID int64) ([]*ConfigListBySuiteIdGroupByAgentRow, error)
+	// Deactivate all other config suites and then activate the given config suite
+	ConfigSuiteActivate(ctx context.Context, db DBTX, id int64) error
+	ConfigSuiteGetById(ctx context.Context, db DBTX, id int64) (*ConfigSuite, error)
+	ConfigUpdateInactiveContentByCreator(ctx context.Context, db DBTX, arg *ConfigUpdateInactiveContentByCreatorParams) (*ConfigUpdateInactiveContentByCreatorRow, error)
 	DeploymentDelete(ctx context.Context, db DBTX, id int64) (*Deployment, error)
 	DeploymentGetById(ctx context.Context, db DBTX, id int64) (*Deployment, error)
-	DeploymentGetWithConfigs(ctx context.Context, db DBTX, id int64) (*DeploymentGetWithConfigsRow, error)
 	DeploymentInsert(ctx context.Context, db DBTX, arg *DeploymentInsertParams) (*Deployment, error)
+	// Create a new deployment with an associated config suite.
+	// For each agent:
+	//   1. If the agent has an existing config, duplicate its latest config.
+	//   2. If the agent has no existing config, create a new config with default values.
+	// Associate all these new configs with the newly created deployment and config suite.
+	DeploymentInsertWithConfigSuite(ctx context.Context, db DBTX, arg *DeploymentInsertWithConfigSuiteParams) (*DeploymentInsertWithConfigSuiteRow, error)
 	DeploymentListPaginated(ctx context.Context, db DBTX, arg *DeploymentListPaginatedParams) ([]*DeploymentListPaginatedRow, error)
+	// it sets current deployed deployment status to retired and the new deployment status to deployed
+	DeploymentPublish(ctx context.Context, db DBTX, arg *DeploymentPublishParams) (*Deployment, error)
 	DeploymentSubmitForReview(ctx context.Context, db DBTX, id int64) (*Deployment, error)
 	DeploymentUpdate(ctx context.Context, db DBTX, arg *DeploymentUpdateParams) (*Deployment, error)
 	InvocationFindById(ctx context.Context, db DBTX, id int64) (*Invocation, error)

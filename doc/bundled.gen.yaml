@@ -1203,36 +1203,6 @@ paths:
           description: Agent is referenced by config
         '500':
           $ref: '#/components/responses/500'
-  /v1/admin/agents/{id}/config:
-    get:
-      summary: Get the latest config of the Agent
-      operationId: adminGetAgentConfig
-      tags:
-        - Admin
-      parameters:
-        - in: path
-          name: id
-          schema:
-            type: integer
-          description: Agent ID
-      responses:
-        '200':
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    $ref: '#/components/schemas/Config'
-                required:
-                  - data
-        '401':
-          description: Unauthorized
-        '404':
-          description: Agent not found
-        '500':
-          $ref: '#/components/responses/500'
   /v1/admin/deployments:
     get:
       summary: List Deployments
@@ -1531,6 +1501,58 @@ paths:
           description: Unauthorized
         '404':
           description: Config not found
+        '500':
+          $ref: '#/components/responses/500'
+  /v1/admin/setting:
+    get:
+      summary: Get system setting
+      operationId: adminGetSetting
+      tags:
+        - Admin
+      responses:
+        '200':
+          description: Current system setting
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Setting'
+              required:
+                - data
+        '401':
+          description: Unauthorized
+        '500':
+          $ref: '#/components/responses/500'
+    patch:
+      summary: Update system setting
+      operationId: adminUpdateSetting
+      tags:
+        - Admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cluster_name:
+                  type: string
+                deployment_approve_required:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated system setting
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Setting'
+              required:
+                - data
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Deployment not found
         '500':
           $ref: '#/components/responses/500'
 components:
@@ -1876,40 +1898,6 @@ components:
         - name
       example:
         name: agent-16888
-    Config:
-      type: object
-      properties:
-        id:
-          type: integer
-          format: int64
-        agent_id:
-          type: integer
-          format: int64
-        agent_name:
-          type: string
-        min_agent_version:
-          type: string
-        content:
-          type: object
-          additionalProperties:
-            type: string
-        created_at:
-          type: integer
-          format: int64
-        created_by:
-          type: string
-        updated_at:
-          type: integer
-          format: int64
-        updated_by:
-          type: string
-      required:
-        - id
-        - agent_id
-        - agent_name
-        - content
-        - created_at
-        - created_by
     Deployment:
       type: object
       properties:
@@ -1955,6 +1943,40 @@ components:
         - name
         - status
         - reviewers
+        - created_at
+        - created_by
+    Config:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        agent_id:
+          type: integer
+          format: int64
+        agent_name:
+          type: string
+        min_agent_version:
+          type: string
+        content:
+          type: object
+          additionalProperties:
+            type: string
+        created_at:
+          type: integer
+          format: int64
+        created_by:
+          type: string
+        updated_at:
+          type: integer
+          format: int64
+        updated_by:
+          type: string
+      required:
+        - id
+        - agent_id
+        - agent_name
+        - content
         - created_at
         - created_by
     DeploymentDetail:
@@ -2005,6 +2027,16 @@ components:
         - reviewers
         - created_at
         - created_by
+    Setting:
+      type: object
+      properties:
+        deployment_approve_required:
+          type: boolean
+        cluster_name:
+          type: string
+      required:
+        - deployment_approve_required
+        - cluster_name
   responses:
     '400':
       description: Bad Request

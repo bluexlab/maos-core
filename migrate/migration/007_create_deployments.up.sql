@@ -14,6 +14,7 @@ CREATE TABLE deployments(
   status deployment_status NOT NULL DEFAULT 'draft',
   reviewers text[] NOT NULL DEFAULT '{}',
   config_suite_id bigint REFERENCES config_suites(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+  notes jsonb,
   created_by text NOT NULL,
   created_at bigint NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW()),
   approved_by text,

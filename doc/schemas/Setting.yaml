@@ -1,0 +1,9 @@
+type: object
+properties:
+  deployment_approve_required:
+    type: boolean
+  cluster_name:
+    type: string
+required:
+  - deployment_approve_required
+  - cluster_name

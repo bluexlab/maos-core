@@ -72,9 +72,6 @@ paths:
   /v1/admin/agents/{id}:
     $ref: "./resources/admin/agent.yaml"
 
-  /v1/admin/agents/{id}/config:
-    $ref: "./resources/admin/agent_config.yaml"
-
   /v1/admin/deployments:
     $ref: "./resources/admin/deployments.yaml"
 
@@ -89,6 +86,9 @@ paths:
 
   /v1/admin/configs/{id}:
     $ref: "./resources/admin/config.yaml"
+
+  /v1/admin/setting:
+    $ref: "./resources/admin/setting.yaml"
 
 components:
   securitySchemes:

@@ -52,6 +52,8 @@ type Querier interface {
 	PgNotifyOne(ctx context.Context, db DBTX, arg *PgNotifyOneParams) error
 	QueueFindById(ctx context.Context, db DBTX, id int64) (*Queue, error)
 	QueueInsert(ctx context.Context, db DBTX, arg *QueueInsertParams) (*Queue, error)
+	SettingGetSystem(ctx context.Context, db DBTX) (*Settings, error)
+	SettingUpdateSystem(ctx context.Context, db DBTX, value []byte) (*Settings, error)
 	TableExists(ctx context.Context, db DBTX, tableName string) (bool, error)
 }
 

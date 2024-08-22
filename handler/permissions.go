@@ -30,6 +30,8 @@ var (
 		"AdminDeleteDeployment":    {"admin"},
 		"AdminSubmitDeployment":    {"admin"},
 		"AdminPublishDeployment":   {"admin"},
+		"AdminGetSetting":          {"admin"},
+		"AdminUpdateSetting":       {"admin"},
 	}
 )
 

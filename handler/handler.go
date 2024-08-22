@@ -179,22 +179,6 @@ func (s *APIHandler) AdminDeleteAgent(ctx context.Context, request api.AdminDele
 	return admin.DeleteAgent(ctx, s.logger, s.accessor, request)
 }
 
-func (s *APIHandler) AdminGetAgentConfig(ctx context.Context, request api.AdminGetAgentConfigRequestObject) (api.AdminGetAgentConfigResponseObject, error) {
-	token := ValidatePermissions(ctx, "AdminGetAgentConfig")
-	if token == nil {
-		return api.AdminGetAgentConfig401Response{}, nil
-	}
-	return admin.AdminGetAgentConfig(ctx, s.logger, s.accessor, request)
-}
-
-// func (s *APIHandler) AdminUpdateAgentConfig(ctx context.Context, request api.AdminUpdateAgentConfigRequestObject) (api.AdminUpdateAgentConfigResponseObject, error) {
-// 	token := ValidatePermissions(ctx, "AdminUpdateAgentConfig")
-// 	if token == nil {
-// 		return api.AdminUpdateAgentConfig401Response{}, nil
-// 	}
-// 	return admin.AdminUpdateAgentConfig(ctx, s.logger, s.accessor, request)
-// }
-
 func (s *APIHandler) AdminListApiTokens(ctx context.Context, request api.AdminListApiTokensRequestObject) (api.AdminListApiTokensResponseObject, error) {
 	token := ValidatePermissions(ctx, "AdminListApiTokens")
 	if token == nil {
@@ -276,6 +260,22 @@ func (s *APIHandler) AdminUpdateConfig(ctx context.Context, request api.AdminUpd
 		return api.AdminUpdateConfig401Response{}, nil
 	}
 	return admin.UpdateConfig(ctx, s.logger, s.accessor, request)
+}
+
+func (s *APIHandler) AdminGetSetting(ctx context.Context, request api.AdminGetSettingRequestObject) (api.AdminGetSettingResponseObject, error) {
+	token := ValidatePermissions(ctx, "AdminGetSetting")
+	if token == nil {
+		return api.AdminGetSetting401Response{}, nil
+	}
+	return admin.GetSetting(ctx, s.logger, s.accessor, request)
+}
+
+func (s *APIHandler) AdminUpdateSetting(ctx context.Context, request api.AdminUpdateSettingRequestObject) (api.AdminUpdateSettingResponseObject, error) {
+	token := ValidatePermissions(ctx, "AdminUpdateSetting")
+	if token == nil {
+		return api.AdminUpdateSetting401Response{}, nil
+	}
+	return admin.UpdateSetting(ctx, s.logger, s.accessor, request)
 }
 
 func (s *APIHandler) GetHealth(ctx context.Context, request api.GetHealthRequestObject) (api.GetHealthResponseObject, error) {

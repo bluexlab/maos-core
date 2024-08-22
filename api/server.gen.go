@@ -343,6 +343,12 @@ type RerankResult struct {
 	Text *string `json:"text,omitempty"`
 }
 
+// Setting defines model for Setting.
+type Setting struct {
+	ClusterName               string `json:"cluster_name"`
+	DeploymentApproveRequired bool   `json:"deployment_approve_required"`
+}
+
 // N400 defines model for 400.
 type N400 = Error
 
@@ -418,6 +424,12 @@ type AdminUpdateDeploymentJSONBody struct {
 type AdminPublishDeploymentJSONBody struct {
 	// User who is publishing the deployment
 	User string `json:"user"`
+}
+
+// AdminUpdateSettingJSONBody defines parameters for AdminUpdateSetting.
+type AdminUpdateSettingJSONBody struct {
+	ClusterName               *string `json:"cluster_name,omitempty"`
+	DeploymentApproveRequired *bool   `json:"deployment_approve_required,omitempty"`
 }
 
 // CreateCompletionJSONBody defines parameters for CreateCompletion.
@@ -552,6 +564,9 @@ type AdminUpdateDeploymentJSONRequestBody AdminUpdateDeploymentJSONBody
 
 // AdminPublishDeploymentJSONRequestBody defines body for AdminPublishDeployment for application/json ContentType.
 type AdminPublishDeploymentJSONRequestBody AdminPublishDeploymentJSONBody
+
+// AdminUpdateSettingJSONRequestBody defines body for AdminUpdateSetting for application/json ContentType.
+type AdminUpdateSettingJSONRequestBody AdminUpdateSettingJSONBody
 
 // CreateCompletionJSONRequestBody defines body for CreateCompletion for application/json ContentType.
 type CreateCompletionJSONRequestBody CreateCompletionJSONBody
@@ -688,9 +703,6 @@ type ServerInterface interface {
 	// Update one specific Agent
 	// (PATCH /v1/admin/agents/{id})
 	AdminUpdateAgent(w http.ResponseWriter, r *http.Request, id int)
-	// Get the latest config of the Agent
-	// (GET /v1/admin/agents/{id}/config)
-	AdminGetAgentConfig(w http.ResponseWriter, r *http.Request, id int)
 	// List API tokens
 	// (GET /v1/admin/api_tokens)
 	AdminListApiTokens(w http.ResponseWriter, r *http.Request, params AdminListApiTokensParams)
@@ -721,6 +733,12 @@ type ServerInterface interface {
 	// Submit the Deployment for reviewing. Only draft deployments can be submitted. After submitting, the deployment will be in `reviewing` status. Reviewers will be notified.
 	// (POST /v1/admin/deployments/{id}/submit)
 	AdminSubmitDeployment(w http.ResponseWriter, r *http.Request, id int)
+	// Get system setting
+	// (GET /v1/admin/setting)
+	AdminGetSetting(w http.ResponseWriter, r *http.Request)
+	// Update system setting
+	// (PATCH /v1/admin/setting)
+	AdminUpdateSetting(w http.ResponseWriter, r *http.Request)
 	// Generate text completion.
 	// (POST /v1/completion)
 	CreateCompletion(w http.ResponseWriter, r *http.Request)
@@ -953,36 +971,6 @@ func (siw *ServerInterfaceWrapper) AdminUpdateAgent(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminUpdateAgent(w, r, id)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r.WithContext(ctx))
-}
-
-// AdminGetAgentConfig operation middleware
-func (siw *ServerInterfaceWrapper) AdminGetAgentConfig(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id int
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: false})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
-
-	ctx = context.WithValue(ctx, TraceScopes, []string{})
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.AdminGetAgentConfig(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1305,6 +1293,44 @@ func (siw *ServerInterfaceWrapper) AdminSubmitDeployment(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminSubmitDeployment(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// AdminGetSetting operation middleware
+func (siw *ServerInterfaceWrapper) AdminGetSetting(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminGetSetting(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// AdminUpdateSetting operation middleware
+func (siw *ServerInterfaceWrapper) AdminUpdateSetting(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminUpdateSetting(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1933,8 +1959,6 @@ func HandlerWithOptions(si ServerInterface, options GorillaServerOptions) http.H
 
 	r.HandleFunc(options.BaseURL+"/v1/admin/agents/{id}", wrapper.AdminUpdateAgent).Methods("PATCH")
 
-	r.HandleFunc(options.BaseURL+"/v1/admin/agents/{id}/config", wrapper.AdminGetAgentConfig).Methods("GET")
-
 	r.HandleFunc(options.BaseURL+"/v1/admin/api_tokens", wrapper.AdminListApiTokens).Methods("GET")
 
 	r.HandleFunc(options.BaseURL+"/v1/admin/api_tokens", wrapper.AdminCreateApiToken).Methods("POST")
@@ -1954,6 +1978,10 @@ func HandlerWithOptions(si ServerInterface, options GorillaServerOptions) http.H
 	r.HandleFunc(options.BaseURL+"/v1/admin/deployments/{id}/publish", wrapper.AdminPublishDeployment).Methods("POST")
 
 	r.HandleFunc(options.BaseURL+"/v1/admin/deployments/{id}/submit", wrapper.AdminSubmitDeployment).Methods("POST")
+
+	r.HandleFunc(options.BaseURL+"/v1/admin/setting", wrapper.AdminGetSetting).Methods("GET")
+
+	r.HandleFunc(options.BaseURL+"/v1/admin/setting", wrapper.AdminUpdateSetting).Methods("PATCH")
 
 	r.HandleFunc(options.BaseURL+"/v1/completion", wrapper.CreateCompletion).Methods("POST")
 
@@ -2240,50 +2268,6 @@ func (response AdminUpdateAgent404Response) VisitAdminUpdateAgentResponse(w http
 type AdminUpdateAgent500JSONResponse struct{ N500JSONResponse }
 
 func (response AdminUpdateAgent500JSONResponse) VisitAdminUpdateAgentResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(500)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type AdminGetAgentConfigRequestObject struct {
-	Id int `json:"id,omitempty"`
-}
-
-type AdminGetAgentConfigResponseObject interface {
-	VisitAdminGetAgentConfigResponse(w http.ResponseWriter) error
-}
-
-type AdminGetAgentConfig200JSONResponse struct {
-	Data Config `json:"data"`
-}
-
-func (response AdminGetAgentConfig200JSONResponse) VisitAdminGetAgentConfigResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type AdminGetAgentConfig401Response struct {
-}
-
-func (response AdminGetAgentConfig401Response) VisitAdminGetAgentConfigResponse(w http.ResponseWriter) error {
-	w.WriteHeader(401)
-	return nil
-}
-
-type AdminGetAgentConfig404Response struct {
-}
-
-func (response AdminGetAgentConfig404Response) VisitAdminGetAgentConfigResponse(w http.ResponseWriter) error {
-	w.WriteHeader(404)
-	return nil
-}
-
-type AdminGetAgentConfig500JSONResponse struct{ N500JSONResponse }
-
-func (response AdminGetAgentConfig500JSONResponse) VisitAdminGetAgentConfigResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
 
@@ -2722,6 +2706,90 @@ func (response AdminSubmitDeployment404Response) VisitAdminSubmitDeploymentRespo
 type AdminSubmitDeployment500JSONResponse struct{ N500JSONResponse }
 
 func (response AdminSubmitDeployment500JSONResponse) VisitAdminSubmitDeploymentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminGetSettingRequestObject struct {
+}
+
+type AdminGetSettingResponseObject interface {
+	VisitAdminGetSettingResponse(w http.ResponseWriter) error
+}
+
+type AdminGetSetting200JSONResponse Setting
+
+func (response AdminGetSetting200JSONResponse) VisitAdminGetSettingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminGetSetting401Response struct {
+}
+
+func (response AdminGetSetting401Response) VisitAdminGetSettingResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type AdminGetSetting500JSONResponse struct{ N500JSONResponse }
+
+func (response AdminGetSetting500JSONResponse) VisitAdminGetSettingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminUpdateSettingRequestObject struct {
+	Body *AdminUpdateSettingJSONRequestBody
+}
+
+type AdminUpdateSettingResponseObject interface {
+	VisitAdminUpdateSettingResponse(w http.ResponseWriter) error
+}
+
+type AdminUpdateSetting200JSONResponse Setting
+
+func (response AdminUpdateSetting200JSONResponse) VisitAdminUpdateSettingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminUpdateSetting400JSONResponse struct{ N400JSONResponse }
+
+func (response AdminUpdateSetting400JSONResponse) VisitAdminUpdateSettingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminUpdateSetting401Response struct {
+}
+
+func (response AdminUpdateSetting401Response) VisitAdminUpdateSettingResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type AdminUpdateSetting404Response struct {
+}
+
+func (response AdminUpdateSetting404Response) VisitAdminUpdateSettingResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type AdminUpdateSetting500JSONResponse struct{ N500JSONResponse }
+
+func (response AdminUpdateSetting500JSONResponse) VisitAdminUpdateSettingResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
 
@@ -3393,9 +3461,6 @@ type StrictServerInterface interface {
 	// Update one specific Agent
 	// (PATCH /v1/admin/agents/{id})
 	AdminUpdateAgent(ctx context.Context, request AdminUpdateAgentRequestObject) (AdminUpdateAgentResponseObject, error)
-	// Get the latest config of the Agent
-	// (GET /v1/admin/agents/{id}/config)
-	AdminGetAgentConfig(ctx context.Context, request AdminGetAgentConfigRequestObject) (AdminGetAgentConfigResponseObject, error)
 	// List API tokens
 	// (GET /v1/admin/api_tokens)
 	AdminListApiTokens(ctx context.Context, request AdminListApiTokensRequestObject) (AdminListApiTokensResponseObject, error)
@@ -3426,6 +3491,12 @@ type StrictServerInterface interface {
 	// Submit the Deployment for reviewing. Only draft deployments can be submitted. After submitting, the deployment will be in `reviewing` status. Reviewers will be notified.
 	// (POST /v1/admin/deployments/{id}/submit)
 	AdminSubmitDeployment(ctx context.Context, request AdminSubmitDeploymentRequestObject) (AdminSubmitDeploymentResponseObject, error)
+	// Get system setting
+	// (GET /v1/admin/setting)
+	AdminGetSetting(ctx context.Context, request AdminGetSettingRequestObject) (AdminGetSettingResponseObject, error)
+	// Update system setting
+	// (PATCH /v1/admin/setting)
+	AdminUpdateSetting(ctx context.Context, request AdminUpdateSettingRequestObject) (AdminUpdateSettingResponseObject, error)
 	// Generate text completion.
 	// (POST /v1/completion)
 	CreateCompletion(ctx context.Context, request CreateCompletionRequestObject) (CreateCompletionResponseObject, error)
@@ -3670,32 +3741,6 @@ func (sh *strictHandler) AdminUpdateAgent(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminUpdateAgentResponseObject); ok {
 		if err := validResponse.VisitAdminUpdateAgentResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// AdminGetAgentConfig operation middleware
-func (sh *strictHandler) AdminGetAgentConfig(w http.ResponseWriter, r *http.Request, id int) {
-	var request AdminGetAgentConfigRequestObject
-
-	request.Id = id
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.AdminGetAgentConfig(ctx, request.(AdminGetAgentConfigRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "AdminGetAgentConfig")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(AdminGetAgentConfigResponseObject); ok {
-		if err := validResponse.VisitAdminGetAgentConfigResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -3987,6 +4032,61 @@ func (sh *strictHandler) AdminSubmitDeployment(w http.ResponseWriter, r *http.Re
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminSubmitDeploymentResponseObject); ok {
 		if err := validResponse.VisitAdminSubmitDeploymentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminGetSetting operation middleware
+func (sh *strictHandler) AdminGetSetting(w http.ResponseWriter, r *http.Request) {
+	var request AdminGetSettingRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminGetSetting(ctx, request.(AdminGetSettingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminGetSetting")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminGetSettingResponseObject); ok {
+		if err := validResponse.VisitAdminGetSettingResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminUpdateSetting operation middleware
+func (sh *strictHandler) AdminUpdateSetting(w http.ResponseWriter, r *http.Request) {
+	var request AdminUpdateSettingRequestObject
+
+	var body AdminUpdateSettingJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminUpdateSetting(ctx, request.(AdminUpdateSettingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminUpdateSetting")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminUpdateSettingResponseObject); ok {
+		if err := validResponse.VisitAdminUpdateSettingResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

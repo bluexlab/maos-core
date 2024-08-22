@@ -185,3 +185,8 @@ type Queue struct {
 	PausedAt  *int64
 	UpdatedAt *int64
 }
+
+type Settings struct {
+	Key   string
+	Value []byte
+}

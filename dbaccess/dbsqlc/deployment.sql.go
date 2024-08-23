@@ -216,14 +216,18 @@ SELECT
 FROM deployments
 WHERE ($1::text IS NULL OR $1::text = ANY(reviewers))
   AND ($2::deployment_status IS NULL OR status = $2::deployment_status)
+  AND ($3::text IS NULL OR name ILIKE '%' || $3::text || '%')
+  AND ($4::bigint[] IS NULL OR id = ANY($4::bigint[]))
 ORDER BY status, created_at DESC, id DESC
-LIMIT $3::bigint
-OFFSET $3 * ($4::bigint - 1)
+LIMIT $5::bigint
+OFFSET $5 * ($6::bigint - 1)
 `
 
 type DeploymentListPaginatedParams struct {
 	Reviewer *string
 	Status   NullDeploymentStatus
+	Name     *string
+	ID       []int64
 	PageSize interface{}
 	Page     int64
 }
@@ -247,6 +251,8 @@ func (q *Queries) DeploymentListPaginated(ctx context.Context, db DBTX, arg *Dep
 	rows, err := db.Query(ctx, deploymentListPaginated,
 		arg.Reviewer,
 		arg.Status,
+		arg.Name,
+		arg.ID,
 		arg.PageSize,
 		arg.Page,
 	)

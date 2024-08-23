@@ -1238,6 +1238,19 @@ paths:
               - retired
               - cancelled
           description: Filter by deployment status.
+        - in: query
+          name: name
+          schema:
+            type: string
+          description: Filter by deployment name
+        - in: query
+          name: id
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+          description: Filter by list of deployment id
       responses:
         '200':
           description: Successful response
@@ -1610,6 +1623,30 @@ paths:
           description: Unauthorized
         '404':
           description: Deployment not found
+        '500':
+          $ref: '#/components/responses/500'
+  /v1/admin/reference_config_suites:
+    get:
+      summary: List reference config suites
+      operationId: adminListReferenceConfigSuites
+      tags:
+        - Admin
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ReferenceConfigSuite'
+                required:
+                  - data
+        '401':
+          description: Unauthorized
         '500':
           $ref: '#/components/responses/500'
 components:
@@ -2098,6 +2135,28 @@ components:
       required:
         - deployment_approve_required
         - cluster_name
+    ReferenceConfigSuite:
+      type: object
+      properties:
+        agent_name:
+          type: string
+        config_suites:
+          type: array
+          items:
+            type: object
+            properties:
+              suite_name:
+                type: string
+              configs:
+                type: object
+                additionalProperties:
+                  type: string
+            required:
+              - suite_name
+              - configs
+      required:
+        - agent_name
+        - config_suites
   responses:
     '400':
       description: Bad Request

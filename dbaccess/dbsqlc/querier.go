@@ -23,7 +23,7 @@ type Querier interface {
 	ConfigInsert(ctx context.Context, db DBTX, arg *ConfigInsertParams) (*Config, error)
 	ConfigListBySuiteIdGroupByAgent(ctx context.Context, db DBTX, configSuiteID int64) ([]*ConfigListBySuiteIdGroupByAgentRow, error)
 	// Deactivate all other config suites and then activate the given config suite
-	ConfigSuiteActivate(ctx context.Context, db DBTX, id int64) error
+	ConfigSuiteActivate(ctx context.Context, db DBTX, id int64) (int64, error)
 	ConfigSuiteGetById(ctx context.Context, db DBTX, id int64) (*ConfigSuite, error)
 	ConfigUpdateInactiveContentByCreator(ctx context.Context, db DBTX, arg *ConfigUpdateInactiveContentByCreatorParams) (*ConfigUpdateInactiveContentByCreatorRow, error)
 	DeploymentDelete(ctx context.Context, db DBTX, id int64) (*Deployment, error)
@@ -55,6 +55,7 @@ type Querier interface {
 	PgNotifyOne(ctx context.Context, db DBTX, arg *PgNotifyOneParams) error
 	QueueFindById(ctx context.Context, db DBTX, id int64) (*Queue, error)
 	QueueInsert(ctx context.Context, db DBTX, arg *QueueInsertParams) (*Queue, error)
+	ReferenceConfigSuiteList(ctx context.Context, db DBTX) ([]*ReferenceConfigSuites, error)
 	SettingGetSystem(ctx context.Context, db DBTX) (*Settings, error)
 	SettingUpdateSystem(ctx context.Context, db DBTX, value []byte) (*Settings, error)
 	TableExists(ctx context.Context, db DBTX, tableName string) (bool, error)

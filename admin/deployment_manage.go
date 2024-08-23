@@ -35,6 +35,8 @@ func ListDeployments(ctx context.Context, logger *slog.Logger, accessor dbaccess
 		PageSize: int64(pageSize),
 		Status:   status,
 		Reviewer: request.Params.Reviewer,
+		Name:     request.Params.Name,
+		ID:       lo.FromPtrOr(request.Params.Id, nil),
 	})
 	if err != nil {
 		logger.Error("Cannot list deployments", "error", err)
@@ -353,7 +355,7 @@ func PublishDeployment(ctx context.Context, logger *slog.Logger, accessor dbacce
 	}
 
 	// Activate config suite
-	err = accessor.Querier().ConfigSuiteActivate(ctx, tx, *deployment.ConfigSuiteID)
+	_, err = accessor.Querier().ConfigSuiteActivate(ctx, tx, *deployment.ConfigSuiteID)
 	if err != nil {
 		logger.Error("Cannot activate config suite", "error", err)
 		return api.AdminPublishDeployment500JSONResponse{

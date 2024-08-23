@@ -344,6 +344,15 @@ type MessageContent2 struct {
 // Permission defines model for Permission.
 type Permission string
 
+// ReferenceConfigSuite defines model for ReferenceConfigSuite.
+type ReferenceConfigSuite struct {
+	AgentName    string `json:"agent_name"`
+	ConfigSuites []struct {
+		Configs   map[string]string `json:"configs"`
+		SuiteName string            `json:"suite_name"`
+	} `json:"config_suites"`
+}
+
 // RerankResult defines model for RerankResult.
 type RerankResult struct {
 	// Index The index of the document in the original list.
@@ -420,6 +429,12 @@ type AdminListDeploymentsParams struct {
 
 	// Status Filter by deployment status.
 	Status *AdminListDeploymentsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
+
+	// Name Filter by deployment name
+	Name *string `form:"name,omitempty" json:"name,omitempty"`
+
+	// Id Filter by list of deployment id
+	Id *[]int64 `form:"id,omitempty" json:"id,omitempty"`
 }
 
 // AdminListDeploymentsParamsStatus defines parameters for AdminListDeployments.
@@ -767,6 +782,9 @@ type ServerInterface interface {
 	// Submit the Deployment for reviewing. Only draft deployments can be submitted. After submitting, the deployment will be in `reviewing` status. Reviewers will be notified.
 	// (POST /v1/admin/deployments/{id}/submit)
 	AdminSubmitDeployment(w http.ResponseWriter, r *http.Request, id int)
+	// List reference config suites
+	// (GET /v1/admin/reference_config_suites)
+	AdminListReferenceConfigSuites(w http.ResponseWriter, r *http.Request)
 	// Get system setting
 	// (GET /v1/admin/setting)
 	AdminGetSetting(w http.ResponseWriter, r *http.Request)
@@ -1164,6 +1182,22 @@ func (siw *ServerInterfaceWrapper) AdminListDeployments(w http.ResponseWriter, r
 		return
 	}
 
+	// ------------- Optional query parameter "name" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "name", r.URL.Query(), &params.Name)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "id", r.URL.Query(), &params.Id)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminListDeployments(w, r, params)
 	}))
@@ -1365,6 +1399,25 @@ func (siw *ServerInterfaceWrapper) AdminSubmitDeployment(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminSubmitDeployment(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// AdminListReferenceConfigSuites operation middleware
+func (siw *ServerInterfaceWrapper) AdminListReferenceConfigSuites(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminListReferenceConfigSuites(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2052,6 +2105,8 @@ func HandlerWithOptions(si ServerInterface, options GorillaServerOptions) http.H
 	r.HandleFunc(options.BaseURL+"/v1/admin/deployments/{id}/reject", wrapper.AdminRejectDeployment).Methods("POST")
 
 	r.HandleFunc(options.BaseURL+"/v1/admin/deployments/{id}/submit", wrapper.AdminSubmitDeployment).Methods("POST")
+
+	r.HandleFunc(options.BaseURL+"/v1/admin/reference_config_suites", wrapper.AdminListReferenceConfigSuites).Methods("GET")
 
 	r.HandleFunc(options.BaseURL+"/v1/admin/setting", wrapper.AdminGetSetting).Methods("GET")
 
@@ -2846,6 +2901,41 @@ func (response AdminSubmitDeployment500JSONResponse) VisitAdminSubmitDeploymentR
 	return json.NewEncoder(w).Encode(response)
 }
 
+type AdminListReferenceConfigSuitesRequestObject struct {
+}
+
+type AdminListReferenceConfigSuitesResponseObject interface {
+	VisitAdminListReferenceConfigSuitesResponse(w http.ResponseWriter) error
+}
+
+type AdminListReferenceConfigSuites200JSONResponse struct {
+	Data []ReferenceConfigSuite `json:"data"`
+}
+
+func (response AdminListReferenceConfigSuites200JSONResponse) VisitAdminListReferenceConfigSuitesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminListReferenceConfigSuites401Response struct {
+}
+
+func (response AdminListReferenceConfigSuites401Response) VisitAdminListReferenceConfigSuitesResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type AdminListReferenceConfigSuites500JSONResponse struct{ N500JSONResponse }
+
+func (response AdminListReferenceConfigSuites500JSONResponse) VisitAdminListReferenceConfigSuitesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type AdminGetSettingRequestObject struct {
 }
 
@@ -3628,6 +3718,9 @@ type StrictServerInterface interface {
 	// Submit the Deployment for reviewing. Only draft deployments can be submitted. After submitting, the deployment will be in `reviewing` status. Reviewers will be notified.
 	// (POST /v1/admin/deployments/{id}/submit)
 	AdminSubmitDeployment(ctx context.Context, request AdminSubmitDeploymentRequestObject) (AdminSubmitDeploymentResponseObject, error)
+	// List reference config suites
+	// (GET /v1/admin/reference_config_suites)
+	AdminListReferenceConfigSuites(ctx context.Context, request AdminListReferenceConfigSuitesRequestObject) (AdminListReferenceConfigSuitesResponseObject, error)
 	// Get system setting
 	// (GET /v1/admin/setting)
 	AdminGetSetting(ctx context.Context, request AdminGetSettingRequestObject) (AdminGetSettingResponseObject, error)
@@ -4202,6 +4295,30 @@ func (sh *strictHandler) AdminSubmitDeployment(w http.ResponseWriter, r *http.Re
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminSubmitDeploymentResponseObject); ok {
 		if err := validResponse.VisitAdminSubmitDeploymentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminListReferenceConfigSuites operation middleware
+func (sh *strictHandler) AdminListReferenceConfigSuites(w http.ResponseWriter, r *http.Request) {
+	var request AdminListReferenceConfigSuitesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminListReferenceConfigSuites(ctx, request.(AdminListReferenceConfigSuitesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminListReferenceConfigSuites")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminListReferenceConfigSuitesResponseObject); ok {
+		if err := validResponse.VisitAdminListReferenceConfigSuitesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

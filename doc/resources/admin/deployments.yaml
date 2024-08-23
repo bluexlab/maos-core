@@ -32,6 +32,19 @@ get:
           - retired
           - cancelled
       description: Filter by deployment status.
+    - in: query
+      name: name
+      schema:
+        type: string
+      description: Filter by deployment name
+    - in: query
+      name: id
+      schema:
+        type: array
+        items:
+          type: integer
+          format: int64
+      description: Filter by list of deployment id
   responses:
     "200":
       description: Successful response

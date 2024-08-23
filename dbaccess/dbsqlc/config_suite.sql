@@ -4,7 +4,7 @@ FROM config_suites
 WHERE id = @id::bigint
 LIMIT 1;
 
--- name: ConfigSuiteActivate :exec
+-- name: ConfigSuiteActivate :one
 -- Deactivate all other config suites and then activate the given config suite
 WITH deactivate_others AS (
     UPDATE config_suites
@@ -13,4 +13,10 @@ WITH deactivate_others AS (
 )
 UPDATE config_suites
 SET active = true
-WHERE id = @id::bigint;
+WHERE id = @id::bigint
+RETURNING id;
+
+-- name: ReferenceConfigSuiteList :many
+SELECT *
+FROM reference_config_suites
+ORDER BY name;

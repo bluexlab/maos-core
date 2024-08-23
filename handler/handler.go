@@ -286,6 +286,14 @@ func (s *APIHandler) AdminUpdateSetting(ctx context.Context, request api.AdminUp
 	return admin.UpdateSetting(ctx, s.logger, s.accessor, request)
 }
 
+func (s *APIHandler) AdminListReferenceConfigSuites(ctx context.Context, request api.AdminListReferenceConfigSuitesRequestObject) (api.AdminListReferenceConfigSuitesResponseObject, error) {
+	token := ValidatePermissions(ctx, "AdminListReferenceConfigSuites")
+	if token == nil {
+		return api.AdminListReferenceConfigSuites401Response{}, nil
+	}
+	return admin.ListReferenceConfigSuites(ctx, s.logger, s.accessor, request)
+}
+
 func (s *APIHandler) GetHealth(ctx context.Context, request api.GetHealthRequestObject) (api.GetHealthResponseObject, error) {
 	return api.GetHealth200JSONResponse{Status: "healthy"}, nil
 }

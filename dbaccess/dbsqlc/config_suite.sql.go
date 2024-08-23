@@ -9,7 +9,7 @@ import (
 	"context"
 )
 
-const configSuiteActivate = `-- name: ConfigSuiteActivate :exec
+const configSuiteActivate = `-- name: ConfigSuiteActivate :one
 WITH deactivate_others AS (
     UPDATE config_suites
     SET active = false
@@ -18,12 +18,14 @@ WITH deactivate_others AS (
 UPDATE config_suites
 SET active = true
 WHERE id = $1::bigint
+RETURNING id
 `
 
 // Deactivate all other config suites and then activate the given config suite
-func (q *Queries) ConfigSuiteActivate(ctx context.Context, db DBTX, id int64) error {
-	_, err := db.Exec(ctx, configSuiteActivate, id)
-	return err
+func (q *Queries) ConfigSuiteActivate(ctx context.Context, db DBTX, id int64) (int64, error) {
+	row := db.QueryRow(ctx, configSuiteActivate, id)
+	err := row.Scan(&id)
+	return id, err
 }
 
 const configSuiteGetById = `-- name: ConfigSuiteGetById :one
@@ -46,4 +48,36 @@ func (q *Queries) ConfigSuiteGetById(ctx context.Context, db DBTX, id int64) (*C
 		&i.DeployedAt,
 	)
 	return &i, err
+}
+
+const referenceConfigSuiteList = `-- name: ReferenceConfigSuiteList :many
+SELECT id, name, config_suites, created_at, updated_at
+FROM reference_config_suites
+ORDER BY name
+`
+
+func (q *Queries) ReferenceConfigSuiteList(ctx context.Context, db DBTX) ([]*ReferenceConfigSuites, error) {
+	rows, err := db.Query(ctx, referenceConfigSuiteList)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*ReferenceConfigSuites
+	for rows.Next() {
+		var i ReferenceConfigSuites
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.ConfigSuite,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

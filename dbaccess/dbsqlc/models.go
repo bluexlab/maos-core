@@ -187,6 +187,14 @@ type Queue struct {
 	UpdatedAt *int64
 }
 
+type ReferenceConfigSuites struct {
+	ID          int64
+	Name        string
+	ConfigSuite []byte
+	CreatedAt   int64
+	UpdatedAt   *int64
+}
+
 type Settings struct {
 	Key   string
 	Value []byte

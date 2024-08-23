@@ -15,6 +15,8 @@ SELECT
 FROM deployments
 WHERE (sqlc.narg(reviewer)::text IS NULL OR sqlc.narg(reviewer)::text = ANY(reviewers))
   AND (sqlc.narg(status)::deployment_status IS NULL OR status = sqlc.narg(status)::deployment_status)
+  AND (sqlc.narg(name)::text IS NULL OR name ILIKE '%' || sqlc.narg(name)::text || '%')
+  AND (sqlc.narg(id)::bigint[] IS NULL OR id = ANY(sqlc.narg(id)::bigint[]))
 ORDER BY status, created_at DESC, id DESC
 LIMIT sqlc.arg(page_size)::bigint
 OFFSET sqlc.arg(page_size) * (sqlc.arg(page)::bigint - 1);

@@ -183,6 +183,123 @@ func TestListDeploymentsWithDB(t *testing.T) {
 		}
 	})
 
+	t.Run("Filter by name", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+		dbPool := testhelper.TestDB(ctx, t)
+		defer dbPool.Close()
+
+		accessor := dbaccess.New(dbPool)
+
+		// Insert deployments with different names
+		fixture.InsertDeployment(t, ctx, dbPool, "deployment-alpha", nil)
+		fixture.InsertDeployment(t, ctx, dbPool, "deployment-beta", nil)
+		fixture.InsertDeployment(t, ctx, dbPool, "other-gamma", nil)
+
+		// Filter by 'deployment'
+		name := "deployment"
+		request := api.AdminListDeploymentsRequestObject{
+			Params: api.AdminListDeploymentsParams{
+				Name: &name,
+			},
+		}
+		response, err := admin.ListDeployments(ctx, logger, accessor, request)
+
+		require.NoError(t, err)
+		require.IsType(t, api.AdminListDeployments200JSONResponse{}, response)
+
+		jsonResponse := response.(api.AdminListDeployments200JSONResponse)
+		require.NotNil(t, jsonResponse.Data)
+		require.Len(t, jsonResponse.Data, 2)
+
+		deploymentNames := []string{jsonResponse.Data[0].Name, jsonResponse.Data[1].Name}
+		require.Contains(t, deploymentNames, "deployment-alpha")
+		require.Contains(t, deploymentNames, "deployment-beta")
+		require.NotContains(t, deploymentNames, "other-gamma")
+
+		for _, deployment := range jsonResponse.Data {
+			require.Contains(t, deployment.Name, "deployment")
+		}
+	})
+
+	t.Run("Filter by partial name", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+		dbPool := testhelper.TestDB(ctx, t)
+		defer dbPool.Close()
+
+		accessor := dbaccess.New(dbPool)
+
+		// Insert deployments with different names
+		fixture.InsertDeployment(t, ctx, dbPool, "partial-match-1", nil)
+		fixture.InsertDeployment(t, ctx, dbPool, "partial-match-2", nil)
+		fixture.InsertDeployment(t, ctx, dbPool, "no-m-atch", nil)
+
+		// Filter by partial name 'match'
+		name := "match"
+		request := api.AdminListDeploymentsRequestObject{
+			Params: api.AdminListDeploymentsParams{
+				Name: &name,
+			},
+		}
+		response, err := admin.ListDeployments(ctx, logger, accessor, request)
+
+		require.NoError(t, err)
+		require.IsType(t, api.AdminListDeployments200JSONResponse{}, response)
+
+		jsonResponse := response.(api.AdminListDeployments200JSONResponse)
+		require.NotNil(t, jsonResponse.Data)
+		require.Len(t, jsonResponse.Data, 2)
+
+		deploymentNames := []string{jsonResponse.Data[0].Name, jsonResponse.Data[1].Name}
+		require.Contains(t, deploymentNames, "partial-match-1")
+		require.Contains(t, deploymentNames, "partial-match-2")
+		require.NotContains(t, deploymentNames, "no-match")
+
+		for _, deployment := range jsonResponse.Data {
+			require.Contains(t, deployment.Name, "match")
+		}
+	})
+
+	t.Run("Filter by id list", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+		dbPool := testhelper.TestDB(ctx, t)
+		defer dbPool.Close()
+
+		accessor := dbaccess.New(dbPool)
+
+		// Insert deployments with different IDs
+		deployment1 := fixture.InsertDeployment(t, ctx, dbPool, "deployment-1", nil)
+		deployment2 := fixture.InsertDeployment(t, ctx, dbPool, "deployment-2", nil)
+		deployment3 := fixture.InsertDeployment(t, ctx, dbPool, "deployment-3", nil)
+
+		// Filter by IDs of deployment1 and deployment2
+		idList := []int64{deployment1.ID, deployment2.ID}
+		request := api.AdminListDeploymentsRequestObject{
+			Params: api.AdminListDeploymentsParams{
+				Id: &idList,
+			},
+		}
+		response, err := admin.ListDeployments(ctx, logger, accessor, request)
+
+		require.NoError(t, err)
+		require.IsType(t, api.AdminListDeployments200JSONResponse{}, response)
+
+		jsonResponse := response.(api.AdminListDeployments200JSONResponse)
+		require.NotNil(t, jsonResponse.Data)
+		require.Len(t, jsonResponse.Data, 2)
+
+		deploymentIDs := []int64{jsonResponse.Data[0].Id, jsonResponse.Data[1].Id}
+		require.Contains(t, deploymentIDs, deployment1.ID)
+		require.Contains(t, deploymentIDs, deployment2.ID)
+		require.NotContains(t, deploymentIDs, deployment3.ID)
+
+		for _, deployment := range jsonResponse.Data {
+			require.Contains(t, idList, deployment.Id)
+		}
+	})
+
 	t.Run("Database pool closed", func(t *testing.T) {
 		t.Parallel()
 		ctx := context.Background()

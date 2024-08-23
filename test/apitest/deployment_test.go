@@ -20,85 +20,118 @@ func TestAdminListDeploymentsEndpoint(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	tests := []struct {
-		name           string
-		token          string
-		queryParams    string
-		expectedStatus int
-		expectedBody   string
-	}{
-		{
-			name:           "Valid admin token",
-			token:          "admin-token",
-			queryParams:    "?page=1&page_size=15",
-			expectedStatus: http.StatusOK,
-			expectedBody:   `{"data":[{"id":2,"name":"deployment2"},{"id":1,"name":"deployment1"}],"meta":{"total":2,"page":1,"page_size":15}}`,
-		},
-		{
-			name:           "Valid admin token with pagination",
-			token:          "admin-token",
-			queryParams:    "?page=1&page_size=1",
-			expectedStatus: http.StatusOK,
-			expectedBody:   `{"data":[{"id":2,"name":"deployment2"}],"meta":{"total":2,"page":1,"page_size":1}}`,
-		},
-		{
-			name:           "Non-admin token",
-			token:          "user-token",
-			queryParams:    "",
-			expectedStatus: http.StatusUnauthorized,
-			expectedBody:   "",
-		},
-		{
-			name:           "Invalid token",
-			token:          "invalid_token",
-			queryParams:    "",
-			expectedStatus: http.StatusUnauthorized,
-			expectedBody:   "",
-		},
+	setupTestData := func(t *testing.T, ctx context.Context, accessor dbaccess.Accessor) {
+		fixture.InsertDeployment(t, ctx, accessor.Source(), "deployment1", []string{"user1"})
+		fixture.InsertDeployment(t, ctx, accessor.Source(), "deployment2", []string{"user2"})
+		agent1 := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
+		agent2 := fixture.InsertAgent(t, ctx, accessor.Source(), "agent2")
+		fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent1.ID, 0, []string{"admin"})
+		fixture.InsertToken(t, ctx, accessor.Source(), "user-token", agent2.ID, 0, []string{"user"})
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+	assertResponseMatches := func(t *testing.T, expected, actual api.AdminListDeployments200JSONResponse) {
+		require.Equal(t, len(expected.Data), len(actual.Data))
+		require.Equal(t, expected.Meta.Total, actual.Meta.Total)
+		require.Equal(t, expected.Meta.Page, actual.Meta.Page)
+		require.Equal(t, expected.Meta.PageSize, actual.Meta.PageSize)
 
-			fixture.InsertDeployment(t, ctx, accessor.Source(), "deployment1", []string{"user1"})
-			fixture.InsertDeployment(t, ctx, accessor.Source(), "deployment2", []string{"user2"})
-			agent1 := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
-			agent2 := fixture.InsertAgent(t, ctx, accessor.Source(), "agent2")
-			fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent1.ID, 0, []string{"admin"})
-			fixture.InsertToken(t, ctx, accessor.Source(), "user-token", agent2.ID, 0, []string{"user"})
-
-			resp, resBody := GetHttp(t, server.URL+"/v1/admin/deployments"+tt.queryParams, tt.token)
-			require.Equal(t, tt.expectedStatus, resp.StatusCode)
-
-			if tt.expectedStatus == http.StatusOK {
-				var response api.AdminListDeployments200JSONResponse
-				err := json.Unmarshal([]byte(resBody), &response)
-				require.NoError(t, err)
-
-				expectedResponse := api.AdminListDeployments200JSONResponse{}
-				err = json.Unmarshal([]byte(tt.expectedBody), &expectedResponse)
-				require.NoError(t, err)
-
-				require.Equal(t, len(expectedResponse.Data), len(response.Data))
-				require.Equal(t, expectedResponse.Meta.Total, response.Meta.Total)
-				require.Equal(t, expectedResponse.Meta.Page, response.Meta.Page)
-				require.Equal(t, expectedResponse.Meta.PageSize, response.Meta.PageSize)
-
-				for i, expectedDeployment := range expectedResponse.Data {
-					require.Equal(t, expectedDeployment.Name, response.Data[i].Name)
-					require.NotZero(t, response.Data[i].Id)
-					require.NotZero(t, response.Data[i].CreatedAt)
-				}
-			} else {
-				if tt.expectedBody != "" {
-					resJson := testhelper.JsonToMap(t, resBody)
-					require.Contains(t, resJson, "error")
-					require.Contains(t, resJson["error"], tt.expectedBody)
-				}
-			}
-		})
+		for i, expectedDeployment := range expected.Data {
+			require.Equal(t, expectedDeployment.Name, actual.Data[i].Name)
+			require.NotZero(t, actual.Data[i].Id)
+			require.NotZero(t, actual.Data[i].CreatedAt)
+		}
 	}
+
+	t.Run("Valid admin token", func(t *testing.T) {
+		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+
+		setupTestData(t, ctx, accessor)
+
+		resp, resBody := GetHttp(t, server.URL+"/v1/admin/deployments?page=1&page_size=15", "admin-token")
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var response api.AdminListDeployments200JSONResponse
+		err := json.Unmarshal([]byte(resBody), &response)
+		require.NoError(t, err)
+
+		expectedResponse := api.AdminListDeployments200JSONResponse{}
+		err = json.Unmarshal([]byte(`{"data":[{"id":2,"name":"deployment2"},{"id":1,"name":"deployment1"}],"meta":{"total":2,"page":1,"page_size":15}}`), &expectedResponse)
+		require.NoError(t, err)
+
+		assertResponseMatches(t, expectedResponse, response)
+	})
+
+	t.Run("Filter by id list", func(t *testing.T) {
+		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+
+		// Insert deployments and get their IDs
+		deployment1 := fixture.InsertDeployment(t, ctx, accessor.Source(), "deployment1", []string{"user1"})
+		deployment2 := fixture.InsertDeployment(t, ctx, accessor.Source(), "deployment2", []string{"user2"})
+		fixture.InsertDeployment(t, ctx, accessor.Source(), "deployment3", []string{"user3"})
+
+		agent := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
+		fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent.ID, 0, []string{"admin"})
+
+		// Construct URL with id list
+		url := fmt.Sprintf("%s/v1/admin/deployments?id=%d&id=%d", server.URL, deployment1.ID, deployment2.ID)
+
+		resp, resBody := GetHttp(t, url, "admin-token")
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var response api.AdminListDeployments200JSONResponse
+		err := json.Unmarshal([]byte(resBody), &response)
+		require.NoError(t, err)
+
+		require.Len(t, response.Data, 2)
+		require.Equal(t, int64(2), response.Meta.Total)
+
+		// Check that only the requested deployments are returned
+		deploymentIDs := []int64{response.Data[0].Id, response.Data[1].Id}
+		require.Contains(t, deploymentIDs, deployment1.ID)
+		require.Contains(t, deploymentIDs, deployment2.ID)
+
+		// Check that deployment names match
+		deploymentNames := []string{response.Data[0].Name, response.Data[1].Name}
+		require.Contains(t, deploymentNames, "deployment1")
+		require.Contains(t, deploymentNames, "deployment2")
+	})
+
+	t.Run("Valid admin token with pagination", func(t *testing.T) {
+		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+
+		setupTestData(t, ctx, accessor)
+
+		resp, resBody := GetHttp(t, server.URL+"/v1/admin/deployments?page=1&page_size=1", "admin-token")
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var response api.AdminListDeployments200JSONResponse
+		err := json.Unmarshal([]byte(resBody), &response)
+		require.NoError(t, err)
+
+		expectedResponse := api.AdminListDeployments200JSONResponse{}
+		err = json.Unmarshal([]byte(`{"data":[{"id":2,"name":"deployment2"}],"meta":{"total":2,"page":1,"page_size":1}}`), &expectedResponse)
+		require.NoError(t, err)
+
+		assertResponseMatches(t, expectedResponse, response)
+	})
+
+	t.Run("Non-admin token", func(t *testing.T) {
+		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+
+		setupTestData(t, ctx, accessor)
+
+		resp, _ := GetHttp(t, server.URL+"/v1/admin/deployments", "user-token")
+		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	})
+
+	t.Run("Invalid token", func(t *testing.T) {
+		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+
+		setupTestData(t, ctx, accessor)
+
+		resp, _ := GetHttp(t, server.URL+"/v1/admin/deployments", "invalid_token")
+		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	})
 }
 
 func TestAdminGetDeploymentEndpoint(t *testing.T) {

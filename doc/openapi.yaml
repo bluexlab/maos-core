@@ -93,6 +93,9 @@ paths:
   /v1/admin/setting:
     $ref: "./resources/admin/setting.yaml"
 
+  /v1/admin/reference_config_suites:
+    $ref: "./resources/admin/reference_config_suites.yaml"
+
 components:
   securitySchemes:
     bearerAuth:

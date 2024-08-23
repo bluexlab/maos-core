@@ -38,6 +38,9 @@ type Querier interface {
 	DeploymentListPaginated(ctx context.Context, db DBTX, arg *DeploymentListPaginatedParams) ([]*DeploymentListPaginatedRow, error)
 	// it sets current deployed deployment status to retired and the new deployment status to deployed
 	DeploymentPublish(ctx context.Context, db DBTX, arg *DeploymentPublishParams) (*Deployment, error)
+	// Reject a deployment.
+	// The deployment must be in the reviewing status and the user must be a reviewer.
+	DeploymentReject(ctx context.Context, db DBTX, arg *DeploymentRejectParams) (*Deployment, error)
 	DeploymentSubmitForReview(ctx context.Context, db DBTX, id int64) (*Deployment, error)
 	DeploymentUpdate(ctx context.Context, db DBTX, arg *DeploymentUpdateParams) (*Deployment, error)
 	InvocationFindById(ctx context.Context, db DBTX, id int64) (*Invocation, error)

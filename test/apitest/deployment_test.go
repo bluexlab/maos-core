@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -403,10 +404,10 @@ func TestSubmitDeployment(t *testing.T) {
 			fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent1.ID, 0, []string{"admin"})
 
 			// Create a draft deployment
-			draftDeployment, err := accessor.Querier().DeploymentInsert(ctx, accessor.Source(), &dbsqlc.DeploymentInsertParams{
+			draftDeployment, err := accessor.Querier().DeploymentInsertWithConfigSuite(ctx, accessor.Source(), &dbsqlc.DeploymentInsertWithConfigSuiteParams{
 				Name:      "draft_deployment",
-				Status:    dbsqlc.NullDeploymentStatus{DeploymentStatus: "draft", Valid: true},
 				CreatedBy: "admin",
+				Reviewers: []string{"reviewer1", "reviewer2"},
 			})
 			require.NoError(t, err)
 
@@ -415,6 +416,7 @@ func TestSubmitDeployment(t *testing.T) {
 				Name:      "non_draft_deployment",
 				Status:    dbsqlc.NullDeploymentStatus{DeploymentStatus: "reviewing", Valid: true},
 				CreatedBy: "admin",
+				Reviewers: []string{"reviewer1", "reviewer2"},
 			})
 			require.NoError(t, err)
 
@@ -438,6 +440,103 @@ func TestSubmitDeployment(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAdminRejectDeploymentEndpoint(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	setupTest := func(t *testing.T) (*httptest.Server, dbaccess.Accessor, int64) {
+		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+
+		agent1 := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
+		fixture.InsertToken(t, ctx, accessor.Source(), "reviewer-token", agent1.ID, 0, []string{"admin"})
+		fixture.InsertToken(t, ctx, accessor.Source(), "non-reviewer-token", agent1.ID, 0, []string{"admin"})
+
+		deployment, err := accessor.Querier().DeploymentInsertWithConfigSuite(ctx, accessor.Source(), &dbsqlc.DeploymentInsertWithConfigSuiteParams{
+			CreatedBy: "test-user",
+			Name:      "test-deployment",
+			Reviewers: []string{"reviewer1", "reviewer2"},
+		})
+		require.NoError(t, err)
+		require.NotNil(t, deployment)
+
+		_, err = accessor.Source().Exec(ctx, "UPDATE deployments SET status = 'reviewing' WHERE id = $1", deployment.ID)
+		require.NoError(t, err)
+
+		return server, accessor, deployment.ID
+	}
+
+	t.Run("Valid reviewer token and reviewing deployment", func(t *testing.T) {
+		server, accessor, deploymentID := setupTest(t)
+
+		body := api.AdminRejectDeploymentJSONRequestBody{
+			User: "reviewer1",
+		}
+		jsonBody, err := json.Marshal(body)
+		require.NoError(t, err)
+
+		resp, _ := PostHttp(t, fmt.Sprintf("%s/v1/admin/deployments/%d/reject", server.URL, deploymentID), string(jsonBody), "reviewer-token")
+		require.Equal(t, http.StatusCreated, resp.StatusCode)
+
+		updatedDeployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), deploymentID)
+		require.NoError(t, err)
+		require.EqualValues(t, api.DeploymentStatusRejected, updatedDeployment.Status)
+		require.NotNil(t, updatedDeployment.FinishedAt)
+		require.Equal(t, "reviewer1", *updatedDeployment.FinishedBy)
+	})
+
+	t.Run("Non-reviewer user", func(t *testing.T) {
+		server, _, deploymentID := setupTest(t)
+
+		body := api.AdminRejectDeploymentJSONRequestBody{
+			User: "non-reviewer",
+		}
+		jsonBody, err := json.Marshal(body)
+		require.NoError(t, err)
+
+		resp, _ := PostHttp(t, fmt.Sprintf("%s/v1/admin/deployments/%d/reject", server.URL, deploymentID), string(jsonBody), "non-reviewer-token")
+		require.Equal(t, http.StatusNotFound, resp.StatusCode)
+	})
+
+	t.Run("Missing user in request body", func(t *testing.T) {
+		server, _, deploymentID := setupTest(t)
+
+		body := api.AdminRejectDeploymentJSONRequestBody{
+			User: "",
+		}
+		jsonBody, err := json.Marshal(body)
+		require.NoError(t, err)
+
+		resp, _ := PostHttp(t, fmt.Sprintf("%s/v1/admin/deployments/%d/reject", server.URL, deploymentID), string(jsonBody), "reviewer-token")
+		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	})
+
+	t.Run("Unauthorized", func(t *testing.T) {
+		server, _, deploymentID := setupTest(t)
+
+		body := api.AdminRejectDeploymentJSONRequestBody{
+			User: "reviewer1",
+		}
+		jsonBody, err := json.Marshal(body)
+		require.NoError(t, err)
+
+		resp, _ := PostHttp(t, fmt.Sprintf("%s/v1/admin/deployments/%d/reject", server.URL, deploymentID), string(jsonBody), "")
+		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	})
+
+	t.Run("Non-existent deployment", func(t *testing.T) {
+		server, _, _ := setupTest(t)
+
+		body := api.AdminRejectDeploymentJSONRequestBody{
+			User: "reviewer1",
+		}
+		jsonBody, err := json.Marshal(body)
+		require.NoError(t, err)
+
+		resp, _ := PostHttp(t, fmt.Sprintf("%s/v1/admin/deployments/%d/reject", server.URL, 999), string(jsonBody), "reviewer-token")
+		require.Equal(t, http.StatusNotFound, resp.StatusCode)
+	})
 }
 
 func TestAdminPublishDeploymentEndpoint(t *testing.T) {

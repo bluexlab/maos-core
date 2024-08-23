@@ -16,7 +16,8 @@ import (
 
 func ListDeployments(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminListDeploymentsRequestObject) (api.AdminListDeploymentsResponseObject, error) {
 	logger.Info("AdminListDeployments",
-		"name", request.Params.Name,
+		"status", lo.FromPtrOr(request.Params.Status, "<nil>"),
+		"reviewer", lo.FromPtrOr(request.Params.Reviewer, "<nil>"),
 		"page", lo.FromPtrOr(request.Params.Page, -999),
 		"page_size", lo.FromPtrOr(request.Params.PageSize, -999),
 	)
@@ -24,8 +25,17 @@ func ListDeployments(ctx context.Context, logger *slog.Logger, accessor dbaccess
 	page, _ := lo.Coalesce[*int](request.Params.Page, &defaultPage)
 	pageSizePtr, _ := lo.Coalesce[*int](request.Params.PageSize, &defaultPageSize)
 	pageSize := lo.Clamp(*pageSizePtr, 1, 100)
+	status := dbsqlc.NullDeploymentStatus{}
+	if request.Params.Status != nil {
+		status.Scan(string(*request.Params.Status))
+	}
 
-	res, err := accessor.Querier().DeploymentListPaginated(ctx, accessor.Source(), &dbsqlc.DeploymentListPaginatedParams{Page: int64(*page), PageSize: int64(pageSize)})
+	res, err := accessor.Querier().DeploymentListPaginated(ctx, accessor.Source(), &dbsqlc.DeploymentListPaginatedParams{
+		Page:     int64(*page),
+		PageSize: int64(pageSize),
+		Status:   status,
+		Reviewer: request.Params.Reviewer,
+	})
 	if err != nil {
 		logger.Error("Cannot list deployments", "error", err)
 		return api.AdminListDeployments500JSONResponse{
@@ -40,6 +50,8 @@ func ListDeployments(ctx context.Context, logger *slog.Logger, accessor dbaccess
 				Id:         row.ID,
 				Name:       row.Name,
 				Status:     api.DeploymentStatus(row.Status),
+				Notes:      deserializeNotes(row.Notes),
+				Reviewers:  row.Reviewers,
 				CreatedBy:  row.CreatedBy,
 				CreatedAt:  row.CreatedAt,
 				ApprovedBy: row.ApprovedBy,
@@ -79,6 +91,7 @@ func GetDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.A
 			Name:       deployment.Name,
 			Status:     api.DeploymentDetailStatus(deployment.Status),
 			Reviewers:  deployment.Reviewers,
+			Notes:      deserializeNotes(deployment.Notes),
 			CreatedBy:  deployment.CreatedBy,
 			CreatedAt:  deployment.CreatedAt,
 			ApprovedBy: deployment.ApprovedBy,
@@ -117,6 +130,7 @@ func GetDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.A
 		Id:         deployment.ID,
 		Name:       deployment.Name,
 		Status:     api.DeploymentDetailStatus(deployment.Status),
+		Notes:      deserializeNotes(deployment.Notes),
 		Reviewers:  deployment.Reviewers,
 		CreatedBy:  deployment.CreatedBy,
 		CreatedAt:  deployment.CreatedAt,
@@ -191,6 +205,8 @@ func UpdateDeployment(ctx context.Context, logger *slog.Logger, accessor dbacces
 			Id:            deployment.ID,
 			Name:          deployment.Name,
 			Status:        api.DeploymentStatus(deployment.Status),
+			Reviewers:     deployment.Reviewers,
+			Notes:         deserializeNotes(deployment.Notes),
 			ConfigSuiteId: deployment.ConfigSuiteID,
 			CreatedBy:     deployment.CreatedBy,
 			CreatedAt:     deployment.CreatedAt,
@@ -205,7 +221,47 @@ func UpdateDeployment(ctx context.Context, logger *slog.Logger, accessor dbacces
 func SubmitDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminSubmitDeploymentRequestObject) (api.AdminSubmitDeploymentResponseObject, error) {
 	logger.Info("AdminSubmitDeployment", "id", request.Id)
 
-	deployment, err := accessor.Querier().DeploymentSubmitForReview(ctx, accessor.Source(), int64(request.Id))
+	tx, err := accessor.Source().Begin(ctx)
+	if err != nil {
+		logger.Error("Cannot start transaction", "error", err)
+		return api.AdminSubmitDeployment500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot start transaction: %v", err)},
+		}, nil
+	}
+	defer tx.Rollback(ctx)
+
+	deployment, err := accessor.Querier().DeploymentGetById(ctx, tx, int64(request.Id))
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return api.AdminSubmitDeployment404Response{}, nil
+		}
+
+		logger.Error("Cannot get deployment", "error", err)
+		return api.AdminSubmitDeployment500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot get deployment: %v", err)},
+		}, nil
+	}
+
+	if deployment.Status != "draft" {
+		logger.Info("Cannot submit deployment", "error", "Deployment is not in draft status", "id", deployment.ID)
+		return api.AdminSubmitDeployment400JSONResponse{
+			N400JSONResponse: api.N400JSONResponse{Error: "Deployment must be in draft status to be submitted"},
+		}, nil
+	}
+	if deployment.ConfigSuiteID == nil {
+		logger.Info("Cannot submit deployment", "error", "Deployment has no config suite", "id", deployment.ID)
+		return api.AdminSubmitDeployment400JSONResponse{
+			N400JSONResponse: api.N400JSONResponse{Error: "Deployment must have a config suite to be submitted"},
+		}, nil
+	}
+	if len(deployment.Reviewers) == 0 {
+		logger.Info("Cannot submit deployment", "error", "Deployment has no reviewers", "id", deployment.ID)
+		return api.AdminSubmitDeployment400JSONResponse{
+			N400JSONResponse: api.N400JSONResponse{Error: "Deployment must have at least one reviewer"},
+		}, nil
+	}
+
+	_, err = accessor.Querier().DeploymentSubmitForReview(ctx, tx, int64(request.Id))
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return api.AdminSubmitDeployment404Response{}, nil
@@ -217,14 +273,44 @@ func SubmitDeployment(ctx context.Context, logger *slog.Logger, accessor dbacces
 		}, nil
 	}
 
+	tx.Commit(ctx)
+
 	// TODO: Notify reviewers (implement this functionality)
 
 	logger.Info("Deployment submitted successfully", "id", deployment.ID, "status", deployment.Status)
 	return api.AdminSubmitDeployment200Response{}, nil
 }
 
+func RejectDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminRejectDeploymentRequestObject) (api.AdminRejectDeploymentResponseObject, error) {
+	logger.Info("AdminRejectDeployment", "id", request.Id, "user", request.Body.User)
+
+	if request.Body == nil || request.Body.User == "" {
+		return api.AdminRejectDeployment400JSONResponse{
+			N400JSONResponse: api.N400JSONResponse{Error: "Missing required field"},
+		}, nil
+	}
+
+	_, err := accessor.Querier().DeploymentReject(ctx, accessor.Source(), &dbsqlc.DeploymentRejectParams{
+		ID:         int64(request.Id),
+		RejectedBy: request.Body.User,
+		Notes:      json.RawMessage(fmt.Sprintf(`{"reason": "%s"}`, request.Body.Reason)),
+	})
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return api.AdminRejectDeployment404Response{}, nil
+		}
+
+		logger.Error("Cannot reject deployment", "error", err)
+		return api.AdminRejectDeployment500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot reject deployment: %v", err)},
+		}, nil
+	}
+
+	return api.AdminRejectDeployment201Response{}, nil
+}
+
 func PublishDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminPublishDeploymentRequestObject) (api.AdminPublishDeploymentResponseObject, error) {
-	logger.Info("AdminPublishDeployment", "id", request.Id)
+	logger.Info("AdminPublishDeployment", "id", request.Id, "user", request.Body.User)
 
 	if request.Body == nil || request.Body.User == "" {
 		return api.AdminPublishDeployment400JSONResponse{
@@ -308,4 +394,13 @@ func DeleteDeployment(ctx context.Context, logger *slog.Logger, accessor dbacces
 	}
 
 	return api.AdminDeleteDeployment200Response{}, nil
+}
+
+func deserializeNotes(content []byte) *map[string]interface{} {
+	var notesMap map[string]interface{}
+	err := json.Unmarshal(content, &notesMap)
+	if err != nil {
+		return nil
+	}
+	return &notesMap
 }

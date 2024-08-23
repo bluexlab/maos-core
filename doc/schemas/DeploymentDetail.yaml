@@ -19,6 +19,8 @@ properties:
     type: array
     items:
       type: string
+  notes:
+    type: object
   created_at:
     type: integer
     format: int64

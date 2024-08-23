@@ -3,6 +3,8 @@ SELECT
   id,
   name,
   status,
+  reviewers,
+  notes,
   created_at,
   created_by,
   approved_at,
@@ -11,7 +13,9 @@ SELECT
   finished_by,
   COUNT(*) OVER() AS total_count
 FROM deployments
-ORDER BY status,created_at DESC, id DESC
+WHERE (sqlc.narg(reviewer)::text IS NULL OR sqlc.narg(reviewer)::text = ANY(reviewers))
+  AND (sqlc.narg(status)::deployment_status IS NULL OR status = sqlc.narg(status)::deployment_status)
+ORDER BY status, created_at DESC, id DESC
 LIMIT sqlc.arg(page_size)::bigint
 OFFSET sqlc.arg(page_size) * (sqlc.arg(page)::bigint - 1);
 
@@ -113,6 +117,18 @@ approved_by = @approved_by::text
 WHERE id = @id::bigint AND (status = 'reviewing' OR status = 'draft')
 RETURNING *;
 
+-- name: DeploymentReject :one
+-- Reject a deployment.
+-- The deployment must be in the reviewing status and the user must be a reviewer.
+UPDATE deployments
+SET status = 'rejected',
+  finished_at = EXTRACT(EPOCH FROM NOW()),
+  finished_by = @rejected_by::text,
+  notes = @notes::jsonb
+WHERE id = @id::bigint
+  AND status = 'reviewing'
+  AND @rejected_by::text = ANY(reviewers)
+RETURNING *;
 
 -- name: DeploymentDelete :one
 DELETE FROM deployments

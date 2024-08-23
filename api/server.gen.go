@@ -86,11 +86,11 @@ const (
 
 // Defines values for InvocationState.
 const (
-	Available InvocationState = "available"
-	Cancelled InvocationState = "cancelled"
-	Completed InvocationState = "completed"
-	Discarded InvocationState = "discarded"
-	Running   InvocationState = "running"
+	InvocationStateAvailable InvocationState = "available"
+	InvocationStateCancelled InvocationState = "cancelled"
+	InvocationStateCompleted InvocationState = "completed"
+	InvocationStateDiscarded InvocationState = "discarded"
+	InvocationStateRunning   InvocationState = "running"
 )
 
 // Defines values for MessageRole.
@@ -107,6 +107,17 @@ const (
 	InvocationCreate  Permission = "invocation:create"
 	InvocationRead    Permission = "invocation:read"
 	InvocationRespond Permission = "invocation:respond"
+)
+
+// Defines values for AdminListDeploymentsParamsStatus.
+const (
+	AdminListDeploymentsParamsStatusApproved  AdminListDeploymentsParamsStatus = "approved"
+	AdminListDeploymentsParamsStatusCancelled AdminListDeploymentsParamsStatus = "cancelled"
+	AdminListDeploymentsParamsStatusDeployed  AdminListDeploymentsParamsStatus = "deployed"
+	AdminListDeploymentsParamsStatusDraft     AdminListDeploymentsParamsStatus = "draft"
+	AdminListDeploymentsParamsStatusRejected  AdminListDeploymentsParamsStatus = "rejected"
+	AdminListDeploymentsParamsStatusRetired   AdminListDeploymentsParamsStatus = "retired"
+	AdminListDeploymentsParamsStatusReviewing AdminListDeploymentsParamsStatus = "reviewing"
 )
 
 // Agent defines model for Agent.
@@ -202,17 +213,18 @@ type Configuration map[string]string
 
 // Deployment defines model for Deployment.
 type Deployment struct {
-	ApprovedAt    *int64           `json:"approved_at,omitempty"`
-	ApprovedBy    *string          `json:"approved_by,omitempty"`
-	ConfigSuiteId *int64           `json:"config_suite_id,omitempty"`
-	CreatedAt     int64            `json:"created_at"`
-	CreatedBy     string           `json:"created_by"`
-	FinishedAt    *int64           `json:"finished_at,omitempty"`
-	FinishedBy    *string          `json:"finished_by,omitempty"`
-	Id            int64            `json:"id"`
-	Name          string           `json:"name"`
-	Reviewers     []string         `json:"reviewers"`
-	Status        DeploymentStatus `json:"status"`
+	ApprovedAt    *int64                  `json:"approved_at,omitempty"`
+	ApprovedBy    *string                 `json:"approved_by,omitempty"`
+	ConfigSuiteId *int64                  `json:"config_suite_id,omitempty"`
+	CreatedAt     int64                   `json:"created_at"`
+	CreatedBy     string                  `json:"created_by"`
+	FinishedAt    *int64                  `json:"finished_at,omitempty"`
+	FinishedBy    *string                 `json:"finished_by,omitempty"`
+	Id            int64                   `json:"id"`
+	Name          string                  `json:"name"`
+	Notes         *map[string]interface{} `json:"notes,omitempty"`
+	Reviewers     []string                `json:"reviewers"`
+	Status        DeploymentStatus        `json:"status"`
 }
 
 // DeploymentStatus defines model for Deployment.Status.
@@ -220,17 +232,18 @@ type DeploymentStatus string
 
 // DeploymentDetail defines model for DeploymentDetail.
 type DeploymentDetail struct {
-	ApprovedAt *int64                 `json:"approved_at,omitempty"`
-	ApprovedBy *string                `json:"approved_by,omitempty"`
-	Configs    *[]Config              `json:"configs,omitempty"`
-	CreatedAt  int64                  `json:"created_at"`
-	CreatedBy  string                 `json:"created_by"`
-	FinishedAt *int64                 `json:"finished_at,omitempty"`
-	FinishedBy *string                `json:"finished_by,omitempty"`
-	Id         int64                  `json:"id"`
-	Name       string                 `json:"name"`
-	Reviewers  []string               `json:"reviewers"`
-	Status     DeploymentDetailStatus `json:"status"`
+	ApprovedAt *int64                  `json:"approved_at,omitempty"`
+	ApprovedBy *string                 `json:"approved_by,omitempty"`
+	Configs    *[]Config               `json:"configs,omitempty"`
+	CreatedAt  int64                   `json:"created_at"`
+	CreatedBy  string                  `json:"created_by"`
+	FinishedAt *int64                  `json:"finished_at,omitempty"`
+	FinishedBy *string                 `json:"finished_by,omitempty"`
+	Id         int64                   `json:"id"`
+	Name       string                  `json:"name"`
+	Notes      *map[string]interface{} `json:"notes,omitempty"`
+	Reviewers  []string                `json:"reviewers"`
+	Status     DeploymentDetailStatus  `json:"status"`
 }
 
 // DeploymentDetailStatus defines model for DeploymentDetail.Status.
@@ -402,9 +415,15 @@ type AdminListDeploymentsParams struct {
 	// PageSize Page number (default 10)
 	PageSize *int `form:"page_size,omitempty" json:"page_size,omitempty"`
 
-	// Name Filter by deployment name
-	Name *string `form:"name,omitempty" json:"name,omitempty"`
+	// Reviewer Filter by if the given user is a reviewer
+	Reviewer *string `form:"reviewer,omitempty" json:"reviewer,omitempty"`
+
+	// Status Filter by deployment status.
+	Status *AdminListDeploymentsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
 }
+
+// AdminListDeploymentsParamsStatus defines parameters for AdminListDeployments.
+type AdminListDeploymentsParamsStatus string
 
 // AdminCreateDeploymentJSONBody defines parameters for AdminCreateDeployment.
 type AdminCreateDeploymentJSONBody struct {
@@ -423,6 +442,15 @@ type AdminUpdateDeploymentJSONBody struct {
 // AdminPublishDeploymentJSONBody defines parameters for AdminPublishDeployment.
 type AdminPublishDeploymentJSONBody struct {
 	// User who is publishing the deployment
+	User string `json:"user"`
+}
+
+// AdminRejectDeploymentJSONBody defines parameters for AdminRejectDeployment.
+type AdminRejectDeploymentJSONBody struct {
+	// Reason The reason for rejecting the deployment
+	Reason string `json:"reason"`
+
+	// User The user who is rejecting the deployment
 	User string `json:"user"`
 }
 
@@ -564,6 +592,9 @@ type AdminUpdateDeploymentJSONRequestBody AdminUpdateDeploymentJSONBody
 
 // AdminPublishDeploymentJSONRequestBody defines body for AdminPublishDeployment for application/json ContentType.
 type AdminPublishDeploymentJSONRequestBody AdminPublishDeploymentJSONBody
+
+// AdminRejectDeploymentJSONRequestBody defines body for AdminRejectDeployment for application/json ContentType.
+type AdminRejectDeploymentJSONRequestBody AdminRejectDeploymentJSONBody
 
 // AdminUpdateSettingJSONRequestBody defines body for AdminUpdateSetting for application/json ContentType.
 type AdminUpdateSettingJSONRequestBody AdminUpdateSettingJSONBody
@@ -730,6 +761,9 @@ type ServerInterface interface {
 	// Publish the Deployment. Only draft deployments can be published. After publishing, the deployment will be in `deployed` status.
 	// (POST /v1/admin/deployments/{id}/publish)
 	AdminPublishDeployment(w http.ResponseWriter, r *http.Request, id int)
+	// Reject the Deployment. Only draft deployments can be rejected. And only the reviewer can reject the deployment. After rejecting, the deployment will be in `rejected` status.
+	// (POST /v1/admin/deployments/{id}/reject)
+	AdminRejectDeployment(w http.ResponseWriter, r *http.Request, id int)
 	// Submit the Deployment for reviewing. Only draft deployments can be submitted. After submitting, the deployment will be in `reviewing` status. Reviewers will be notified.
 	// (POST /v1/admin/deployments/{id}/submit)
 	AdminSubmitDeployment(w http.ResponseWriter, r *http.Request, id int)
@@ -1114,11 +1148,19 @@ func (siw *ServerInterfaceWrapper) AdminListDeployments(w http.ResponseWriter, r
 		return
 	}
 
-	// ------------- Optional query parameter "name" -------------
+	// ------------- Optional query parameter "reviewer" -------------
 
-	err = runtime.BindQueryParameter("form", true, false, "name", r.URL.Query(), &params.Name)
+	err = runtime.BindQueryParameter("form", true, false, "reviewer", r.URL.Query(), &params.Reviewer)
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "reviewer", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "status", r.URL.Query(), &params.Status)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
 		return
 	}
 
@@ -1263,6 +1305,36 @@ func (siw *ServerInterfaceWrapper) AdminPublishDeployment(w http.ResponseWriter,
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminPublishDeployment(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// AdminRejectDeployment operation middleware
+func (siw *ServerInterfaceWrapper) AdminRejectDeployment(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: false})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminRejectDeployment(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1977,6 +2049,8 @@ func HandlerWithOptions(si ServerInterface, options GorillaServerOptions) http.H
 
 	r.HandleFunc(options.BaseURL+"/v1/admin/deployments/{id}/publish", wrapper.AdminPublishDeployment).Methods("POST")
 
+	r.HandleFunc(options.BaseURL+"/v1/admin/deployments/{id}/reject", wrapper.AdminRejectDeployment).Methods("POST")
+
 	r.HandleFunc(options.BaseURL+"/v1/admin/deployments/{id}/submit", wrapper.AdminSubmitDeployment).Methods("POST")
 
 	r.HandleFunc(options.BaseURL+"/v1/admin/setting", wrapper.AdminGetSetting).Methods("GET")
@@ -2671,6 +2745,57 @@ func (response AdminPublishDeployment500JSONResponse) VisitAdminPublishDeploymen
 	return json.NewEncoder(w).Encode(response)
 }
 
+type AdminRejectDeploymentRequestObject struct {
+	Id   int `json:"id,omitempty"`
+	Body *AdminRejectDeploymentJSONRequestBody
+}
+
+type AdminRejectDeploymentResponseObject interface {
+	VisitAdminRejectDeploymentResponse(w http.ResponseWriter) error
+}
+
+type AdminRejectDeployment201Response struct {
+}
+
+func (response AdminRejectDeployment201Response) VisitAdminRejectDeploymentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(201)
+	return nil
+}
+
+type AdminRejectDeployment400JSONResponse struct{ N400JSONResponse }
+
+func (response AdminRejectDeployment400JSONResponse) VisitAdminRejectDeploymentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminRejectDeployment401Response struct {
+}
+
+func (response AdminRejectDeployment401Response) VisitAdminRejectDeploymentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type AdminRejectDeployment404Response struct {
+}
+
+func (response AdminRejectDeployment404Response) VisitAdminRejectDeploymentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type AdminRejectDeployment500JSONResponse struct{ N500JSONResponse }
+
+func (response AdminRejectDeployment500JSONResponse) VisitAdminRejectDeploymentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type AdminSubmitDeploymentRequestObject struct {
 	Id int `json:"id,omitempty"`
 }
@@ -2685,6 +2810,15 @@ type AdminSubmitDeployment200Response struct {
 func (response AdminSubmitDeployment200Response) VisitAdminSubmitDeploymentResponse(w http.ResponseWriter) error {
 	w.WriteHeader(200)
 	return nil
+}
+
+type AdminSubmitDeployment400JSONResponse struct{ N400JSONResponse }
+
+func (response AdminSubmitDeployment400JSONResponse) VisitAdminSubmitDeploymentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type AdminSubmitDeployment401Response struct {
@@ -3488,6 +3622,9 @@ type StrictServerInterface interface {
 	// Publish the Deployment. Only draft deployments can be published. After publishing, the deployment will be in `deployed` status.
 	// (POST /v1/admin/deployments/{id}/publish)
 	AdminPublishDeployment(ctx context.Context, request AdminPublishDeploymentRequestObject) (AdminPublishDeploymentResponseObject, error)
+	// Reject the Deployment. Only draft deployments can be rejected. And only the reviewer can reject the deployment. After rejecting, the deployment will be in `rejected` status.
+	// (POST /v1/admin/deployments/{id}/reject)
+	AdminRejectDeployment(ctx context.Context, request AdminRejectDeploymentRequestObject) (AdminRejectDeploymentResponseObject, error)
 	// Submit the Deployment for reviewing. Only draft deployments can be submitted. After submitting, the deployment will be in `reviewing` status. Reviewers will be notified.
 	// (POST /v1/admin/deployments/{id}/submit)
 	AdminSubmitDeployment(ctx context.Context, request AdminSubmitDeploymentRequestObject) (AdminSubmitDeploymentResponseObject, error)
@@ -4006,6 +4143,39 @@ func (sh *strictHandler) AdminPublishDeployment(w http.ResponseWriter, r *http.R
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminPublishDeploymentResponseObject); ok {
 		if err := validResponse.VisitAdminPublishDeploymentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminRejectDeployment operation middleware
+func (sh *strictHandler) AdminRejectDeployment(w http.ResponseWriter, r *http.Request, id int) {
+	var request AdminRejectDeploymentRequestObject
+
+	request.Id = id
+
+	var body AdminRejectDeploymentJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminRejectDeployment(ctx, request.(AdminRejectDeploymentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminRejectDeployment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminRejectDeploymentResponseObject); ok {
+		if err := validResponse.VisitAdminRejectDeploymentResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

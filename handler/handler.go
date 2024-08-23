@@ -246,6 +246,14 @@ func (s *APIHandler) AdminPublishDeployment(ctx context.Context, request api.Adm
 	return admin.PublishDeployment(ctx, s.logger, s.accessor, request)
 }
 
+func (s *APIHandler) AdminRejectDeployment(ctx context.Context, request api.AdminRejectDeploymentRequestObject) (api.AdminRejectDeploymentResponseObject, error) {
+	token := ValidatePermissions(ctx, "AdminRejectDeployment")
+	if token == nil {
+		return api.AdminRejectDeployment401Response{}, nil
+	}
+	return admin.RejectDeployment(ctx, s.logger, s.accessor, request)
+}
+
 func (s *APIHandler) AdminDeleteDeployment(ctx context.Context, request api.AdminDeleteDeploymentRequestObject) (api.AdminDeleteDeploymentResponseObject, error) {
 	token := ValidatePermissions(ctx, "AdminDeleteDeployment")
 	if token == nil {

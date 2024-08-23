@@ -1,0 +1,40 @@
+post:
+  summary: Reject the Deployment. Only draft deployments can be rejected.
+    And only the reviewer can reject the deployment.
+    After rejecting, the deployment will be in `rejected` status.
+  operationId: adminRejectDeployment
+  tags:
+    - Admin
+  parameters:
+    - in: path
+      name: id
+      schema:
+        type: integer
+      description: Deployment ID
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            reason:
+              type: string
+              description: The reason for rejecting the deployment
+            user:
+              type: string
+              description: The user who is rejecting the deployment
+          required:
+            - user
+            - reason
+  responses:
+    "201":
+      description: Successful response
+    "401":
+      description: Unauthorized
+    "400":
+      $ref: "../../responses/400.yaml"
+    "404":
+      description: Deployment not found
+    "500":
+      $ref: "../../responses/500.yaml"

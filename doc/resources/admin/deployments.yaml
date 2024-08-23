@@ -15,10 +15,23 @@ get:
         type: integer
       description: Page number (default 10)
     - in: query
-      name: name
+      name: reviewer
       schema:
         type: string
-      description: Filter by deployment name
+      description: Filter by if the given user is a reviewer
+    - in: query
+      name: status
+      schema:
+        type: string
+        enum:
+          - draft
+          - reviewing
+          - approved
+          - rejected
+          - deployed
+          - retired
+          - cancelled
+      description: Filter by deployment status.
   responses:
     "200":
       description: Successful response

@@ -12,7 +12,7 @@ import (
 const deploymentDelete = `-- name: DeploymentDelete :one
 DELETE FROM deployments
 WHERE id = $1::bigint AND status = 'draft'
-RETURNING id, name, status, reviewers, config_suite_id, created_by, created_at, approved_by, approved_at, finished_by, finished_at
+RETURNING id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at
 `
 
 func (q *Queries) DeploymentDelete(ctx context.Context, db DBTX, id int64) (*Deployment, error) {
@@ -24,6 +24,7 @@ func (q *Queries) DeploymentDelete(ctx context.Context, db DBTX, id int64) (*Dep
 		&i.Status,
 		&i.Reviewers,
 		&i.ConfigSuiteID,
+		&i.Notes,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.ApprovedBy,
@@ -35,7 +36,7 @@ func (q *Queries) DeploymentDelete(ctx context.Context, db DBTX, id int64) (*Dep
 }
 
 const deploymentGetById = `-- name: DeploymentGetById :one
-SELECT id, name, status, reviewers, config_suite_id, created_by, created_at, approved_by, approved_at, finished_by, finished_at
+SELECT id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at
 FROM deployments
 WHERE id = $1::bigint
 LIMIT 1
@@ -50,6 +51,7 @@ func (q *Queries) DeploymentGetById(ctx context.Context, db DBTX, id int64) (*De
 		&i.Status,
 		&i.Reviewers,
 		&i.ConfigSuiteID,
+		&i.Notes,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.ApprovedBy,
@@ -73,7 +75,7 @@ VALUES (
   COALESCE($3::text[], '{}'),
   $4::text
 )
-RETURNING id, name, status, reviewers, config_suite_id, created_by, created_at, approved_by, approved_at, finished_by, finished_at
+RETURNING id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at
 `
 
 type DeploymentInsertParams struct {
@@ -97,6 +99,7 @@ func (q *Queries) DeploymentInsert(ctx context.Context, db DBTX, arg *Deployment
 		&i.Status,
 		&i.Reviewers,
 		&i.ConfigSuiteID,
+		&i.Notes,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.ApprovedBy,
@@ -128,7 +131,7 @@ inserted_deployment AS (
     $1::text,
     (SELECT id FROM inserted_config_suite)
   )
-  RETURNING id, name, status, reviewers, config_suite_id, created_by, created_at, approved_by, approved_at, finished_by, finished_at
+  RETURNING id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at
 ),
 agent_configs AS (
   INSERT INTO configs (agent_id, config_suite_id, created_by, min_agent_version, content)
@@ -146,7 +149,7 @@ agent_configs AS (
     )
   FROM agents
 )
-SELECT id, name, status, reviewers, config_suite_id, created_by, created_at, approved_by, approved_at, finished_by, finished_at FROM inserted_deployment
+SELECT id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at FROM inserted_deployment
 `
 
 type DeploymentInsertWithConfigSuiteParams struct {
@@ -161,6 +164,7 @@ type DeploymentInsertWithConfigSuiteRow struct {
 	Status        DeploymentStatus
 	Reviewers     []string
 	ConfigSuiteID *int64
+	Notes         []byte
 	CreatedBy     string
 	CreatedAt     int64
 	ApprovedBy    *string
@@ -184,6 +188,7 @@ func (q *Queries) DeploymentInsertWithConfigSuite(ctx context.Context, db DBTX, 
 		&i.Status,
 		&i.Reviewers,
 		&i.ConfigSuiteID,
+		&i.Notes,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.ApprovedBy,
@@ -199,6 +204,8 @@ SELECT
   id,
   name,
   status,
+  reviewers,
+  notes,
   created_at,
   created_by,
   approved_at,
@@ -207,12 +214,16 @@ SELECT
   finished_by,
   COUNT(*) OVER() AS total_count
 FROM deployments
-ORDER BY status,created_at DESC, id DESC
-LIMIT $1::bigint
-OFFSET $1 * ($2::bigint - 1)
+WHERE ($1::text IS NULL OR $1::text = ANY(reviewers))
+  AND ($2::deployment_status IS NULL OR status = $2::deployment_status)
+ORDER BY status, created_at DESC, id DESC
+LIMIT $3::bigint
+OFFSET $3 * ($4::bigint - 1)
 `
 
 type DeploymentListPaginatedParams struct {
+	Reviewer *string
+	Status   NullDeploymentStatus
 	PageSize interface{}
 	Page     int64
 }
@@ -221,6 +232,8 @@ type DeploymentListPaginatedRow struct {
 	ID         int64
 	Name       string
 	Status     DeploymentStatus
+	Reviewers  []string
+	Notes      []byte
 	CreatedAt  int64
 	CreatedBy  string
 	ApprovedAt *int64
@@ -231,7 +244,12 @@ type DeploymentListPaginatedRow struct {
 }
 
 func (q *Queries) DeploymentListPaginated(ctx context.Context, db DBTX, arg *DeploymentListPaginatedParams) ([]*DeploymentListPaginatedRow, error) {
-	rows, err := db.Query(ctx, deploymentListPaginated, arg.PageSize, arg.Page)
+	rows, err := db.Query(ctx, deploymentListPaginated,
+		arg.Reviewer,
+		arg.Status,
+		arg.PageSize,
+		arg.Page,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -243,6 +261,8 @@ func (q *Queries) DeploymentListPaginated(ctx context.Context, db DBTX, arg *Dep
 			&i.ID,
 			&i.Name,
 			&i.Status,
+			&i.Reviewers,
+			&i.Notes,
 			&i.CreatedAt,
 			&i.CreatedBy,
 			&i.ApprovedAt,
@@ -275,7 +295,7 @@ SET status = 'deployed',
 approved_at = EXTRACT(EPOCH FROM NOW()),
 approved_by = $1::text
 WHERE id = $2::bigint AND (status = 'reviewing' OR status = 'draft')
-RETURNING id, name, status, reviewers, config_suite_id, created_by, created_at, approved_by, approved_at, finished_by, finished_at
+RETURNING id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at
 `
 
 type DeploymentPublishParams struct {
@@ -293,6 +313,47 @@ func (q *Queries) DeploymentPublish(ctx context.Context, db DBTX, arg *Deploymen
 		&i.Status,
 		&i.Reviewers,
 		&i.ConfigSuiteID,
+		&i.Notes,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.ApprovedBy,
+		&i.ApprovedAt,
+		&i.FinishedBy,
+		&i.FinishedAt,
+	)
+	return &i, err
+}
+
+const deploymentReject = `-- name: DeploymentReject :one
+UPDATE deployments
+SET status = 'rejected',
+  finished_at = EXTRACT(EPOCH FROM NOW()),
+  finished_by = $1::text,
+  notes = $2::jsonb
+WHERE id = $3::bigint
+  AND status = 'reviewing'
+  AND $1::text = ANY(reviewers)
+RETURNING id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at
+`
+
+type DeploymentRejectParams struct {
+	RejectedBy string
+	Notes      []byte
+	ID         int64
+}
+
+// Reject a deployment.
+// The deployment must be in the reviewing status and the user must be a reviewer.
+func (q *Queries) DeploymentReject(ctx context.Context, db DBTX, arg *DeploymentRejectParams) (*Deployment, error) {
+	row := db.QueryRow(ctx, deploymentReject, arg.RejectedBy, arg.Notes, arg.ID)
+	var i Deployment
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Status,
+		&i.Reviewers,
+		&i.ConfigSuiteID,
+		&i.Notes,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.ApprovedBy,
@@ -307,7 +368,7 @@ const deploymentSubmitForReview = `-- name: DeploymentSubmitForReview :one
 UPDATE deployments
 SET status = 'reviewing'
 WHERE id = $1::bigint AND status = 'draft'
-RETURNING id, name, status, reviewers, config_suite_id, created_by, created_at, approved_by, approved_at, finished_by, finished_at
+RETURNING id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at
 `
 
 func (q *Queries) DeploymentSubmitForReview(ctx context.Context, db DBTX, id int64) (*Deployment, error) {
@@ -319,6 +380,7 @@ func (q *Queries) DeploymentSubmitForReview(ctx context.Context, db DBTX, id int
 		&i.Status,
 		&i.Reviewers,
 		&i.ConfigSuiteID,
+		&i.Notes,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.ApprovedBy,
@@ -335,7 +397,7 @@ SET
   name = COALESCE($1::text, name),
   reviewers = COALESCE($2::text[], reviewers)
 WHERE id = $3::bigint AND status = 'draft'
-RETURNING id, name, status, reviewers, config_suite_id, created_by, created_at, approved_by, approved_at, finished_by, finished_at
+RETURNING id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at
 `
 
 type DeploymentUpdateParams struct {
@@ -353,6 +415,7 @@ func (q *Queries) DeploymentUpdate(ctx context.Context, db DBTX, arg *Deployment
 		&i.Status,
 		&i.Reviewers,
 		&i.ConfigSuiteID,
+		&i.Notes,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.ApprovedBy,

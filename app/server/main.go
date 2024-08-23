@@ -18,8 +18,6 @@ func main() {
 	logger := initLogger()
 	app := &App{logger}
 
-	logger.Warn("stating", slog.String("level", "debug"))
-
 	if len(os.Args) > 1 && os.Args[1] == "migrate" {
 		app.Migrate()
 	} else {
@@ -50,7 +48,7 @@ func initLogger() *slog.Logger {
 	} else {
 		opts := slog.HandlerOptions{
 			AddSource:   true,
-			Level:       slog.LevelInfo,
+			Level:       level,
 			ReplaceAttr: unixTimestampHandler,
 		}
 		handler := slog.NewJSONHandler(os.Stdout, &opts)

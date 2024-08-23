@@ -147,6 +147,7 @@ type Deployment struct {
 	Status        DeploymentStatus
 	Reviewers     []string
 	ConfigSuiteID *int64
+	Notes         []byte
 	CreatedBy     string
 	CreatedAt     int64
 	ApprovedBy    *string

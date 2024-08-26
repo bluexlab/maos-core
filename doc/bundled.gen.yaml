@@ -36,15 +36,36 @@ paths:
       operationId: getCallerConfig
       tags:
         - Configuration
+      parameters:
+        - in: header
+          name: X-Agent-Version
+          required: false
+          schema:
+            type: string
+            pattern: ^\d+\.\d+\.\d+(\.\d+)?$
+          description: >-
+            Specifies the version of the agent in the format x.y.z where x, y,
+            and z are non-negative integers.
       responses:
         '200':
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Configuration'
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Configuration'
+                required:
+                  - data
+        '400':
+          $ref: '#/components/responses/400'
         '401':
           description: Unauthorized
+        '404':
+          description: Config not found
+        '500':
+          $ref: '#/components/responses/500'
   /v1/invocations/async:
     post:
       summary: Create a new asynchronous invocation job.
@@ -1567,6 +1588,8 @@ paths:
                     $ref: '#/components/schemas/Config'
                 required:
                   - data
+        '400':
+          $ref: '#/components/responses/400'
         '401':
           description: Unauthorized
         '404':

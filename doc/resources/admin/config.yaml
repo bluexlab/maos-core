@@ -43,5 +43,7 @@ patch:
       description: Unauthorized
     "404":
       description: Config not found
+    "400":
+      $ref: "../../responses/400.yaml"
     "500":
       $ref: "../../responses/500.yaml"

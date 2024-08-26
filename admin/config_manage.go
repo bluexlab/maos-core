@@ -10,10 +10,21 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/api"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess/dbsqlc"
+	"gitlab.com/navyx/ai/maos/maos-core/util"
 )
 
-func UpdateConfig(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminUpdateConfigRequestObject) (api.AdminUpdateConfigResponseObject, error) {
-	logger.Info("AdminUpdateConfig", "id", request.Id, "user", request.Body.User, "min_agent_version", request.Body.MinAgentVersion, "content", request.Body.Content)
+func UpdateConfig(
+	ctx context.Context,
+	logger *slog.Logger,
+	accessor dbaccess.Accessor,
+	request api.AdminUpdateConfigRequestObject,
+) (api.AdminUpdateConfigResponseObject, error) {
+	logger.Info("AdminUpdateConfig",
+		"id", request.Id,
+		"user", request.Body.User,
+		"min_agent_version", request.Body.MinAgentVersion,
+		"content", request.Body.Content,
+	)
 
 	contentJSON, err := json.Marshal(request.Body.Content)
 	if err != nil {
@@ -23,12 +34,23 @@ func UpdateConfig(ctx context.Context, logger *slog.Logger, accessor dbaccess.Ac
 		}, nil
 	}
 
-	updatedConfig, err := accessor.Querier().ConfigUpdateInactiveContentByCreator(ctx, accessor.Source(), &dbsqlc.ConfigUpdateInactiveContentByCreatorParams{
-		ID:              request.Id,
-		Updater:         request.Body.User,
-		Content:         contentJSON,
-		MinAgentVersion: request.Body.MinAgentVersion,
-	})
+	minAgentVersion := util.DeserializeAgentVersion(request.Body.MinAgentVersion)
+	if minAgentVersion == nil && request.Body.MinAgentVersion != nil {
+		logger.Error("Invalid agent version", "version", request.Body.MinAgentVersion)
+		return api.AdminUpdateConfig400JSONResponse{
+			N400JSONResponse: api.N400JSONResponse{Error: "Invalid agent version"},
+		}, nil
+	}
+
+	updatedConfig, err := accessor.Querier().ConfigUpdateInactiveContentByCreator(
+		ctx,
+		accessor.Source(),
+		&dbsqlc.ConfigUpdateInactiveContentByCreatorParams{
+			ID:              request.Id,
+			Updater:         request.Body.User,
+			Content:         contentJSON,
+			MinAgentVersion: minAgentVersion,
+		})
 
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -59,7 +81,7 @@ func UpdateConfig(ctx context.Context, logger *slog.Logger, accessor dbaccess.Ac
 			AgentId:         updatedConfig.AgentId,
 			AgentName:       updatedConfig.AgentName,
 			Content:         content,
-			MinAgentVersion: updatedConfig.MinAgentVersion,
+			MinAgentVersion: util.SerializeAgentVersion(updatedConfig.MinAgentVersion),
 			CreatedAt:       updatedConfig.CreatedAt,
 			CreatedBy:       updatedConfig.CreatedBy,
 			UpdatedAt:       updatedConfig.UpdatedAt,

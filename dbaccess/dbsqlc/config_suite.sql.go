@@ -11,19 +11,30 @@ import (
 
 const configSuiteActivate = `-- name: ConfigSuiteActivate :one
 WITH deactivate_others AS (
-    UPDATE config_suites
-    SET active = false
-    WHERE active = true AND id <> $1::bigint
+  UPDATE config_suites
+  SET active = false,
+    updated_at = EXTRACT(EPOCH FROM NOW()),
+    updated_by = $1::text
+  WHERE active = true AND id <> $2::bigint
 )
 UPDATE config_suites
-SET active = true
-WHERE id = $1::bigint
+SET active = true,
+  deployed_at = EXTRACT(EPOCH FROM NOW()),
+  updated_at = EXTRACT(EPOCH FROM NOW()),
+  updated_by = $1::text
+WHERE id = $2::bigint
 RETURNING id
 `
 
+type ConfigSuiteActivateParams struct {
+	UpdatedBy string
+	ID        int64
+}
+
 // Deactivate all other config suites and then activate the given config suite
-func (q *Queries) ConfigSuiteActivate(ctx context.Context, db DBTX, id int64) (int64, error) {
-	row := db.QueryRow(ctx, configSuiteActivate, id)
+func (q *Queries) ConfigSuiteActivate(ctx context.Context, db DBTX, arg *ConfigSuiteActivateParams) (int64, error) {
+	row := db.QueryRow(ctx, configSuiteActivate, arg.UpdatedBy, arg.ID)
+	var id int64
 	err := row.Scan(&id)
 	return id, err
 }

@@ -37,11 +37,7 @@ func (s *APIHandler) Close(ctx context.Context) error {
 
 // GetCallerConfig implements the GET /v1/config endpoint
 func (s *APIHandler) GetCallerConfig(ctx context.Context, request api.GetCallerConfigRequestObject) (api.GetCallerConfigResponseObject, error) {
-	config := api.GetCallerConfig200JSONResponse{
-		"key1": "value1",
-		"key2": "value2",
-	}
-	return config, nil
+	return GetAgentConfig(ctx, s.logger, s.accessor, request)
 }
 
 // CreateInvocation implements POST /v1/invocations endpoint

@@ -488,6 +488,12 @@ type CreateCompletionJSONBody struct {
 	Temperature   *float32  `json:"temperature,omitempty"`
 }
 
+// GetCallerConfigParams defines parameters for GetCallerConfig.
+type GetCallerConfigParams struct {
+	// XAgentVersion Specifies the version of the agent in the format x.y.z where x, y, and z are non-negative integers.
+	XAgentVersion *string `json:"X-Agent-Version,omitempty"`
+}
+
 // CreateEmbeddingJSONBody defines parameters for CreateEmbedding.
 type CreateEmbeddingJSONBody struct {
 	// Input The text to embedded.
@@ -799,7 +805,7 @@ type ServerInterface interface {
 	ListCompletionModels(w http.ResponseWriter, r *http.Request)
 	// Get configuration of the caller
 	// (GET /v1/config)
-	GetCallerConfig(w http.ResponseWriter, r *http.Request)
+	GetCallerConfig(w http.ResponseWriter, r *http.Request, params GetCallerConfigParams)
 	// Create embedding of text.
 	// (POST /v1/embedding)
 	CreateEmbedding(w http.ResponseWriter, r *http.Request)
@@ -1507,12 +1513,38 @@ func (siw *ServerInterfaceWrapper) ListCompletionModels(w http.ResponseWriter, r
 func (siw *ServerInterfaceWrapper) GetCallerConfig(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	var err error
+
 	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
 
 	ctx = context.WithValue(ctx, TraceScopes, []string{})
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetCallerConfigParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Agent-Version" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Agent-Version")]; found {
+		var XAgentVersion string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Agent-Version", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Agent-Version", valueList[0], &XAgentVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Agent-Version", Err: err})
+			return
+		}
+
+		params.XAgentVersion = &XAgentVersion
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetCallerConfig(w, r)
+		siw.Handler.GetCallerConfig(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2505,6 +2537,15 @@ func (response AdminUpdateConfig200JSONResponse) VisitAdminUpdateConfigResponse(
 	return json.NewEncoder(w).Encode(response)
 }
 
+type AdminUpdateConfig400JSONResponse struct{ N400JSONResponse }
+
+func (response AdminUpdateConfig400JSONResponse) VisitAdminUpdateConfigResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type AdminUpdateConfig401Response struct {
 }
 
@@ -3078,17 +3119,30 @@ func (response ListCompletionModels401Response) VisitListCompletionModelsRespons
 }
 
 type GetCallerConfigRequestObject struct {
+	Params GetCallerConfigParams
 }
 
 type GetCallerConfigResponseObject interface {
 	VisitGetCallerConfigResponse(w http.ResponseWriter) error
 }
 
-type GetCallerConfig200JSONResponse Configuration
+type GetCallerConfig200JSONResponse struct {
+	// Data A key-value structure representing the caller's configuration
+	Data Configuration `json:"data"`
+}
 
 func (response GetCallerConfig200JSONResponse) VisitGetCallerConfigResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetCallerConfig400JSONResponse struct{ N400JSONResponse }
+
+func (response GetCallerConfig400JSONResponse) VisitGetCallerConfigResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -3099,6 +3153,23 @@ type GetCallerConfig401Response struct {
 func (response GetCallerConfig401Response) VisitGetCallerConfigResponse(w http.ResponseWriter) error {
 	w.WriteHeader(401)
 	return nil
+}
+
+type GetCallerConfig404Response struct {
+}
+
+func (response GetCallerConfig404Response) VisitGetCallerConfigResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type GetCallerConfig500JSONResponse struct{ N500JSONResponse }
+
+func (response GetCallerConfig500JSONResponse) VisitGetCallerConfigResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type CreateEmbeddingRequestObject struct {
@@ -4437,8 +4508,10 @@ func (sh *strictHandler) ListCompletionModels(w http.ResponseWriter, r *http.Req
 }
 
 // GetCallerConfig operation middleware
-func (sh *strictHandler) GetCallerConfig(w http.ResponseWriter, r *http.Request) {
+func (sh *strictHandler) GetCallerConfig(w http.ResponseWriter, r *http.Request, params GetCallerConfigParams) {
 	var request GetCallerConfigRequestObject
+
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetCallerConfig(ctx, request.(GetCallerConfigRequestObject))

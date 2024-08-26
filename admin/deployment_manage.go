@@ -122,7 +122,7 @@ func GetDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.A
 			Id:              row.ID,
 			AgentId:         row.AgentId,
 			AgentName:       row.AgentName,
-			MinAgentVersion: row.MinAgentVersion,
+			MinAgentVersion: util.SerializeAgentVersion(row.MinAgentVersion),
 			CreatedAt:       row.CreatedAt,
 			CreatedBy:       row.CreatedBy,
 			Content:         content,
@@ -356,7 +356,10 @@ func PublishDeployment(ctx context.Context, logger *slog.Logger, accessor dbacce
 	}
 
 	// Activate config suite
-	suiteId, err := accessor.Querier().ConfigSuiteActivate(ctx, tx, *deployment.ConfigSuiteID)
+	suiteId, err := accessor.Querier().ConfigSuiteActivate(ctx, tx, &dbsqlc.ConfigSuiteActivateParams{
+		ID:        *deployment.ConfigSuiteID,
+		UpdatedBy: request.Body.User,
+	})
 	if err != nil {
 		logger.Error("Cannot activate config suite", "error", err)
 		return api.AdminPublishDeployment500JSONResponse{

@@ -533,7 +533,7 @@ func TestCreateDeployment(t *testing.T) {
 		_, err := accessor.Querier().ConfigInsert(ctx, accessor.Source(), &dbsqlc.ConfigInsertParams{
 			AgentId:         agent1.ID,
 			Content:         existingContent1,
-			MinAgentVersion: lo.ToPtr("1.0.0"),
+			MinAgentVersion: []int32{1, 0, 0},
 			CreatedBy:       "test-user",
 		})
 		require.NoError(t, err)
@@ -567,7 +567,7 @@ func TestCreateDeployment(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Equal(t, existingContent1, config1.Content)
-		require.Equal(t, "1.0.0", *config1.MinAgentVersion)
+		require.Equal(t, []int32{1, 0, 0}, config1.MinAgentVersion)
 
 		config2, err := accessor.Querier().ConfigFindByAgentIdAndSuiteId(ctx, accessor.Source(), &dbsqlc.ConfigFindByAgentIdAndSuiteIdParams{
 			AgentId:       agent2.ID,
@@ -1115,6 +1115,14 @@ func TestPublishDeployment(t *testing.T) {
 		dbDeployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), int64(createdDeployment.ID))
 		require.NoError(t, err)
 		require.EqualValues(t, "deployed", dbDeployment.Status)
+
+		// verify config suites was activated
+		dbSuite, err := accessor.Querier().ConfigSuiteGetById(ctx, accessor.Source(), *dbDeployment.ConfigSuiteID)
+		require.NoError(t, err)
+		require.EqualValues(t, true, dbSuite.Active)
+		require.NotNil(t, dbSuite.DeployedAt)
+		require.Equal(t, "admin", *dbSuite.UpdatedBy)
+
 		// Verify that the suite was published to the suite store
 		publishedSuites, err := suiteStore.ReadSuites(ctx)
 		require.NoError(t, err)

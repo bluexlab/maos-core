@@ -2,68 +2,51 @@ package apitest
 
 import (
 	"bytes"
+	"io"
 	"net/http"
 	"testing"
 
-	"gitlab.com/navyx/ai/maos/maos-core/internal/testhelper"
+	"github.com/stretchr/testify/require"
 )
 
-func GetHttp(t *testing.T, url string, token string) (*http.Response, string) {
-	return request(t, "GET", url, token)
+func GetHttp(t *testing.T, url, token string) (*http.Response, string) {
+	return request(t, http.MethodGet, url, nil, token, nil)
 }
 
-func PostHttp(t *testing.T, url string, body string, token string) (*http.Response, string) {
-	return reqeustWithBody(t, "POST", url, body, token)
+func PostHttp(t *testing.T, url, body, token string) (*http.Response, string) {
+	return request(t, http.MethodPost, url, bytes.NewBufferString(body), token, nil)
 }
 
-func PatchHttp(t *testing.T, url string, body string, token string) (*http.Response, string) {
-	return reqeustWithBody(t, "PATCH", url, body, token)
+func PatchHttp(t *testing.T, url, body, token string) (*http.Response, string) {
+	return request(t, http.MethodPatch, url, bytes.NewBufferString(body), token, nil)
 }
 
-func DeleteHttp(t *testing.T, url string, token string) (*http.Response, string) {
-	return request(t, "DELETE", url, token)
+func DeleteHttp(t *testing.T, url, token string) (*http.Response, string) {
+	return request(t, http.MethodDelete, url, nil, token, nil)
 }
 
-func request(t *testing.T, method string, url string, token string) (*http.Response, string) {
-	req, err := http.NewRequest(method, url, nil)
-	if err != nil {
-		t.Fatalf("Error creating request: %v", err)
-	}
+func GetHttpWithHeader(t *testing.T, url, token string, headers map[string]string) (*http.Response, string) {
+	return request(t, http.MethodGet, url, nil, token, headers)
+}
+
+func request(t *testing.T, method, url string, body io.Reader, token string, headers map[string]string) (*http.Response, string) {
+	req, err := http.NewRequest(method, url, body)
+	require.NoError(t, err)
+
 	req.Header.Set("Authorization", "Bearer "+token)
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
 
-	client := http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
+	client := &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
+	defer client.CloseIdleConnections()
 
 	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatalf("Error making request: %v", err)
-	}
+	require.NoError(t, err)
 
-	resBody, err := testhelper.ReadBody(resp.Body)
-	if err != nil {
-		t.Fatalf("Error reading response body: %v", err)
-	}
+	defer resp.Body.Close()
+	resBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
 
-	client.CloseIdleConnections()
-	return resp, resBody
-}
-
-func reqeustWithBody(t *testing.T, method string, url string, body string, token string) (*http.Response, string) {
-	req, err := http.NewRequest(method, url, bytes.NewBufferString(body))
-	if err != nil {
-		t.Fatalf("Error creating request: %v", err)
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	client := http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
-	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatalf("Error making request: %v", err)
-	}
-
-	resBody, err := testhelper.ReadBody(resp.Body)
-	if err != nil {
-		t.Fatalf("Error reading response body: %v", err)
-	}
-	client.CloseIdleConnections()
-	return resp, resBody
+	return resp, string(resBody)
 }

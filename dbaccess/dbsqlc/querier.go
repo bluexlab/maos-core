@@ -18,12 +18,16 @@ type Querier interface {
 	ApiTokenFindByID(ctx context.Context, db DBTX, id string) (*ApiTokenFindByIDRow, error)
 	ApiTokenInsert(ctx context.Context, db DBTX, arg *ApiTokenInsertParams) (*ApiToken, error)
 	ApiTokenListByPage(ctx context.Context, db DBTX, arg *ApiTokenListByPageParams) ([]*ApiTokenListByPageRow, error)
+	// Find the active config for the given agent that is compatible with the given agent version
+	ConfigAgentActiveConfig(ctx context.Context, db DBTX, arg *ConfigAgentActiveConfigParams) (*Config, error)
+	// Find the retired config for the given agent that is compatible with the given agent version
+	ConfigAgentRetiredAndVersionCompatibleConfig(ctx context.Context, db DBTX, arg *ConfigAgentRetiredAndVersionCompatibleConfigParams) (*Config, error)
 	ConfigFindByAgentId(ctx context.Context, db DBTX, agentID int64) (*ConfigFindByAgentIdRow, error)
 	ConfigFindByAgentIdAndSuiteId(ctx context.Context, db DBTX, arg *ConfigFindByAgentIdAndSuiteIdParams) (*ConfigFindByAgentIdAndSuiteIdRow, error)
 	ConfigInsert(ctx context.Context, db DBTX, arg *ConfigInsertParams) (*Config, error)
 	ConfigListBySuiteIdGroupByAgent(ctx context.Context, db DBTX, configSuiteID int64) ([]*ConfigListBySuiteIdGroupByAgentRow, error)
 	// Deactivate all other config suites and then activate the given config suite
-	ConfigSuiteActivate(ctx context.Context, db DBTX, id int64) (int64, error)
+	ConfigSuiteActivate(ctx context.Context, db DBTX, arg *ConfigSuiteActivateParams) (int64, error)
 	ConfigSuiteGetById(ctx context.Context, db DBTX, id int64) (*ConfigSuite, error)
 	ConfigUpdateInactiveContentByCreator(ctx context.Context, db DBTX, arg *ConfigUpdateInactiveContentByCreatorParams) (*ConfigUpdateInactiveContentByCreatorRow, error)
 	DeploymentDelete(ctx context.Context, db DBTX, id int64) (*Deployment, error)

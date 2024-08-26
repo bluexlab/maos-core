@@ -6,6 +6,32 @@ WHERE configs.agent_id = @agent_id
 ORDER BY configs.created_at DESC, configs.id DESC
 LIMIT 1;
 
+-- name: ConfigAgentActiveConfig :one
+-- Find the active config for the given agent that is compatible with the given agent version
+SELECT configs.*
+FROM configs
+JOIN agents ON configs.agent_id = agents.id
+JOIN config_suites ON configs.config_suite_id = config_suites.id
+WHERE configs.agent_id = @agent_id
+  AND config_suites.active IS TRUE
+  AND config_suites.deployed_at IS NOT NULL
+  AND (configs.min_agent_version IS NULL OR @agent_version::integer[] >= configs.min_agent_version::integer[])
+ORDER BY configs.id DESC
+LIMIT 1;
+
+-- name: ConfigAgentRetiredAndVersionCompatibleConfig :one
+-- Find the retired config for the given agent that is compatible with the given agent version
+SELECT configs.*
+FROM configs
+JOIN agents ON configs.agent_id = agents.id
+JOIN config_suites ON configs.config_suite_id = config_suites.id
+WHERE configs.agent_id = @agent_id
+  AND config_suites.active IS FALSE
+  AND config_suites.deployed_at IS NOT NULL
+  AND (configs.min_agent_version IS NULL OR @agent_version::integer[] >= configs.min_agent_version::integer[])
+ORDER BY configs.id DESC
+LIMIT 1;
+
 -- name: ConfigFindByAgentIdAndSuiteId :one
 SELECT configs.*, agents.name AS agent_name
 FROM configs
@@ -41,7 +67,7 @@ WITH config_suite_check AS (
 )
 UPDATE configs SET
     content = COALESCE(sqlc.narg('content')::jsonb, content),
-    min_agent_version = COALESCE(sqlc.narg('min_agent_version')::text, min_agent_version),
+    min_agent_version = COALESCE(sqlc.narg('min_agent_version')::integer[], min_agent_version),
     updated_at = EXTRACT(EPOCH FROM NOW()),
     updated_by = @updater::text
 FROM agents
@@ -68,6 +94,6 @@ INSERT INTO configs(
     @agent_id::bigint,
     @content::jsonb,
     @created_by::text,
-    sqlc.narg('min_agent_version')::text,
+    sqlc.narg('min_agent_version')::integer[],
     sqlc.narg('config_suite_id')::bigint
 ) RETURNING *;

@@ -9,6 +9,78 @@ import (
 	"context"
 )
 
+const configAgentActiveConfig = `-- name: ConfigAgentActiveConfig :one
+SELECT configs.id, configs.agent_id, configs.config_suite_id, configs.content, configs.min_agent_version, configs.created_by, configs.created_at, configs.updated_by, configs.updated_at
+FROM configs
+JOIN agents ON configs.agent_id = agents.id
+JOIN config_suites ON configs.config_suite_id = config_suites.id
+WHERE configs.agent_id = $1
+  AND config_suites.active IS TRUE
+  AND config_suites.deployed_at IS NOT NULL
+  AND (configs.min_agent_version IS NULL OR $2::integer[] >= configs.min_agent_version::integer[])
+ORDER BY configs.id DESC
+LIMIT 1
+`
+
+type ConfigAgentActiveConfigParams struct {
+	AgentId      int64
+	AgentVersion []int32
+}
+
+// Find the active config for the given agent that is compatible with the given agent version
+func (q *Queries) ConfigAgentActiveConfig(ctx context.Context, db DBTX, arg *ConfigAgentActiveConfigParams) (*Config, error) {
+	row := db.QueryRow(ctx, configAgentActiveConfig, arg.AgentId, arg.AgentVersion)
+	var i Config
+	err := row.Scan(
+		&i.ID,
+		&i.AgentId,
+		&i.ConfigSuiteID,
+		&i.Content,
+		&i.MinAgentVersion,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
+	)
+	return &i, err
+}
+
+const configAgentRetiredAndVersionCompatibleConfig = `-- name: ConfigAgentRetiredAndVersionCompatibleConfig :one
+SELECT configs.id, configs.agent_id, configs.config_suite_id, configs.content, configs.min_agent_version, configs.created_by, configs.created_at, configs.updated_by, configs.updated_at
+FROM configs
+JOIN agents ON configs.agent_id = agents.id
+JOIN config_suites ON configs.config_suite_id = config_suites.id
+WHERE configs.agent_id = $1
+  AND config_suites.active IS FALSE
+  AND config_suites.deployed_at IS NOT NULL
+  AND (configs.min_agent_version IS NULL OR $2::integer[] >= configs.min_agent_version::integer[])
+ORDER BY configs.id DESC
+LIMIT 1
+`
+
+type ConfigAgentRetiredAndVersionCompatibleConfigParams struct {
+	AgentId      int64
+	AgentVersion []int32
+}
+
+// Find the retired config for the given agent that is compatible with the given agent version
+func (q *Queries) ConfigAgentRetiredAndVersionCompatibleConfig(ctx context.Context, db DBTX, arg *ConfigAgentRetiredAndVersionCompatibleConfigParams) (*Config, error) {
+	row := db.QueryRow(ctx, configAgentRetiredAndVersionCompatibleConfig, arg.AgentId, arg.AgentVersion)
+	var i Config
+	err := row.Scan(
+		&i.ID,
+		&i.AgentId,
+		&i.ConfigSuiteID,
+		&i.Content,
+		&i.MinAgentVersion,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
+	)
+	return &i, err
+}
+
 const configFindByAgentId = `-- name: ConfigFindByAgentId :one
 SELECT configs.id, configs.agent_id, configs.config_suite_id, configs.content, configs.min_agent_version, configs.created_by, configs.created_at, configs.updated_by, configs.updated_at, agents.name AS agent_name
 FROM configs
@@ -23,7 +95,7 @@ type ConfigFindByAgentIdRow struct {
 	AgentId         int64
 	ConfigSuiteID   *int64
 	Content         []byte
-	MinAgentVersion *string
+	MinAgentVersion []int32
 	CreatedBy       string
 	CreatedAt       int64
 	UpdatedBy       *string
@@ -69,7 +141,7 @@ type ConfigFindByAgentIdAndSuiteIdRow struct {
 	AgentId         int64
 	ConfigSuiteID   *int64
 	Content         []byte
-	MinAgentVersion *string
+	MinAgentVersion []int32
 	CreatedBy       string
 	CreatedAt       int64
 	UpdatedBy       *string
@@ -106,7 +178,7 @@ INSERT INTO configs(
     $1::bigint,
     $2::jsonb,
     $3::text,
-    $4::text,
+    $4::integer[],
     $5::bigint
 ) RETURNING id, agent_id, config_suite_id, content, min_agent_version, created_by, created_at, updated_by, updated_at
 `
@@ -115,7 +187,7 @@ type ConfigInsertParams struct {
 	AgentId         int64
 	Content         []byte
 	CreatedBy       string
-	MinAgentVersion *string
+	MinAgentVersion []int32
 	ConfigSuiteID   *int64
 }
 
@@ -165,7 +237,7 @@ type ConfigListBySuiteIdGroupByAgentRow struct {
 	Content         []byte
 	CreatedAt       int64
 	CreatedBy       string
-	MinAgentVersion *string
+	MinAgentVersion []int32
 	ConfigSuiteID   *int64
 	AgentId_2       int64
 	AgentName       string
@@ -211,7 +283,7 @@ WITH config_suite_check AS (
 )
 UPDATE configs SET
     content = COALESCE($1::jsonb, content),
-    min_agent_version = COALESCE($2::text, min_agent_version),
+    min_agent_version = COALESCE($2::integer[], min_agent_version),
     updated_at = EXTRACT(EPOCH FROM NOW()),
     updated_by = $3::text
 FROM agents
@@ -230,7 +302,7 @@ RETURNING configs.id, configs.agent_id, configs.config_suite_id, configs.content
 
 type ConfigUpdateInactiveContentByCreatorParams struct {
 	Content         []byte
-	MinAgentVersion *string
+	MinAgentVersion []int32
 	Updater         string
 	ID              int64
 }
@@ -240,7 +312,7 @@ type ConfigUpdateInactiveContentByCreatorRow struct {
 	AgentId         int64
 	ConfigSuiteID   *int64
 	Content         []byte
-	MinAgentVersion *string
+	MinAgentVersion []int32
 	CreatedBy       string
 	CreatedAt       int64
 	UpdatedBy       *string

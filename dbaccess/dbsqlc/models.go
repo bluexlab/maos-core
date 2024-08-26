@@ -124,7 +124,7 @@ type Config struct {
 	AgentId         int64
 	ConfigSuiteID   *int64
 	Content         []byte
-	MinAgentVersion *string
+	MinAgentVersion []int32
 	CreatedBy       string
 	CreatedAt       int64
 	UpdatedBy       *string

@@ -8,4 +8,12 @@ type Config struct {
 	DatabaseUser     string `envconfig:"DATABASE_USER" validate:"omitempty"`
 	DatabasePassword string `envconfig:"DATABASE_PASSWORD" validate:"omitempty"`
 	DatabaseName     string `envconfig:"DATABASE_NAME" validate:"omitempty"`
+
+	// AWS credentials
+	AWSAccessKeyID     string `envconfig:"AWS_ACCESS_KEY_ID" validate:"required"`
+	AWSSecretAccessKey string `envconfig:"AWS_SECRET_ACCESS_KEY" validate:"required"`
+	AWSRegion          string `envconfig:"AWS_REGION" validate:"required"`
+	SuiteStoreBucket   string `envconfig:"SUITE_STORE_BUCKET" validate:"required"`
+	SuiteStorePrefix   string `envconfig:"SUITE_STORE_PREFIX"`
+	ClusterName        string `envconfig:"CLUSTER_NAME" validate:"required"`
 }

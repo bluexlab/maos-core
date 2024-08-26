@@ -81,3 +81,30 @@ func (q *Queries) ReferenceConfigSuiteList(ctx context.Context, db DBTX) ([]*Ref
 	}
 	return items, nil
 }
+
+const referenceConfigSuiteUpsert = `-- name: ReferenceConfigSuiteUpsert :one
+INSERT INTO reference_config_suites (
+  name,
+  config_suites
+)
+VALUES (
+  $1::text,
+  $2::jsonb
+)
+ON CONFLICT (name) DO UPDATE SET
+  config_suites = $2::jsonb,
+  updated_at = EXTRACT(EPOCH FROM NOW())
+RETURNING id
+`
+
+type ReferenceConfigSuiteUpsertParams struct {
+	Name              string
+	ConfigSuitesBytes []byte
+}
+
+func (q *Queries) ReferenceConfigSuiteUpsert(ctx context.Context, db DBTX, arg *ReferenceConfigSuiteUpsertParams) (int64, error) {
+	row := db.QueryRow(ctx, referenceConfigSuiteUpsert, arg.Name, arg.ConfigSuitesBytes)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}

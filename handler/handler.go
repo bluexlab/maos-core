@@ -7,14 +7,16 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/admin"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
+	"gitlab.com/navyx/ai/maos/maos-core/internal/suitestore"
 	"gitlab.com/navyx/ai/maos/maos-core/invocation"
 )
 
-func NewAPIHandler(logger *slog.Logger, accessor dbaccess.Accessor) *APIHandler {
+func NewAPIHandler(logger *slog.Logger, accessor dbaccess.Accessor, suiteStore suitestore.SuiteStore) *APIHandler {
 	return &APIHandler{
 		logger:            logger,
 		accessor:          accessor,
 		invocationManager: invocation.NewManager(logger, accessor),
+		suiteStore:        suiteStore,
 	}
 }
 
@@ -22,6 +24,7 @@ type APIHandler struct {
 	logger            *slog.Logger
 	accessor          dbaccess.Accessor
 	invocationManager *invocation.Manager
+	suiteStore        suitestore.SuiteStore
 }
 
 func (s *APIHandler) Start(ctx context.Context) error {
@@ -243,7 +246,7 @@ func (s *APIHandler) AdminPublishDeployment(ctx context.Context, request api.Adm
 	if token == nil {
 		return api.AdminPublishDeployment401Response{}, nil
 	}
-	return admin.PublishDeployment(ctx, s.logger, s.accessor, request)
+	return admin.PublishDeployment(ctx, s.logger, s.accessor, s.suiteStore, request)
 }
 
 func (s *APIHandler) AdminRejectDeployment(ctx context.Context, request api.AdminRejectDeploymentRequestObject) (api.AdminRejectDeploymentResponseObject, error) {

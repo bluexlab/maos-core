@@ -10,6 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/go-playground/validator"
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v5"
@@ -18,6 +21,7 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/api"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 	"gitlab.com/navyx/ai/maos/maos-core/handler"
+	"gitlab.com/navyx/ai/maos/maos-core/internal/suitestore"
 	"gitlab.com/navyx/ai/maos/maos-core/middleware"
 	"gitlab.com/navyx/ai/maos/maos-core/migrate"
 )
@@ -95,7 +99,17 @@ func (a *App) Run() {
 		},
 	}
 
-	apiHandler := handler.NewAPIHandler(a.logger.WithGroup("APIHandler"), accessor)
+	// Create S3 client with AWS credentials
+	s3Client, err := a.createS3Client(config)
+	if err != nil {
+		a.logger.Error("Failed to create S3 client", "err", err)
+		os.Exit(1)
+	}
+	suiteStore := suitestore.NewS3SuiteStore(a.logger.WithGroup("SuiteStore"), s3Client, config.SuiteStoreBucket, config.SuiteStorePrefix, config.ClusterName, accessor, 10*time.Second)
+	suiteStore.StartBackgroundScanner(ctx)
+	defer suiteStore.StopAndWaitForScannerToStop(10 * time.Second)
+
+	apiHandler := handler.NewAPIHandler(a.logger.WithGroup("APIHandler"), accessor, suiteStore)
 	err = apiHandler.Start(ctx)
 	if err != nil {
 		a.logger.Error("Failed to initialize handler", "err", err)
@@ -183,4 +197,16 @@ func (a *App) loadConfig() Config {
 	}
 
 	return config
+}
+
+func (a *App) createS3Client(systemConfig Config) (*s3.Client, error) {
+	creds := credentials.NewStaticCredentialsProvider(systemConfig.AWSAccessKeyID, systemConfig.AWSSecretAccessKey, "")
+	cfg, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithRegion(systemConfig.AWSRegion),
+		config.WithCredentialsProvider(creds),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load AWS config: %w", err)
+	}
+	return s3.NewFromConfig(cfg), nil
 }

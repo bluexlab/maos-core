@@ -56,6 +56,7 @@ type Querier interface {
 	QueueFindById(ctx context.Context, db DBTX, id int64) (*Queue, error)
 	QueueInsert(ctx context.Context, db DBTX, arg *QueueInsertParams) (*Queue, error)
 	ReferenceConfigSuiteList(ctx context.Context, db DBTX) ([]*ReferenceConfigSuites, error)
+	ReferenceConfigSuiteUpsert(ctx context.Context, db DBTX, arg *ReferenceConfigSuiteUpsertParams) (int64, error)
 	SettingGetSystem(ctx context.Context, db DBTX) (*Settings, error)
 	SettingUpdateSystem(ctx context.Context, db DBTX, value []byte) (*Settings, error)
 	TableExists(ctx context.Context, db DBTX, tableName string) (bool, error)

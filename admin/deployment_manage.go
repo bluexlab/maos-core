@@ -11,6 +11,7 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/api"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess/dbsqlc"
+	"gitlab.com/navyx/ai/maos/maos-core/internal/suitestore"
 	"gitlab.com/navyx/ai/maos/maos-core/util"
 )
 
@@ -311,7 +312,7 @@ func RejectDeployment(ctx context.Context, logger *slog.Logger, accessor dbacces
 	return api.AdminRejectDeployment201Response{}, nil
 }
 
-func PublishDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminPublishDeploymentRequestObject) (api.AdminPublishDeploymentResponseObject, error) {
+func PublishDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, suiteStore suitestore.SuiteStore, request api.AdminPublishDeploymentRequestObject) (api.AdminPublishDeploymentResponseObject, error) {
 	logger.Info("AdminPublishDeployment", "id", request.Id, "user", request.Body.User)
 
 	if request.Body == nil || request.Body.User == "" {
@@ -355,7 +356,7 @@ func PublishDeployment(ctx context.Context, logger *slog.Logger, accessor dbacce
 	}
 
 	// Activate config suite
-	_, err = accessor.Querier().ConfigSuiteActivate(ctx, tx, *deployment.ConfigSuiteID)
+	suiteId, err := accessor.Querier().ConfigSuiteActivate(ctx, tx, *deployment.ConfigSuiteID)
 	if err != nil {
 		logger.Error("Cannot activate config suite", "error", err)
 		return api.AdminPublishDeployment500JSONResponse{
@@ -372,6 +373,15 @@ func PublishDeployment(ctx context.Context, logger *slog.Logger, accessor dbacce
 		logger.Error("Cannot publish deployment", "error", err)
 		return api.AdminPublishDeployment500JSONResponse{
 			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot publish deployment: %v", err)},
+		}, nil
+	}
+
+	// publish config suite to S3
+	err = publishConfigSuiteToS3(ctx, suiteId, tx, accessor, suiteStore)
+	if err != nil {
+		logger.Error("Cannot serialize config suite", "error", err)
+		return api.AdminPublishDeployment500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot serialize config suite: %v", err)},
 		}, nil
 	}
 
@@ -405,4 +415,27 @@ func deserializeNotes(content []byte) *map[string]interface{} {
 		return nil
 	}
 	return &notesMap
+}
+
+func publishConfigSuiteToS3(ctx context.Context, configSuiteId int64, tx pgx.Tx, accessor dbaccess.Accessor, suiteStore suitestore.SuiteStore) error {
+	configs, err := accessor.Querier().ConfigListBySuiteIdGroupByAgent(ctx, tx, configSuiteId)
+	if err != nil {
+		return err
+	}
+
+	publishingConfigs := make([]suitestore.AgentConfig, 0, len(configs))
+	for _, config := range configs {
+		var configContent map[string]string
+		err := json.Unmarshal(config.Content, &configContent)
+		if err != nil {
+			return err
+		}
+
+		publishingConfigs = append(publishingConfigs, suitestore.AgentConfig{
+			AgentName: config.AgentName,
+			Configs:   configContent,
+		})
+	}
+
+	return suiteStore.WriteSuite(ctx, publishingConfigs)
 }

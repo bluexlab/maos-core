@@ -1057,10 +1057,11 @@ func TestPublishDeployment(t *testing.T) {
 	ctx := context.Background()
 	logger := testhelper.Logger(t)
 
-	setupDeploymentTest := func(t *testing.T, status string) (*pgxpool.Pool, dbaccess.Accessor, *dbsqlc.Deployment, *dbsqlc.Agent, *dbsqlc.Agent) {
+	setupDeploymentTest := func(t *testing.T, status string) (*pgxpool.Pool, dbaccess.Accessor, *dbsqlc.Deployment, *dbsqlc.Agent, *dbsqlc.Agent, *testhelper.MockSuiteStore) {
 		t.Helper()
 		dbPool := testhelper.TestDB(ctx, t)
 		accessor := dbaccess.New(dbPool)
+		suiteStore := testhelper.NewMockSuiteStore()
 
 		// Create two agents
 		agent1 := fixture.InsertAgent(t, ctx, dbPool, "agent1")
@@ -1094,19 +1095,19 @@ func TestPublishDeployment(t *testing.T) {
 			CreatedBy:     createdDeployment.CreatedBy,
 			CreatedAt:     createdDeployment.CreatedAt,
 		}
-		return dbPool, accessor, deployment, agent1, agent2
+		return dbPool, accessor, deployment, agent1, agent2, suiteStore
 	}
 
 	t.Run("Successfully publish reviewing deployment", func(t *testing.T) {
 		t.Parallel()
-		_, accessor, createdDeployment, _, _ := setupDeploymentTest(t, "reviewing")
+		_, accessor, createdDeployment, _, _, suiteStore := setupDeploymentTest(t, "reviewing")
 
 		// Publish the deployment
 		publishRequest := api.AdminPublishDeploymentRequestObject{
 			Id:   int(createdDeployment.ID),
 			Body: &api.AdminPublishDeploymentJSONRequestBody{User: "admin"},
 		}
-		publishResponse, err := admin.PublishDeployment(ctx, logger, accessor, publishRequest)
+		publishResponse, err := admin.PublishDeployment(ctx, logger, accessor, suiteStore, publishRequest)
 		require.NoError(t, err)
 		require.IsType(t, api.AdminPublishDeployment201Response{}, publishResponse)
 
@@ -1114,18 +1115,36 @@ func TestPublishDeployment(t *testing.T) {
 		dbDeployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), int64(createdDeployment.ID))
 		require.NoError(t, err)
 		require.EqualValues(t, "deployed", dbDeployment.Status)
+		// Verify that the suite was published to the suite store
+		publishedSuites, err := suiteStore.ReadSuites(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, publishedSuites)
+		require.Len(t, publishedSuites, 1) // We expect 2 agent configs
+
+		// Verify the content of the published suite
+		publishedSuite := publishedSuites[0]
+		for _, agentConfig := range publishedSuite.ConfigSuites {
+			switch agentConfig.AgentName {
+			case "agent1":
+				require.Equal(t, map[string]string{"key": "value1"}, agentConfig.Configs)
+			case "agent2":
+				require.Equal(t, map[string]string{"key": "value2"}, agentConfig.Configs)
+			default:
+				t.Fatalf("Unexpected agent name: %s", agentConfig.AgentName)
+			}
+		}
 	})
 
 	t.Run("Successfully publish draft deployment", func(t *testing.T) {
 		t.Parallel()
-		_, accessor, createdDeployment, _, _ := setupDeploymentTest(t, "draft")
+		_, accessor, createdDeployment, _, _, suiteStore := setupDeploymentTest(t, "draft")
 
 		// Publish the deployment
 		publishRequest := api.AdminPublishDeploymentRequestObject{
 			Id:   int(createdDeployment.ID),
 			Body: &api.AdminPublishDeploymentJSONRequestBody{User: "admin"},
 		}
-		publishResponse, err := admin.PublishDeployment(ctx, logger, accessor, publishRequest)
+		publishResponse, err := admin.PublishDeployment(ctx, logger, accessor, suiteStore, publishRequest)
 		require.NoError(t, err)
 		require.IsType(t, api.AdminPublishDeployment201Response{}, publishResponse)
 
@@ -1137,14 +1156,14 @@ func TestPublishDeployment(t *testing.T) {
 
 	t.Run("Attempt to publish already deployed deployment", func(t *testing.T) {
 		t.Parallel()
-		_, accessor, createdDeployment, _, _ := setupDeploymentTest(t, "deployed")
+		_, accessor, createdDeployment, _, _, suiteStore := setupDeploymentTest(t, "deployed")
 
 		// Attempt to publish the already deployed deployment
 		publishRequest := api.AdminPublishDeploymentRequestObject{
 			Id:   int(createdDeployment.ID),
 			Body: &api.AdminPublishDeploymentJSONRequestBody{User: "admin"},
 		}
-		publishResponse, err := admin.PublishDeployment(ctx, logger, accessor, publishRequest)
+		publishResponse, err := admin.PublishDeployment(ctx, logger, accessor, suiteStore, publishRequest)
 		require.NoError(t, err)
 		require.IsType(t, api.AdminPublishDeployment400JSONResponse{}, publishResponse)
 
@@ -1156,7 +1175,7 @@ func TestPublishDeployment(t *testing.T) {
 
 	t.Run("Database error", func(t *testing.T) {
 		t.Parallel()
-		dbPool, accessor, createdDeployment, _, _ := setupDeploymentTest(t, "reviewing")
+		dbPool, accessor, createdDeployment, _, _, suiteStore := setupDeploymentTest(t, "reviewing")
 
 		// Close the database pool to simulate a database error
 		dbPool.Close()
@@ -1166,7 +1185,7 @@ func TestPublishDeployment(t *testing.T) {
 			Id:   int(createdDeployment.ID),
 			Body: &api.AdminPublishDeploymentJSONRequestBody{User: "admin"},
 		}
-		publishResponse, err := admin.PublishDeployment(ctx, logger, accessor, publishRequest)
+		publishResponse, err := admin.PublishDeployment(ctx, logger, accessor, suiteStore, publishRequest)
 		require.NoError(t, err)
 		require.IsType(t, api.AdminPublishDeployment500JSONResponse{}, publishResponse)
 

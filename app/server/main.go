@@ -17,12 +17,7 @@ func main() {
 
 	logger := initLogger()
 	app := &App{logger}
-
-	if len(os.Args) > 1 && os.Args[1] == "migrate" {
-		app.Migrate()
-	} else {
-		app.Run()
-	}
+	app.Run()
 }
 
 func initLogger() *slog.Logger {

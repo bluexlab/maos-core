@@ -28,7 +28,8 @@ COPY . /app/src/
 # build the maos-core-server
 RUN cd /app/src \
     && echo $BUILDNO > REVISION \
-    && go build -o /go/bin/maos-core-server ./app/server
+    && go build -o /go/bin/maos-core-server ./app/server \
+    && go build -o /go/bin/maos-core-migrate ./app/migrate
 
 # FROM scratch
 FROM alpine:3.19
@@ -43,6 +44,7 @@ WORKDIR $APP_HOME
 COPY --from=builder /usr/local/go/lib/time/zoneinfo.zip /usr/local/go/lib/time/zoneinfo.zip
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /go/bin/maos-core-server $APP_HOME/maos-core-server
+COPY --from=builder /go/bin/maos-core-migrate $APP_HOME/maos-core-migrate
 COPY migrate.sh $APP_HOME/migrate.sh
 
 # add launch shell command

@@ -23,7 +23,6 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/handler"
 	"gitlab.com/navyx/ai/maos/maos-core/internal/suitestore"
 	"gitlab.com/navyx/ai/maos/maos-core/middleware"
-	"gitlab.com/navyx/ai/maos/maos-core/migrate"
 )
 
 const appName string = "maos-core-server"
@@ -137,37 +136,6 @@ func (a *App) Run() {
 		a.logger.Error("Server running error", "err", err)
 		os.Exit(1)
 	}
-}
-
-func (a *App) Migrate() {
-	ctx := context.Background()
-
-	config := a.loadConfig()
-
-	// Connect to the database and create a new accessor
-	dbConfig, err := pgxpool.ParseConfig(config.DatabaseUrl)
-	if err != nil {
-		a.logger.Error("Failed to parse connection string", "err", err)
-		os.Exit(1)
-	}
-
-	dbConfig.ConnConfig.Tracer = &LoggingQueryTracer{a.logger}
-	pool, err := pgxpool.NewWithConfig(ctx, dbConfig)
-	if err != nil {
-		a.logger.Error("Failed to connect to database", "err", err)
-		os.Exit(1)
-	}
-	defer pool.Close()
-
-	accessor := dbaccess.New(pool)
-
-	_, err = migrate.New(accessor, nil).Migrate(ctx, migrate.DirectionUp, &migrate.MigrateOpts{})
-	if err != nil {
-		a.logger.Error("Failed to migrate db", "url", config.DatabaseUrl, "error", err.Error())
-		os.Exit(2)
-	}
-
-	a.logger.Info("maos-core Database migrated")
 }
 
 func (a *App) loadConfig() Config {

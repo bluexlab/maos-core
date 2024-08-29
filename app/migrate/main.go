@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log/slog"
 	"os"
 
@@ -81,10 +82,20 @@ Options:
 }
 
 func connectToDatabase(ctx context.Context, logger *slog.Logger) *pgxpool.Pool {
-	databaseUrl := os.Getenv("DATABASE_URL")
-	if databaseUrl == "" {
-		logger.Error("DATABASE_URL is not set in the environment variables")
-		os.Exit(1)
+	var databaseUrl string
+	if databaseUrl = os.Getenv("DATABASE_URL"); databaseUrl == "" {
+		host := os.Getenv("DATABASE_HOST")
+		port := os.Getenv("DATABASE_PORT")
+		user := os.Getenv("DATABASE_USER")
+		password := os.Getenv("DATABASE_PASSWORD")
+		dbName := os.Getenv("DATABASE_NAME")
+
+		if host == "" || port == "" || user == "" || password == "" || dbName == "" {
+			logger.Error("Database connection details are not fully specified in environment variables")
+			os.Exit(1)
+		}
+
+		databaseUrl = fmt.Sprintf("postgres://%s:%s@%s:%s/%s", user, password, host, port, dbName)
 	}
 
 	dbConfig, err := pgxpool.ParseConfig(databaseUrl)

@@ -10,6 +10,8 @@ post:
       name: id
       schema:
         type: integer
+        format: int64
+      required: true
       description: Deployment ID
   requestBody:
     required: true

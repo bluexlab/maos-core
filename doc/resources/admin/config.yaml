@@ -10,6 +10,7 @@ patch:
         type: integer
         format: int64
       description: Config ID
+      required: true
   requestBody:
     required: true
     content:

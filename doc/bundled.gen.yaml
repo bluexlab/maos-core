@@ -1137,6 +1137,8 @@ paths:
           name: id
           schema:
             type: integer
+            format: int64
+          required: true
           description: Agent ID
       responses:
         '200':
@@ -1171,6 +1173,8 @@ paths:
           name: id
           schema:
             type: integer
+            format: int64
+          required: true
           description: Agent ID
       requestBody:
         required: true
@@ -1212,6 +1216,8 @@ paths:
           name: id
           schema:
             type: integer
+            format: int64
+          required: true
           description: Agent ID
       responses:
         '200':
@@ -1361,6 +1367,7 @@ paths:
           schema:
             type: integer
             format: int64
+          required: true
           description: Deployment ID
       responses:
         '200':
@@ -1386,6 +1393,7 @@ paths:
           schema:
             type: integer
             format: int64
+          required: true
           description: Deployment ID
       requestBody:
         required: true
@@ -1431,6 +1439,7 @@ paths:
           schema:
             type: integer
             format: int64
+          required: true
           description: Deployment ID
       responses:
         '200':
@@ -1455,6 +1464,8 @@ paths:
           name: id
           schema:
             type: integer
+            format: int64
+          required: true
           description: Deployment ID
       responses:
         '200':
@@ -1480,6 +1491,8 @@ paths:
           name: id
           schema:
             type: integer
+            format: int64
+          required: true
           description: Deployment ID
       requestBody:
         required: true
@@ -1518,6 +1531,8 @@ paths:
           name: id
           schema:
             type: integer
+            format: int64
+          required: true
           description: Deployment ID
       requestBody:
         required: true
@@ -1559,6 +1574,7 @@ paths:
             type: integer
             format: int64
           description: Config ID
+          required: true
       requestBody:
         required: true
         content:
@@ -1609,8 +1625,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Setting'
-              required:
-                - data
         '401':
           description: Unauthorized
         '500':
@@ -1627,7 +1641,7 @@ paths:
             schema:
               type: object
               properties:
-                cluster_name:
+                display_name:
                   type: string
                 deployment_approve_required:
                   type: boolean
@@ -1638,8 +1652,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Setting'
-              required:
-                - data
         '400':
           $ref: '#/components/responses/400'
         '401':
@@ -2153,11 +2165,11 @@ components:
       properties:
         deployment_approve_required:
           type: boolean
-        cluster_name:
+        display_name:
           type: string
       required:
         - deployment_approve_required
-        - cluster_name
+        - display_name
     ReferenceConfigSuite:
       type: object
       properties:

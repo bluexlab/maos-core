@@ -105,7 +105,7 @@ func (a *App) Run() {
 		a.logger.Error("Failed to create S3 client", "err", err)
 		os.Exit(1)
 	}
-	suiteStore := suitestore.NewS3SuiteStore(a.logger.WithGroup("SuiteStore"), s3Client, config.SuiteStoreBucket, config.SuiteStorePrefix, config.ClusterName, accessor, 10*time.Second)
+	suiteStore := suitestore.NewS3SuiteStore(a.logger.WithGroup("SuiteStore"), s3Client, config.SuiteStoreBucket, config.SuiteStorePrefix, config.MaosDisplayName, accessor, 10*time.Second)
 	suiteStore.StartBackgroundScanner(ctx)
 	defer suiteStore.StopAndWaitForScannerToStop(10 * time.Second)
 

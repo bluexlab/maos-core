@@ -15,5 +15,5 @@ type Config struct {
 	AWSRegion          string `envconfig:"AWS_REGION" validate:"required"`
 	SuiteStoreBucket   string `envconfig:"SUITE_STORE_BUCKET" validate:"required"`
 	SuiteStorePrefix   string `envconfig:"SUITE_STORE_PREFIX"`
-	ClusterName        string `envconfig:"CLUSTER_NAME" validate:"required"`
+	MaosDisplayName    string `envconfig:"MAOS_DISPLAY_NAME" validate:"required"`
 }

@@ -77,7 +77,7 @@ func TestS3SuiteStore_StartBackgroundScanner(t *testing.T) {
 		mockS3Client,
 		"test-bucket",
 		"test-prefix",
-		"test-cluster",
+		"test-maos",
 		accessor,
 		600*time.Millisecond,
 	)
@@ -163,7 +163,7 @@ func TestS3SuiteStore_WriteSuite(t *testing.T) {
 		mockS3Client,
 		"test-bucket",
 		"test-prefix",
-		"test-cluster",
+		"test-maos",
 		accessor,
 		1*time.Second,
 	)
@@ -173,7 +173,7 @@ func TestS3SuiteStore_WriteSuite(t *testing.T) {
 	}
 
 	expectedContent := suitestore.ReferenceConfigSuite{
-		SuiteName:    "test-cluster",
+		SuiteName:    "test-maos",
 		ConfigSuites: suite,
 	}
 	expectedJSON, err := json.Marshal(expectedContent)
@@ -181,7 +181,7 @@ func TestS3SuiteStore_WriteSuite(t *testing.T) {
 
 	mockS3Client.On("PutObject", mock.Anything, &s3.PutObjectInput{
 		Bucket: aws.String("test-bucket"),
-		Key:    aws.String("test-prefix/test-cluster.json"),
+		Key:    aws.String("test-prefix/test-maos.json"),
 		Body:   bytes.NewReader(expectedJSON),
 	}, mock.Anything).Return(&s3.PutObjectOutput{}, nil)
 
@@ -202,7 +202,7 @@ func TestS3SuiteStore_WriteSuite_Error(t *testing.T) {
 		mockS3Client,
 		"test-bucket",
 		"test-prefix",
-		"", // Empty cluster name to trigger error
+		"", // Empty display name to trigger error
 		accessor,
 		1*time.Second,
 	)
@@ -213,7 +213,7 @@ func TestS3SuiteStore_WriteSuite_Error(t *testing.T) {
 
 	err := store.WriteSuite(context.Background(), suite)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "clusterName is required")
+	require.Contains(t, err.Error(), "displayName is required")
 
 	mockS3Client.AssertNotCalled(t, "PutObject")
 }

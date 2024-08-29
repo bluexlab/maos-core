@@ -834,7 +834,7 @@ func TestSubmitDeployment(t *testing.T) {
 		require.NotNil(t, createdDeployment)
 
 		// Submit the deployment for review
-		submitRequest := api.AdminSubmitDeploymentRequestObject{Id: int(createdDeployment.ID)}
+		submitRequest := api.AdminSubmitDeploymentRequestObject{Id: createdDeployment.ID}
 		submitResponse, err := admin.SubmitDeployment(ctx, logger, accessor, submitRequest)
 		require.NoError(t, err)
 		require.IsType(t, api.AdminSubmitDeployment200Response{}, submitResponse)
@@ -874,13 +874,13 @@ func TestSubmitDeployment(t *testing.T) {
 		require.NotNil(t, createdDeployment)
 
 		// Attempt to submit the non-draft deployment
-		submitRequest := api.AdminSubmitDeploymentRequestObject{Id: int(createdDeployment.ID)}
+		submitRequest := api.AdminSubmitDeploymentRequestObject{Id: createdDeployment.ID}
 		submitResponse, err := admin.SubmitDeployment(ctx, logger, accessor, submitRequest)
 		require.NoError(t, err)
 		require.IsType(t, api.AdminSubmitDeployment400JSONResponse{}, submitResponse)
 
 		// Verify that the status hasn't changed
-		dbDeployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), int64(createdDeployment.ID))
+		dbDeployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), createdDeployment.ID)
 		require.NoError(t, err)
 		require.EqualValues(t, "reviewing", dbDeployment.Status)
 	})
@@ -903,7 +903,7 @@ func TestSubmitDeployment(t *testing.T) {
 		dbPool.Close()
 
 		// Attempt to submit the deployment
-		submitRequest := api.AdminSubmitDeploymentRequestObject{Id: int(createdDeployment.ID)}
+		submitRequest := api.AdminSubmitDeploymentRequestObject{Id: createdDeployment.ID}
 		submitResponse, err := admin.SubmitDeployment(ctx, logger, accessor, submitRequest)
 		require.NoError(t, err)
 		require.IsType(t, api.AdminSubmitDeployment500JSONResponse{}, submitResponse)
@@ -938,9 +938,8 @@ func TestRejectDeployment(t *testing.T) {
 	t.Run("Successfully reject draft deployment", func(t *testing.T) {
 		t.Parallel()
 		_, accessor, createdDeployment := setupRejectDeploymentTest(t, "reviewing")
-
 		rejectRequest := api.AdminRejectDeploymentRequestObject{
-			Id: int(createdDeployment.ID),
+			Id: createdDeployment.ID,
 			Body: &api.AdminRejectDeploymentJSONRequestBody{
 				User:   "reviewer1",
 				Reason: "Test rejection reason",
@@ -964,7 +963,7 @@ func TestRejectDeployment(t *testing.T) {
 		_, accessor, createdDeployment := setupRejectDeploymentTest(t, "draft")
 
 		rejectRequest := api.AdminRejectDeploymentRequestObject{
-			Id: int(createdDeployment.ID),
+			Id: createdDeployment.ID,
 			Body: &api.AdminRejectDeploymentJSONRequestBody{
 				User:   "reviewer1",
 				Reason: "Test rejection reason",
@@ -975,7 +974,7 @@ func TestRejectDeployment(t *testing.T) {
 		require.IsType(t, api.AdminRejectDeployment404Response{}, rejectResponse)
 
 		// Verify that the status hasn't changed
-		dbDeployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), int64(createdDeployment.ID))
+		dbDeployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), createdDeployment.ID)
 		require.NoError(t, err)
 		require.EqualValues(t, "draft", dbDeployment.Status)
 	})
@@ -985,7 +984,7 @@ func TestRejectDeployment(t *testing.T) {
 		_, accessor, createdDeployment := setupRejectDeploymentTest(t, "reviewing")
 
 		rejectRequest := api.AdminRejectDeploymentRequestObject{
-			Id: int(createdDeployment.ID),
+			Id: createdDeployment.ID,
 			Body: &api.AdminRejectDeploymentJSONRequestBody{
 				User:   "non-reviewer",
 				Reason: "Test rejection reason",
@@ -996,7 +995,7 @@ func TestRejectDeployment(t *testing.T) {
 		require.IsType(t, api.AdminRejectDeployment404Response{}, rejectResponse)
 
 		// Verify that the status hasn't changed
-		dbDeployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), int64(createdDeployment.ID))
+		dbDeployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), createdDeployment.ID)
 		require.NoError(t, err)
 		require.EqualValues(t, "reviewing", dbDeployment.Status)
 	})
@@ -1006,7 +1005,7 @@ func TestRejectDeployment(t *testing.T) {
 		_, accessor, createdDeployment := setupRejectDeploymentTest(t, "reviewing")
 
 		rejectRequest := api.AdminRejectDeploymentRequestObject{
-			Id:   int(createdDeployment.ID),
+			Id:   createdDeployment.ID,
 			Body: &api.AdminRejectDeploymentJSONRequestBody{},
 		}
 		rejectResponse, err := admin.RejectDeployment(ctx, logger, accessor, rejectRequest)
@@ -1019,7 +1018,7 @@ func TestRejectDeployment(t *testing.T) {
 		_, accessor, createdDeployment := setupRejectDeploymentTest(t, "reviewing")
 
 		rejectRequest := api.AdminRejectDeploymentRequestObject{
-			Id: int(createdDeployment.ID),
+			Id: createdDeployment.ID,
 			Body: &api.AdminRejectDeploymentJSONRequestBody{
 				User: "reviewer1",
 			},
@@ -1037,7 +1036,7 @@ func TestRejectDeployment(t *testing.T) {
 		dbPool.Close()
 
 		rejectRequest := api.AdminRejectDeploymentRequestObject{
-			Id: int(createdDeployment.ID),
+			Id: createdDeployment.ID,
 			Body: &api.AdminRejectDeploymentJSONRequestBody{
 				User:   "reviewer1",
 				Reason: "Test rejection reason",
@@ -1104,7 +1103,7 @@ func TestPublishDeployment(t *testing.T) {
 
 		// Publish the deployment
 		publishRequest := api.AdminPublishDeploymentRequestObject{
-			Id:   int(createdDeployment.ID),
+			Id:   createdDeployment.ID,
 			Body: &api.AdminPublishDeploymentJSONRequestBody{User: "admin"},
 		}
 		publishResponse, err := admin.PublishDeployment(ctx, logger, accessor, suiteStore, publishRequest)
@@ -1149,7 +1148,7 @@ func TestPublishDeployment(t *testing.T) {
 
 		// Publish the deployment
 		publishRequest := api.AdminPublishDeploymentRequestObject{
-			Id:   int(createdDeployment.ID),
+			Id:   createdDeployment.ID,
 			Body: &api.AdminPublishDeploymentJSONRequestBody{User: "admin"},
 		}
 		publishResponse, err := admin.PublishDeployment(ctx, logger, accessor, suiteStore, publishRequest)
@@ -1168,7 +1167,7 @@ func TestPublishDeployment(t *testing.T) {
 
 		// Attempt to publish the already deployed deployment
 		publishRequest := api.AdminPublishDeploymentRequestObject{
-			Id:   int(createdDeployment.ID),
+			Id:   createdDeployment.ID,
 			Body: &api.AdminPublishDeploymentJSONRequestBody{User: "admin"},
 		}
 		publishResponse, err := admin.PublishDeployment(ctx, logger, accessor, suiteStore, publishRequest)
@@ -1190,7 +1189,7 @@ func TestPublishDeployment(t *testing.T) {
 
 		// Attempt to publish the deployment
 		publishRequest := api.AdminPublishDeploymentRequestObject{
-			Id:   int(createdDeployment.ID),
+			Id:   createdDeployment.ID,
 			Body: &api.AdminPublishDeploymentJSONRequestBody{User: "admin"},
 		}
 		publishResponse, err := admin.PublishDeployment(ctx, logger, accessor, suiteStore, publishRequest)

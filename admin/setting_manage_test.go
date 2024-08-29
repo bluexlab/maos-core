@@ -28,7 +28,7 @@ func TestGetSettingWithDB(t *testing.T) {
 		accessor := dbaccess.New(dbPool)
 
 		// Setup setting
-		_, err := accessor.Source().Exec(ctx, "INSERT INTO settings (key, value) VALUES ($1, $2)", "system", []byte(`{"cluster_name": "test-cluster", "deployment_approve_required": true}`))
+		_, err := accessor.Source().Exec(ctx, "INSERT INTO settings (key, value) VALUES ($1, $2)", "system", []byte(`{"display_name": "test-maos", "deployment_approve_required": true}`))
 		require.NoError(t, err)
 
 		response, err := admin.GetSetting(ctx, logger, accessor, api.AdminGetSettingRequestObject{})
@@ -36,7 +36,7 @@ func TestGetSettingWithDB(t *testing.T) {
 		require.IsType(t, api.AdminGetSetting200JSONResponse{}, response)
 
 		jsonResponse := response.(api.AdminGetSetting200JSONResponse)
-		assert.Equal(t, "test-cluster", jsonResponse.ClusterName)
+		assert.Equal(t, "test-maos", jsonResponse.DisplayName)
 		assert.True(t, jsonResponse.DeploymentApproveRequired)
 	})
 
@@ -69,7 +69,7 @@ func TestGetSettingWithDB(t *testing.T) {
 		require.IsType(t, api.AdminGetSetting200JSONResponse{}, response)
 
 		jsonResponse := response.(api.AdminGetSetting200JSONResponse)
-		assert.Empty(t, jsonResponse.ClusterName)
+		assert.Empty(t, jsonResponse.DisplayName)
 		assert.False(t, jsonResponse.DeploymentApproveRequired)
 	})
 }
@@ -86,13 +86,13 @@ func TestUpdateSetting(t *testing.T) {
 		accessor := dbaccess.New(dbPool)
 
 		// Setup initial setting
-		_, err := accessor.Source().Exec(ctx, "INSERT INTO settings (key, value) VALUES ($1, $2)", "system", []byte(`{"cluster_name": "initial-cluster", "deployment_approve_required": false}`))
+		_, err := accessor.Source().Exec(ctx, "INSERT INTO settings (key, value) VALUES ($1, $2)", "system", []byte(`{"display_name": "initial-maos", "deployment_approve_required": false}`))
 		require.NoError(t, err)
 
 		// Prepare update request
 		updateRequest := api.AdminUpdateSettingRequestObject{
 			Body: &api.AdminUpdateSettingJSONRequestBody{
-				ClusterName:               lo.ToPtr("updated-cluster"),
+				DisplayName:               lo.ToPtr("updated-maos"),
 				DeploymentApproveRequired: lo.ToPtr(true),
 			},
 		}
@@ -102,7 +102,7 @@ func TestUpdateSetting(t *testing.T) {
 		require.IsType(t, api.AdminUpdateSetting200JSONResponse{}, response)
 
 		jsonResponse := response.(api.AdminUpdateSetting200JSONResponse)
-		assert.Equal(t, "updated-cluster", jsonResponse.ClusterName)
+		assert.Equal(t, "updated-maos", jsonResponse.DisplayName)
 		assert.True(t, jsonResponse.DeploymentApproveRequired)
 
 		// Verify the update in the database
@@ -113,11 +113,11 @@ func TestUpdateSetting(t *testing.T) {
 		var settingContent admin.SettingType
 		err = json.Unmarshal(settingValue, &settingContent)
 		require.NoError(t, err)
-		assert.Equal(t, "updated-cluster", *settingContent.ClusterName)
+		assert.Equal(t, "updated-maos", *settingContent.DisplayName)
 		assert.True(t, *settingContent.DeploymentApproveRequired)
 	})
 
-	t.Run("Update with only cluster name", func(t *testing.T) {
+	t.Run("Update with only display name", func(t *testing.T) {
 		t.Parallel()
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
@@ -125,13 +125,13 @@ func TestUpdateSetting(t *testing.T) {
 		accessor := dbaccess.New(dbPool)
 
 		// Setup initial setting
-		_, err := accessor.Source().Exec(ctx, "INSERT INTO settings (key, value) VALUES ($1, $2)", "system", []byte(`{"cluster_name": "initial-cluster", "deployment_approve_required": true}`))
+		_, err := accessor.Source().Exec(ctx, "INSERT INTO settings (key, value) VALUES ($1, $2)", "system", []byte(`{"display_name": "initial-maos", "deployment_approve_required": true}`))
 		require.NoError(t, err)
 
-		// Prepare update request with only cluster name
+		// Prepare update request with only display name
 		updateRequest := api.AdminUpdateSettingRequestObject{
 			Body: &api.AdminUpdateSettingJSONRequestBody{
-				ClusterName: lo.ToPtr("updated-cluster-name"),
+				DisplayName: lo.ToPtr("updated-maos-name"),
 			},
 		}
 
@@ -140,7 +140,7 @@ func TestUpdateSetting(t *testing.T) {
 		require.IsType(t, api.AdminUpdateSetting200JSONResponse{}, response)
 
 		jsonResponse := response.(api.AdminUpdateSetting200JSONResponse)
-		assert.Equal(t, "updated-cluster-name", jsonResponse.ClusterName)
+		assert.Equal(t, "updated-maos-name", jsonResponse.DisplayName)
 		assert.True(t, jsonResponse.DeploymentApproveRequired) // Should remain unchanged
 
 		// Verify the update in the database
@@ -151,7 +151,7 @@ func TestUpdateSetting(t *testing.T) {
 		var settingContent admin.SettingType
 		err = json.Unmarshal(settingValue, &settingContent)
 		require.NoError(t, err)
-		assert.Equal(t, "updated-cluster-name", *settingContent.ClusterName)
+		assert.Equal(t, "updated-maos-name", *settingContent.DisplayName)
 		assert.True(t, *settingContent.DeploymentApproveRequired) // Should remain unchanged
 	})
 
@@ -165,7 +165,7 @@ func TestUpdateSetting(t *testing.T) {
 		// Prepare update request
 		updateRequest := api.AdminUpdateSettingRequestObject{
 			Body: &api.AdminUpdateSettingJSONRequestBody{
-				ClusterName:               lo.ToPtr("new-cluster"),
+				DisplayName:               lo.ToPtr("new-maos"),
 				DeploymentApproveRequired: lo.ToPtr(true),
 			},
 		}
@@ -175,7 +175,7 @@ func TestUpdateSetting(t *testing.T) {
 		require.IsType(t, api.AdminUpdateSetting200JSONResponse{}, response)
 
 		jsonResponse := response.(api.AdminUpdateSetting200JSONResponse)
-		assert.Equal(t, "new-cluster", jsonResponse.ClusterName)
+		assert.Equal(t, "new-maos", jsonResponse.DisplayName)
 		assert.True(t, jsonResponse.DeploymentApproveRequired)
 
 		// Verify the update in the database
@@ -186,7 +186,7 @@ func TestUpdateSetting(t *testing.T) {
 		var settingContent admin.SettingType
 		err = json.Unmarshal(settingValue, &settingContent)
 		require.NoError(t, err)
-		assert.Equal(t, "new-cluster", *settingContent.ClusterName)
+		assert.Equal(t, "new-maos", *settingContent.DisplayName)
 		assert.True(t, *settingContent.DeploymentApproveRequired)
 	})
 
@@ -214,7 +214,7 @@ func TestUpdateSetting(t *testing.T) {
 
 		updateRequest := api.AdminUpdateSettingRequestObject{
 			Body: &api.AdminUpdateSettingJSONRequestBody{
-				ClusterName: lo.ToPtr("test-cluster"),
+				DisplayName: lo.ToPtr("test-maos"),
 			},
 		}
 

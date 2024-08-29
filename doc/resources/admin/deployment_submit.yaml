@@ -10,8 +10,9 @@ post:
       name: id
       schema:
         type: integer
+        format: int64
+      required: true
       description: Deployment ID
-
   responses:
     "200":
       description: Successful response

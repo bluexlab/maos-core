@@ -9,6 +9,7 @@ get:
       schema:
         type: integer
         format: int64
+      required: true
       description: Deployment ID
   responses:
     "200":
@@ -35,6 +36,7 @@ patch:
       schema:
         type: integer
         format: int64
+      required: true
       description: Deployment ID
   requestBody:
     required: true
@@ -81,6 +83,7 @@ delete:
       schema:
         type: integer
         format: int64
+      required: true
       description: Deployment ID
   responses:
     "200":

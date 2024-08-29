@@ -367,8 +367,8 @@ type RerankResult struct {
 
 // Setting defines model for Setting.
 type Setting struct {
-	ClusterName               string `json:"cluster_name"`
 	DeploymentApproveRequired bool   `json:"deployment_approve_required"`
+	DisplayName               string `json:"display_name"`
 }
 
 // N400 defines model for 400.
@@ -471,8 +471,8 @@ type AdminRejectDeploymentJSONBody struct {
 
 // AdminUpdateSettingJSONBody defines parameters for AdminUpdateSetting.
 type AdminUpdateSettingJSONBody struct {
-	ClusterName               *string `json:"cluster_name,omitempty"`
 	DeploymentApproveRequired *bool   `json:"deployment_approve_required,omitempty"`
+	DisplayName               *string `json:"display_name,omitempty"`
 }
 
 // CreateCompletionJSONBody defines parameters for CreateCompletion.
@@ -748,13 +748,13 @@ type ServerInterface interface {
 	AdminCreateAgent(w http.ResponseWriter, r *http.Request)
 	// Delete one specific Agent
 	// (DELETE /v1/admin/agents/{id})
-	AdminDeleteAgent(w http.ResponseWriter, r *http.Request, id int)
+	AdminDeleteAgent(w http.ResponseWriter, r *http.Request, id int64)
 	// Get one specific Agents
 	// (GET /v1/admin/agents/{id})
-	AdminGetAgent(w http.ResponseWriter, r *http.Request, id int)
+	AdminGetAgent(w http.ResponseWriter, r *http.Request, id int64)
 	// Update one specific Agent
 	// (PATCH /v1/admin/agents/{id})
-	AdminUpdateAgent(w http.ResponseWriter, r *http.Request, id int)
+	AdminUpdateAgent(w http.ResponseWriter, r *http.Request, id int64)
 	// List API tokens
 	// (GET /v1/admin/api_tokens)
 	AdminListApiTokens(w http.ResponseWriter, r *http.Request, params AdminListApiTokensParams)
@@ -781,13 +781,13 @@ type ServerInterface interface {
 	AdminUpdateDeployment(w http.ResponseWriter, r *http.Request, id int64)
 	// Publish the Deployment. Only draft deployments can be published. After publishing, the deployment will be in `deployed` status.
 	// (POST /v1/admin/deployments/{id}/publish)
-	AdminPublishDeployment(w http.ResponseWriter, r *http.Request, id int)
+	AdminPublishDeployment(w http.ResponseWriter, r *http.Request, id int64)
 	// Reject the Deployment. Only draft deployments can be rejected. And only the reviewer can reject the deployment. After rejecting, the deployment will be in `rejected` status.
 	// (POST /v1/admin/deployments/{id}/reject)
-	AdminRejectDeployment(w http.ResponseWriter, r *http.Request, id int)
+	AdminRejectDeployment(w http.ResponseWriter, r *http.Request, id int64)
 	// Submit the Deployment for reviewing. Only draft deployments can be submitted. After submitting, the deployment will be in `reviewing` status. Reviewers will be notified.
 	// (POST /v1/admin/deployments/{id}/submit)
-	AdminSubmitDeployment(w http.ResponseWriter, r *http.Request, id int)
+	AdminSubmitDeployment(w http.ResponseWriter, r *http.Request, id int64)
 	// List reference config suites
 	// (GET /v1/admin/reference_config_suites)
 	AdminListReferenceConfigSuites(w http.ResponseWriter, r *http.Request)
@@ -955,9 +955,9 @@ func (siw *ServerInterfaceWrapper) AdminDeleteAgent(w http.ResponseWriter, r *ht
 	var err error
 
 	// ------------- Path parameter "id" -------------
-	var id int
+	var id int64
 
-	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: false})
+	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: true})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
 		return
@@ -985,9 +985,9 @@ func (siw *ServerInterfaceWrapper) AdminGetAgent(w http.ResponseWriter, r *http.
 	var err error
 
 	// ------------- Path parameter "id" -------------
-	var id int
+	var id int64
 
-	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: false})
+	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: true})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
 		return
@@ -1015,9 +1015,9 @@ func (siw *ServerInterfaceWrapper) AdminUpdateAgent(w http.ResponseWriter, r *ht
 	var err error
 
 	// ------------- Path parameter "id" -------------
-	var id int
+	var id int64
 
-	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: false})
+	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: true})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
 		return
@@ -1122,7 +1122,7 @@ func (siw *ServerInterfaceWrapper) AdminUpdateConfig(w http.ResponseWriter, r *h
 	// ------------- Path parameter "id" -------------
 	var id int64
 
-	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: false})
+	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: true})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
 		return
@@ -1243,7 +1243,7 @@ func (siw *ServerInterfaceWrapper) AdminDeleteDeployment(w http.ResponseWriter, 
 	// ------------- Path parameter "id" -------------
 	var id int64
 
-	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: false})
+	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: true})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
 		return
@@ -1273,7 +1273,7 @@ func (siw *ServerInterfaceWrapper) AdminGetDeployment(w http.ResponseWriter, r *
 	// ------------- Path parameter "id" -------------
 	var id int64
 
-	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: false})
+	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: true})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
 		return
@@ -1303,7 +1303,7 @@ func (siw *ServerInterfaceWrapper) AdminUpdateDeployment(w http.ResponseWriter, 
 	// ------------- Path parameter "id" -------------
 	var id int64
 
-	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: false})
+	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: true})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
 		return
@@ -1331,9 +1331,9 @@ func (siw *ServerInterfaceWrapper) AdminPublishDeployment(w http.ResponseWriter,
 	var err error
 
 	// ------------- Path parameter "id" -------------
-	var id int
+	var id int64
 
-	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: false})
+	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: true})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
 		return
@@ -1361,9 +1361,9 @@ func (siw *ServerInterfaceWrapper) AdminRejectDeployment(w http.ResponseWriter, 
 	var err error
 
 	// ------------- Path parameter "id" -------------
-	var id int
+	var id int64
 
-	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: false})
+	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: true})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
 		return
@@ -1391,9 +1391,9 @@ func (siw *ServerInterfaceWrapper) AdminSubmitDeployment(w http.ResponseWriter, 
 	var err error
 
 	// ------------- Path parameter "id" -------------
-	var id int
+	var id int64
 
-	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: false})
+	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: true})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
 		return
@@ -2289,7 +2289,7 @@ func (response AdminCreateAgent500JSONResponse) VisitAdminCreateAgentResponse(w 
 }
 
 type AdminDeleteAgentRequestObject struct {
-	Id int `json:"id,omitempty"`
+	Id int64 `json:"id"`
 }
 
 type AdminDeleteAgentResponseObject interface {
@@ -2338,7 +2338,7 @@ func (response AdminDeleteAgent500JSONResponse) VisitAdminDeleteAgentResponse(w 
 }
 
 type AdminGetAgentRequestObject struct {
-	Id int `json:"id,omitempty"`
+	Id int64 `json:"id"`
 }
 
 type AdminGetAgentResponseObject interface {
@@ -2382,7 +2382,7 @@ func (response AdminGetAgent500JSONResponse) VisitAdminGetAgentResponse(w http.R
 }
 
 type AdminUpdateAgentRequestObject struct {
-	Id   int `json:"id,omitempty"`
+	Id   int64 `json:"id"`
 	Body *AdminUpdateAgentJSONRequestBody
 }
 
@@ -2518,7 +2518,7 @@ func (response AdminCreateApiToken500JSONResponse) VisitAdminCreateApiTokenRespo
 }
 
 type AdminUpdateConfigRequestObject struct {
-	Id   int64 `json:"id,omitempty"`
+	Id   int64 `json:"id"`
 	Body *AdminUpdateConfigJSONRequestBody
 }
 
@@ -2663,7 +2663,7 @@ func (response AdminCreateDeployment500JSONResponse) VisitAdminCreateDeploymentR
 }
 
 type AdminDeleteDeploymentRequestObject struct {
-	Id int64 `json:"id,omitempty"`
+	Id int64 `json:"id"`
 }
 
 type AdminDeleteDeploymentResponseObject interface {
@@ -2704,7 +2704,7 @@ func (response AdminDeleteDeployment500JSONResponse) VisitAdminDeleteDeploymentR
 }
 
 type AdminGetDeploymentRequestObject struct {
-	Id int64 `json:"id,omitempty"`
+	Id int64 `json:"id"`
 }
 
 type AdminGetDeploymentResponseObject interface {
@@ -2746,7 +2746,7 @@ func (response AdminGetDeployment500JSONResponse) VisitAdminGetDeploymentRespons
 }
 
 type AdminUpdateDeploymentRequestObject struct {
-	Id   int64 `json:"id,omitempty"`
+	Id   int64 `json:"id"`
 	Body *AdminUpdateDeploymentJSONRequestBody
 }
 
@@ -2791,7 +2791,7 @@ func (response AdminUpdateDeployment500JSONResponse) VisitAdminUpdateDeploymentR
 }
 
 type AdminPublishDeploymentRequestObject struct {
-	Id   int `json:"id,omitempty"`
+	Id   int64 `json:"id"`
 	Body *AdminPublishDeploymentJSONRequestBody
 }
 
@@ -2842,7 +2842,7 @@ func (response AdminPublishDeployment500JSONResponse) VisitAdminPublishDeploymen
 }
 
 type AdminRejectDeploymentRequestObject struct {
-	Id   int `json:"id,omitempty"`
+	Id   int64 `json:"id"`
 	Body *AdminRejectDeploymentJSONRequestBody
 }
 
@@ -2893,7 +2893,7 @@ func (response AdminRejectDeployment500JSONResponse) VisitAdminRejectDeploymentR
 }
 
 type AdminSubmitDeploymentRequestObject struct {
-	Id int `json:"id,omitempty"`
+	Id int64 `json:"id"`
 }
 
 type AdminSubmitDeploymentResponseObject interface {
@@ -3965,7 +3965,7 @@ func (sh *strictHandler) AdminCreateAgent(w http.ResponseWriter, r *http.Request
 }
 
 // AdminDeleteAgent operation middleware
-func (sh *strictHandler) AdminDeleteAgent(w http.ResponseWriter, r *http.Request, id int) {
+func (sh *strictHandler) AdminDeleteAgent(w http.ResponseWriter, r *http.Request, id int64) {
 	var request AdminDeleteAgentRequestObject
 
 	request.Id = id
@@ -3991,7 +3991,7 @@ func (sh *strictHandler) AdminDeleteAgent(w http.ResponseWriter, r *http.Request
 }
 
 // AdminGetAgent operation middleware
-func (sh *strictHandler) AdminGetAgent(w http.ResponseWriter, r *http.Request, id int) {
+func (sh *strictHandler) AdminGetAgent(w http.ResponseWriter, r *http.Request, id int64) {
 	var request AdminGetAgentRequestObject
 
 	request.Id = id
@@ -4017,7 +4017,7 @@ func (sh *strictHandler) AdminGetAgent(w http.ResponseWriter, r *http.Request, i
 }
 
 // AdminUpdateAgent operation middleware
-func (sh *strictHandler) AdminUpdateAgent(w http.ResponseWriter, r *http.Request, id int) {
+func (sh *strictHandler) AdminUpdateAgent(w http.ResponseWriter, r *http.Request, id int64) {
 	var request AdminUpdateAgentRequestObject
 
 	request.Id = id
@@ -4282,7 +4282,7 @@ func (sh *strictHandler) AdminUpdateDeployment(w http.ResponseWriter, r *http.Re
 }
 
 // AdminPublishDeployment operation middleware
-func (sh *strictHandler) AdminPublishDeployment(w http.ResponseWriter, r *http.Request, id int) {
+func (sh *strictHandler) AdminPublishDeployment(w http.ResponseWriter, r *http.Request, id int64) {
 	var request AdminPublishDeploymentRequestObject
 
 	request.Id = id
@@ -4315,7 +4315,7 @@ func (sh *strictHandler) AdminPublishDeployment(w http.ResponseWriter, r *http.R
 }
 
 // AdminRejectDeployment operation middleware
-func (sh *strictHandler) AdminRejectDeployment(w http.ResponseWriter, r *http.Request, id int) {
+func (sh *strictHandler) AdminRejectDeployment(w http.ResponseWriter, r *http.Request, id int64) {
 	var request AdminRejectDeploymentRequestObject
 
 	request.Id = id
@@ -4348,7 +4348,7 @@ func (sh *strictHandler) AdminRejectDeployment(w http.ResponseWriter, r *http.Re
 }
 
 // AdminSubmitDeployment operation middleware
-func (sh *strictHandler) AdminSubmitDeployment(w http.ResponseWriter, r *http.Request, id int) {
+func (sh *strictHandler) AdminSubmitDeployment(w http.ResponseWriter, r *http.Request, id int64) {
 	var request AdminSubmitDeploymentRequestObject
 
 	request.Id = id

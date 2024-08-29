@@ -12,7 +12,7 @@ import (
 )
 
 type SettingType struct {
-	ClusterName               *string `json:"cluster_name,omitempty"`
+	DisplayName               *string `json:"display_name,omitempty"`
 	DeploymentApproveRequired *bool   `json:"deployment_approve_required,omitempty"`
 }
 
@@ -23,7 +23,7 @@ func GetSetting(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acce
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return api.AdminGetSetting200JSONResponse{
-				ClusterName:               "",
+				DisplayName:               "",
 				DeploymentApproveRequired: false,
 			}, nil
 		}
@@ -42,7 +42,7 @@ func GetSetting(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acce
 	}
 
 	return api.AdminGetSetting200JSONResponse{
-		ClusterName:               lo.FromPtrOr(settingContent.ClusterName, ""),
+		DisplayName:               lo.FromPtrOr(settingContent.DisplayName, ""),
 		DeploymentApproveRequired: lo.FromPtrOr(settingContent.DeploymentApproveRequired, false),
 	}, nil
 }
@@ -68,7 +68,7 @@ func UpdateSetting(ctx context.Context, logger *slog.Logger, accessor dbaccess.A
 	}
 
 	settingContent := SettingType{
-		ClusterName:               request.Body.ClusterName,
+		DisplayName:               request.Body.DisplayName,
 		DeploymentApproveRequired: request.Body.DeploymentApproveRequired,
 	}
 
@@ -92,7 +92,7 @@ func UpdateSetting(ctx context.Context, logger *slog.Logger, accessor dbaccess.A
 	}
 
 	return api.AdminUpdateSetting200JSONResponse{
-		ClusterName:               lo.FromPtrOr(updatedSetting.ClusterName, ""),
+		DisplayName:               lo.FromPtrOr(updatedSetting.DisplayName, ""),
 		DeploymentApproveRequired: lo.FromPtrOr(updatedSetting.DeploymentApproveRequired, false),
 	}, nil
 }

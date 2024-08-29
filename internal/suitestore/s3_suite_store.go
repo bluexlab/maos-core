@@ -28,7 +28,7 @@ type S3SuiteStore struct {
 	s3Client     S3ClientInterface
 	bucketName   string
 	keyPrefix    string
-	clusterName  string
+	displayName  string
 	db           dbaccess.Accessor
 	scanInterval time.Duration
 	stopChan     chan struct{}
@@ -37,13 +37,13 @@ type S3SuiteStore struct {
 }
 
 // NewS3SuiteStore creates a new S3SuiteStore
-func NewS3SuiteStore(logger *slog.Logger, s3Client S3ClientInterface, bucketName, keyPrefix, clusterName string, db dbaccess.Accessor, scanInterval time.Duration) *S3SuiteStore {
+func NewS3SuiteStore(logger *slog.Logger, s3Client S3ClientInterface, bucketName, keyPrefix, displayName string, db dbaccess.Accessor, scanInterval time.Duration) *S3SuiteStore {
 	return &S3SuiteStore{
 		logger:       logger,
 		s3Client:     s3Client,
 		bucketName:   bucketName,
 		keyPrefix:    keyPrefix,
-		clusterName:  clusterName,
+		displayName:  displayName,
 		db:           db,
 		scanInterval: scanInterval,
 		stopChan:     make(chan struct{}),
@@ -91,7 +91,7 @@ func (s *S3SuiteStore) StopAndWaitForScannerToStop(timeout time.Duration) error 
 }
 
 func (s *S3SuiteStore) scanAndUpdateDatabase(ctx context.Context) error {
-	s.logger.Info("Scanning and updating reference config suites", "bucketName", s.bucketName, "keyPrefix", s.keyPrefix, "clusterName", s.clusterName)
+	s.logger.Info("Scanning and updating reference config suites", "bucketName", s.bucketName, "keyPrefix", s.keyPrefix, "displayName", s.displayName)
 
 	paginator := s3.NewListObjectsV2Paginator(s.s3Client, &s3.ListObjectsV2Input{
 		Bucket: aws.String(s.bucketName),
@@ -119,7 +119,7 @@ func (s *S3SuiteStore) scanAndUpdateDatabase(ctx context.Context) error {
 				return err
 			}
 
-			if suite.SuiteName == s.clusterName {
+			if suite.SuiteName == s.displayName {
 				s.logger.Debug("Skipping self suite")
 				continue
 			}
@@ -176,10 +176,10 @@ func (s *S3SuiteStore) readSingleSuite(ctx context.Context, key string) (Referen
 
 // WriteSuite writes the given config suite to S3
 func (s *S3SuiteStore) WriteSuite(ctx context.Context, suite []AgentConfig) error {
-	s.logger.Info("Writing suite to S3", "bucketName", s.bucketName, "keyPrefix", s.keyPrefix, "clusterName", s.clusterName, "suite", suite)
+	s.logger.Info("Writing suite to S3", "bucketName", s.bucketName, "keyPrefix", s.keyPrefix, "displayName", s.displayName, "suite", suite)
 
 	output := ReferenceConfigSuite{
-		SuiteName:    s.clusterName,
+		SuiteName:    s.displayName,
 		ConfigSuites: suite,
 	}
 	data, err := json.Marshal(output)
@@ -188,14 +188,14 @@ func (s *S3SuiteStore) WriteSuite(ctx context.Context, suite []AgentConfig) erro
 		return err
 	}
 
-	if s.clusterName == "" {
-		s.logger.Error("clusterName is required")
-		return fmt.Errorf("clusterName is required")
+	if s.displayName == "" {
+		s.logger.Error("displayName is required")
+		return fmt.Errorf("displayName is required")
 	}
 
 	_, err = s.s3Client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(s.bucketName),
-		Key:    aws.String(filepath.Join(s.keyPrefix, s.clusterName+".json")),
+		Key:    aws.String(filepath.Join(s.keyPrefix, s.displayName+".json")),
 		Body:   bytes.NewReader(data),
 	})
 

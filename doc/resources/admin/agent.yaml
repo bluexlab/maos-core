@@ -8,6 +8,8 @@ get:
       name: id
       schema:
         type: integer
+        format: int64
+      required: true
       description: Agent ID
   responses:
     "200":
@@ -43,6 +45,8 @@ patch:
       name: id
       schema:
         type: integer
+        format: int64
+      required: true
       description: Agent ID
   requestBody:
     required: true
@@ -85,6 +89,8 @@ delete:
       name: id
       schema:
         type: integer
+        format: int64
+      required: true
       description: Agent ID
   responses:
     "200":

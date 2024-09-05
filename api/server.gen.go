@@ -148,7 +148,6 @@ type ApiTokenCreate struct {
 	AgentId     int64    `json:"agent_id"`
 	CreatedBy   string   `json:"created_by"`
 	ExpireAt    int64    `json:"expire_at"`
-	Id          string   `json:"id"`
 	Permissions []string `json:"permissions"`
 }
 

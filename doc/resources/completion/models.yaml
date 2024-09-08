@@ -22,6 +22,12 @@ get:
                       type: string
                     name:
                       type: string
+                  required:
+                    - id
+                    - provider
+                    - name
+            required:
+              - data
           examples:
             model_list:
               value:

@@ -14,6 +14,8 @@ var (
 		"CreateInvocationSync":           {"create:invocation"},
 		"GetNextInvocation":              {"read:invocation"},
 		"ReturnInvocationResponse":       {"read:invocation"},
+		"ListEmbeddingModels":            {"read:completion"},
+		"CreateCompletion":               {"create:completion"},
 		"AdminListAgents":                {"admin"},
 		"AdminGetAgents":                 {"admin"},
 		"AdminCreateAgent":               {"admin"},

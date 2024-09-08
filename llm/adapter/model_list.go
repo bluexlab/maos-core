@@ -1,6 +1,10 @@
 package adapter
 
-import "gitlab.com/navyx/ai/maos/maos-core/llm"
+import (
+	"fmt"
+
+	"gitlab.com/navyx/ai/maos/maos-core/llm"
+)
 
 const (
 	PROVIDER_AZURE     = "Azure"
@@ -46,4 +50,22 @@ func GetModelByID(id string) (llm.Model, bool) {
 
 func GetModelList() []llm.Model {
 	return modelList
+}
+
+// CreateAdapter creates an adapter for the given model ID
+// This is a variable so we can inject it for testing
+var CreateAdapter = func(modelId string) (LLMAdapter, error) {
+	model, ok := GetModelByID(modelId)
+	if !ok {
+		return nil, fmt.Errorf("model %s not found", modelId)
+	}
+
+	switch model.Provider {
+	case PROVIDER_AZURE:
+		return NewAzureAdapter(model.ID, model.Provider)
+	case PROVIDER_ANTHROPIC:
+		return NewAnthropicAdapter(), nil
+	default:
+		return nil, fmt.Errorf("unsupported provider: %s", model.Provider)
+	}
 }

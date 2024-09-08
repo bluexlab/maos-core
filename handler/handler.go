@@ -2,13 +2,18 @@ package handler
 
 import (
 	"context"
+	"encoding/base64"
+	"fmt"
 	"log/slog"
 
+	"github.com/samber/lo"
 	"gitlab.com/navyx/ai/maos/maos-core/admin"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 	"gitlab.com/navyx/ai/maos/maos-core/internal/suitestore"
 	"gitlab.com/navyx/ai/maos/maos-core/invocation"
+	"gitlab.com/navyx/ai/maos/maos-core/llm"
+	"gitlab.com/navyx/ai/maos/maos-core/llm/adapter"
 )
 
 func NewAPIHandler(logger *slog.Logger, accessor dbaccess.Accessor, suiteStore suitestore.SuiteStore) *APIHandler {
@@ -103,11 +108,103 @@ func (s *APIHandler) CreateEmbedding(ctx context.Context, request api.CreateEmbe
 }
 
 func (s *APIHandler) CreateCompletion(ctx context.Context, request api.CreateCompletionRequestObject) (api.CreateCompletionResponseObject, error) {
-	panic("not implemented")
+	return400Error := func(message string) (api.CreateCompletionResponseObject, error) {
+		return api.CreateCompletion400JSONResponse{N400JSONResponse: api.N400JSONResponse{Error: message}}, nil
+	}
+
+	token := ValidatePermissions(ctx, "CreateCompletion")
+	if token == nil {
+		return api.CreateCompletion401Response{}, nil
+	}
+
+	adapter, err := adapter.CreateAdapter(request.Body.ModelId)
+	if err != nil {
+		return return400Error(fmt.Sprintf("Model %s not found", request.Body.ModelId))
+	}
+
+	messages := make([]llm.Message, 0, len(request.Body.Messages))
+	for _, m := range request.Body.Messages {
+		msg := llm.Message{
+			Role:    string(m.Role),
+			Content: make([]llm.Content, 0, len(m.Content)),
+		}
+		for _, c := range m.Content {
+			if content, err := c.AsMessageContent0(); err == nil && content.Text != "" {
+				msg.Content = append(msg.Content, llm.Content{Text: content.Text})
+			} else if content1, err := c.AsMessageContent1(); err == nil && content1.Image != "" {
+				decodedImage, err := base64.StdEncoding.DecodeString(content1.Image)
+				if err != nil {
+					return return400Error("Invalid base64 image encoding")
+				}
+				msg.Content = append(msg.Content, llm.Content{Image: decodedImage})
+			} else if content2, err := c.AsMessageContent2(); err == nil && content2.ImageUrl != "" {
+				msg.Content = append(msg.Content, llm.Content{ImageURL: content2.ImageUrl})
+			} else {
+				return return400Error("Invalid message content")
+			}
+		}
+		messages = append(messages, msg)
+	}
+
+	completionRequest := llm.CompletionRequest{
+		ModelID:     request.Body.ModelId,
+		Messages:    messages,
+		Temperature: request.Body.Temperature,
+		MaxTokens:   lo.ToPtr(int32(lo.FromPtrOr(request.Body.MaxTokens, 8000))),
+	}
+
+	result, err := adapter.GetCompletion(ctx, completionRequest)
+	if err != nil {
+		return api.CreateCompletion500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{
+				Error: err.Error(),
+			},
+		}, nil
+	}
+
+	return api.CreateCompletion200JSONResponse{
+		Messages: lo.Map(result.Messages, func(m llm.Message, _ int) api.Message {
+			return api.Message{
+				Role: api.MessageRole(m.Role),
+				Content: lo.Map(m.Content, func(c llm.Content, _ int) api.MessageContent {
+					var content api.MessageContent
+					if c.Text != "" {
+						content.FromMessageContent0(api.MessageContent0{Text: c.Text})
+					}
+					if c.Image != nil {
+						content.FromMessageContent1(api.MessageContent1{Image: base64.StdEncoding.EncodeToString(c.Image)})
+					}
+					if c.ImageURL != "" {
+						content.FromMessageContent2(api.MessageContent2{ImageUrl: c.ImageURL})
+					}
+					return content
+				}),
+			}
+		}),
+	}, nil
 }
 
 func (s *APIHandler) ListCompletionModels(ctx context.Context, request api.ListCompletionModelsRequestObject) (api.ListCompletionModelsResponseObject, error) {
-	panic("not implemented")
+	token := ValidatePermissions(ctx, "ListEmbeddingModels")
+	if token == nil {
+		return api.ListCompletionModels401Response{}, nil
+	}
+	models := lo.Map(adapter.GetModelList(), func(model llm.Model, _ int) struct {
+		Id       string `json:"id"`
+		Name     string `json:"name"`
+		Provider string `json:"provider"`
+	} {
+		return struct {
+			Id       string `json:"id"`
+			Name     string `json:"name"`
+			Provider string `json:"provider"`
+		}{
+			Id:       model.ID,
+			Name:     model.Name,
+			Provider: model.Provider,
+		}
+	})
+	return api.ListCompletionModels200JSONResponse{Data: models}, nil
 }
 
 func (s *APIHandler) CreateRerank(ctx context.Context, request api.CreateRerankRequestObject) (api.CreateRerankResponseObject, error) {

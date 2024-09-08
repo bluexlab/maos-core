@@ -311,8 +311,8 @@ type InvocationState string
 
 // Message defines model for Message.
 type Message struct {
-	Content *[]MessageContent `json:"content,omitempty"`
-	Role    *MessageRole      `json:"role,omitempty"`
+	Content []MessageContent `json:"content"`
+	Role    MessageRole      `json:"role"`
 }
 
 // MessageRole defines model for Message.Role.
@@ -325,19 +325,19 @@ type MessageContent struct {
 
 // MessageContent0 defines model for .
 type MessageContent0 struct {
-	Text *string `json:"text,omitempty"`
+	Text string `json:"text"`
 }
 
 // MessageContent1 defines model for .
 type MessageContent1 struct {
 	// Image The based64 encoded image file. Only "jpeg" and "png" are supported by all providers.
-	Image *string `json:"image,omitempty"`
+	Image string `json:"image"`
 }
 
 // MessageContent2 defines model for .
 type MessageContent2 struct {
 	// ImageUrl The URL of the image file. Only "jpeg" and "png" are supported by all providers.
-	ImageUrl *string `json:"image_url,omitempty"`
+	ImageUrl string `json:"image_url"`
 }
 
 // Permission defines model for Permission.
@@ -3069,12 +3069,21 @@ type CreateCompletionResponseObject interface {
 }
 
 type CreateCompletion200JSONResponse struct {
-	Messages *[]Message `json:"messages,omitempty"`
+	Messages []Message `json:"messages"`
 }
 
 func (response CreateCompletion200JSONResponse) VisitCreateCompletionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateCompletion400JSONResponse struct{ N400JSONResponse }
+
+func (response CreateCompletion400JSONResponse) VisitCreateCompletionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -3087,6 +3096,15 @@ func (response CreateCompletion401Response) VisitCreateCompletionResponse(w http
 	return nil
 }
 
+type CreateCompletion500JSONResponse struct{ N500JSONResponse }
+
+func (response CreateCompletion500JSONResponse) VisitCreateCompletionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListCompletionModelsRequestObject struct {
 }
 
@@ -3095,11 +3113,11 @@ type ListCompletionModelsResponseObject interface {
 }
 
 type ListCompletionModels200JSONResponse struct {
-	Data *[]struct {
-		Id       *string `json:"id,omitempty"`
-		Name     *string `json:"name,omitempty"`
-		Provider *string `json:"provider,omitempty"`
-	} `json:"data,omitempty"`
+	Data []struct {
+		Id       string `json:"id"`
+		Name     string `json:"name"`
+		Provider string `json:"provider"`
+	} `json:"data"`
 }
 
 func (response ListCompletionModels200JSONResponse) VisitListCompletionModelsResponse(w http.ResponseWriter) error {

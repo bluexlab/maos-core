@@ -3,14 +3,20 @@ oneOf:
     properties:
       text:
         type: string
+    required:
+      - text
   - type: object
     properties:
       image:
         type: string
         description: The based64 encoded image file. Only "jpeg" and "png" are supported by all providers.
+    required:
+      - image
   - type: object
     properties:
       image_url:
         type: string
         format: uri
         description: The URL of the image file. Only "jpeg" and "png" are supported by all providers.
+    required:
+      - image_url

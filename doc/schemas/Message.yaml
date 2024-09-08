@@ -10,3 +10,6 @@ properties:
     type: array
     items:
       $ref: "./MessageContent.yaml"
+required:
+  - role
+  - content

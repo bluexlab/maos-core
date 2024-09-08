@@ -481,6 +481,12 @@ paths:
                           type: string
                         name:
                           type: string
+                      required:
+                        - id
+                        - provider
+                        - name
+                required:
+                  - data
               examples:
                 model_list:
                   value:
@@ -557,14 +563,20 @@ paths:
                     items:
                       $ref: '#/components/schemas/Message'
                       description: The completion of the input text.
+                required:
+                  - messages
               examples:
                 completion:
                   value:
                     messages:
                       - role: system
                         content: The capital of France is Paris.
+        '400':
+          $ref: '#/components/responses/400'
         '401':
           description: Unauthorized
+        '500':
+          $ref: '#/components/responses/500'
   /v1/embedding/models:
     get:
       summary: List embedding models.
@@ -1773,6 +1785,8 @@ components:
           properties:
             text:
               type: string
+          required:
+            - text
         - type: object
           properties:
             image:
@@ -1780,6 +1794,8 @@ components:
               description: >-
                 The based64 encoded image file. Only "jpeg" and "png" are
                 supported by all providers.
+          required:
+            - image
         - type: object
           properties:
             image_url:
@@ -1788,6 +1804,8 @@ components:
               description: >-
                 The URL of the image file. Only "jpeg" and "png" are supported
                 by all providers.
+          required:
+            - image_url
     Message:
       type: object
       properties:
@@ -1801,6 +1819,9 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/MessageContent'
+      required:
+        - role
+        - content
     Embedding:
       type: object
       properties:

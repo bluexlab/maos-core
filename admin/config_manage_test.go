@@ -226,4 +226,76 @@ func TestUpdateConfig(t *testing.T) {
 		require.Equal(t, user, *jsonResponse.Data.UpdatedBy)
 		require.NotZero(t, jsonResponse.Data.UpdatedAt)
 	})
+
+	t.Run("Invalid Kubernetes config", func(t *testing.T) {
+		dbPool := testhelper.TestDB(ctx, t)
+		accessor := dbaccess.New(dbPool)
+		defer dbPool.Close()
+
+		user := "testuser"
+		agent := fixture.InsertAgent(t, ctx, dbPool, "TestAgent")
+		configSuite := fixture.InsertConfigSuite(t, ctx, dbPool)
+		initialContent := map[string]string{
+			"KUBE_REPLICAS": "1",
+		}
+		config := fixture.InsertConfig2(t, ctx, dbPool, agent.ID, &configSuite.ID, user, initialContent)
+
+		invalidKubeConfig := map[string]string{
+			"KUBE_REPLICAS": "invalid",
+		}
+
+		request := api.AdminUpdateConfigRequestObject{
+			Id: config.ID,
+			Body: &api.AdminUpdateConfigJSONRequestBody{
+				Content: &invalidKubeConfig,
+				User:    user,
+			},
+		}
+
+		response, err := admin.UpdateConfig(ctx, logger, accessor, request)
+
+		require.NoError(t, err)
+		require.IsType(t, api.AdminUpdateConfig400JSONResponse{}, response)
+		jsonResponse := response.(api.AdminUpdateConfig400JSONResponse)
+		require.Contains(t, jsonResponse.Error, "invalid replicas")
+	})
+
+	t.Run("Valid Kubernetes config", func(t *testing.T) {
+		dbPool := testhelper.TestDB(ctx, t)
+		accessor := dbaccess.New(dbPool)
+		defer dbPool.Close()
+
+		user := "testuser"
+		agent := fixture.InsertAgent(t, ctx, dbPool, "TestAgent")
+		configSuite := fixture.InsertConfigSuite(t, ctx, dbPool)
+		initialContent := map[string]string{
+			"KUBE_REPLICAS": "1",
+		}
+		config := fixture.InsertConfig2(t, ctx, dbPool, agent.ID, &configSuite.ID, user, initialContent)
+
+		validKubeConfig := map[string]string{
+			"KUBE_REPLICAS":       "2",
+			"KUBE_DOCKER_IMAGE":   "myregistry.com/myimage:latest",
+			"KUBE_CPU_REQUEST":    "200m",
+			"KUBE_MEMORY_REQUEST": "256Mi",
+		}
+
+		request := api.AdminUpdateConfigRequestObject{
+			Id: config.ID,
+			Body: &api.AdminUpdateConfigJSONRequestBody{
+				Content: &validKubeConfig,
+				User:    user,
+			},
+		}
+
+		response, err := admin.UpdateConfig(ctx, logger, accessor, request)
+
+		require.NoError(t, err)
+		require.IsType(t, api.AdminUpdateConfig200JSONResponse{}, response)
+		jsonResponse := response.(api.AdminUpdateConfig200JSONResponse)
+		require.Equal(t, validKubeConfig["KUBE_REPLICAS"], jsonResponse.Data.Content["KUBE_REPLICAS"])
+		require.Equal(t, validKubeConfig["KUBE_DOCKER_IMAGE"], jsonResponse.Data.Content["KUBE_DOCKER_IMAGE"])
+		require.Equal(t, validKubeConfig["KUBE_CPU_REQUEST"], jsonResponse.Data.Content["KUBE_CPU_REQUEST"])
+		require.Equal(t, validKubeConfig["KUBE_MEMORY_REQUEST"], jsonResponse.Data.Content["KUBE_MEMORY_REQUEST"])
+	})
 }

@@ -1,4 +1,6 @@
-FROM golang:1.22.2-alpine3.19 as builder
+FROM golang:1.22.2-alpine3.19 AS builder
+
+ARG BUILDNO=local
 
 ENV GO111MODULE=on \
     CGO_ENABLED=0 \
@@ -48,15 +50,14 @@ COPY migrate.sh $APP_HOME/migrate.sh
 COPY docker-entrypoint.sh /usr/bin/
 
 RUN echo $BUILDNO > $APP_HOME/BUILD \
-    && echo $REV > $APP_HOME/REV \
-    && echo "INFO: BLUEX-RELEASE maos-core-server -- Rev: $REV -- Build: $BUILDNO" > /MANIFEST
+    && echo $REV > $APP_HOME/REV
 
 RUN addgroup -S appgroup && adduser -h $APP_HOME -G appgroup -S -D -H appuser
 RUN chown -R appuser:appgroup $APP_HOME
 
 USER appuser
 
-ENV PORT 5000
+ENV PORT=5000
 
 EXPOSE 5000
 

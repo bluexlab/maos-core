@@ -16,8 +16,25 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 	"gitlab.com/navyx/ai/maos/maos-core/handler"
 	"gitlab.com/navyx/ai/maos/maos-core/internal/testhelper"
+	"gitlab.com/navyx/ai/maos/maos-core/k8s"
 	"gitlab.com/navyx/ai/maos/maos-core/middleware"
 )
+
+type mockK8sController struct {
+	k8s.Controller
+	updatedDeploymentSets [][]k8s.DeploymentParams
+	restartedDeployments  []string
+}
+
+func (m *mockK8sController) UpdateDeploymentSet(ctx context.Context, deploymentSet []k8s.DeploymentParams) error {
+	m.updatedDeploymentSets = append(m.updatedDeploymentSets, deploymentSet)
+	return nil
+}
+
+func (m *mockK8sController) TriggerRollingRestart(ctx context.Context, deploymentName string) error {
+	m.restartedDeployments = append(m.restartedDeployments, deploymentName)
+	return nil
+}
 
 // SetupHttpTestWithDb sets up two test servers and database accessors.
 // It can simulate two running services in HA mode.
@@ -31,8 +48,8 @@ func SetupHttpTestWithDb(t *testing.T, ctx context.Context) (*httptest.Server, d
 		pool2.Close()
 	})
 
-	s, a, _ := builder(t, ctx, dbPool)
-	s2, _, _ := builder(t, ctx, pool2)
+	s, a, _, _ := builder(t, ctx, dbPool)
+	s2, _, _, _ := builder(t, ctx, pool2)
 
 	return s, a, s2
 }
@@ -47,18 +64,20 @@ func SetupHttpTestWithDbAndSuiteStore(t *testing.T, ctx context.Context) (*httpt
 		pool2.Close()
 	})
 
-	s, a, suiteStore := builder(t, ctx, dbPool)
-	s2, _, _ := builder(t, ctx, pool2)
+	s, a, suiteStore, _ := builder(t, ctx, dbPool)
+	s2, _, _, _ := builder(t, ctx, pool2)
 
 	return s, a, s2, suiteStore
 }
 
-func builder(t *testing.T, ctx context.Context, pool *pgxpool.Pool) (*httptest.Server, *dbaccess.PgAccessor, *testhelper.MockSuiteStore) {
+func builder(t *testing.T, ctx context.Context, pool *pgxpool.Pool) (*httptest.Server, *dbaccess.PgAccessor, *testhelper.MockSuiteStore, k8s.Controller) {
 	accessor := dbaccess.New(pool)
 	suiteStore := testhelper.NewMockSuiteStore()
 	logger := testhelper.Logger(t)
 
-	apiHandler := handler.NewAPIHandler(logger.WithGroup("APIHandler"), accessor, suiteStore)
+	mockK8sController := &mockK8sController{}
+
+	apiHandler := handler.NewAPIHandler(logger.WithGroup("APIHandler"), accessor, suiteStore, mockK8sController)
 	err := apiHandler.Start(ctx)
 	require.NoError(t, err)
 
@@ -89,5 +108,5 @@ func builder(t *testing.T, ctx context.Context, pool *pgxpool.Pool) (*httptest.S
 		cacheCloser()
 	})
 
-	return server, accessor, suiteStore
+	return server, accessor, suiteStore, mockK8sController
 }

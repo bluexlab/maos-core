@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strconv"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/samber/lo"
@@ -12,6 +13,7 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess/dbsqlc"
 	"gitlab.com/navyx/ai/maos/maos-core/internal/suitestore"
+	"gitlab.com/navyx/ai/maos/maos-core/k8s"
 	"gitlab.com/navyx/ai/maos/maos-core/util"
 )
 
@@ -118,6 +120,10 @@ func GetDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.A
 		if err != nil {
 			logger.Error("Cannot unmarshal content", "error", err)
 		}
+
+		// insert kubernetes config
+		InsertMissingKubeConfigsWithDefault(content)
+
 		return api.Config{
 			Id:              row.ID,
 			AgentId:         row.AgentId,
@@ -312,7 +318,13 @@ func RejectDeployment(ctx context.Context, logger *slog.Logger, accessor dbacces
 	return api.AdminRejectDeployment201Response{}, nil
 }
 
-func PublishDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, suiteStore suitestore.SuiteStore, request api.AdminPublishDeploymentRequestObject) (api.AdminPublishDeploymentResponseObject, error) {
+func PublishDeployment(
+	ctx context.Context,
+	logger *slog.Logger,
+	accessor dbaccess.Accessor,
+	suiteStore suitestore.SuiteStore,
+	controller k8s.Controller,
+	request api.AdminPublishDeploymentRequestObject) (api.AdminPublishDeploymentResponseObject, error) {
 	logger.Info("AdminPublishDeployment", "id", request.Id, "user", request.Body.User)
 
 	if request.Body == nil || request.Body.User == "" {
@@ -388,6 +400,23 @@ func PublishDeployment(ctx context.Context, logger *slog.Logger, accessor dbacce
 		}, nil
 	}
 
+	// update kubernetes agent deployments
+	configs, err := accessor.Querier().ConfigListBySuiteIdGroupByAgent(ctx, tx, *deployment.ConfigSuiteID)
+	if err != nil {
+		logger.Error("Cannot get configs", "error", err)
+		return api.AdminPublishDeployment500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot get configs: %v", err)},
+		}, nil
+	}
+
+	err = updateKubernetesDeployments(ctx, controller, deployment, configs)
+	if err != nil {
+		logger.Error("Cannot update kubernetes deployments", "error", err)
+		return api.AdminPublishDeployment500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot update kubernetes deployments: %v", err)},
+		}, nil
+	}
+
 	tx.Commit(ctx)
 
 	return api.AdminPublishDeployment201Response{}, nil
@@ -441,4 +470,61 @@ func publishConfigSuiteToS3(ctx context.Context, configSuiteId int64, tx pgx.Tx,
 	}
 
 	return suiteStore.WriteSuite(ctx, publishingConfigs)
+}
+
+func updateKubernetesDeployments(
+	ctx context.Context,
+	controller k8s.Controller,
+	deployment *dbsqlc.Deployment,
+	configs []*dbsqlc.ConfigListBySuiteIdGroupByAgentRow,
+) error {
+	deploymentSet := make([]k8s.DeploymentParams, 0, len(configs))
+
+	for _, config := range configs {
+		var content map[string]string
+		err := json.Unmarshal(config.Content, &content)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal config content: %v", err)
+		}
+
+		if content["KUBE_DOCKER_IMAGE"] == "" {
+			continue
+		}
+
+		// Prepare deployment params
+		params := k8s.DeploymentParams{
+			Name:          "maos-" + config.AgentName,
+			Replicas:      getReplicasFromContent(content),
+			Labels:        map[string]string{"app": config.AgentName},
+			Image:         content["KUBE_DOCKER_IMAGE"],
+			EnvVars:       content,
+			APIKey:        content["MAOS_API_KEY"],
+			MemoryRequest: content["KUBE_MEMORY_REQUEST"],
+			MemoryLimit:   content["KUBE_MEMORY_LIMIT"],
+		}
+
+		deploymentSet = append(deploymentSet, params)
+	}
+
+	// Update the deployment set using the Controller interface
+	err := controller.UpdateDeploymentSet(ctx, deploymentSet)
+	if err != nil {
+		return fmt.Errorf("failed to update deployment set: %v", err)
+	}
+
+	return nil
+}
+
+func getReplicasFromContent(content map[string]string) int32 {
+	replicasStr, exists := content["KUBE_REPLICAS"]
+	if !exists {
+		return 1 // Default to 1 if not specified
+	}
+
+	replicas, err := strconv.Atoi(replicasStr)
+	if err != nil || replicas < 1 {
+		return 1 // Default to 1 if invalid
+	}
+
+	return int32(replicas)
 }

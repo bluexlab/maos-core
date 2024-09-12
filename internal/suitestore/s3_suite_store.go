@@ -55,6 +55,8 @@ func NewS3SuiteStore(logger *slog.Logger, s3Client S3ClientInterface, bucketName
 // StartBackgroundScanner starts the background daemon to scan S3 and update the database
 func (s *S3SuiteStore) StartBackgroundScanner(ctx context.Context) {
 	go func() {
+		s.logger.Info("Starting reference config suite scanner", "scanInterval", s.scanInterval)
+
 		ticker := time.NewTicker(s.scanInterval)
 		defer ticker.Stop()
 		defer close(s.stoppedChan) // Signal that the scanner has stopped

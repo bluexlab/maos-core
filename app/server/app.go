@@ -22,6 +22,7 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 	"gitlab.com/navyx/ai/maos/maos-core/handler"
 	"gitlab.com/navyx/ai/maos/maos-core/internal/suitestore"
+	"gitlab.com/navyx/ai/maos/maos-core/k8s"
 	"gitlab.com/navyx/ai/maos/maos-core/middleware"
 )
 
@@ -104,11 +105,27 @@ func (a *App) Run() {
 		a.logger.Error("Failed to create S3 client", "err", err)
 		os.Exit(1)
 	}
-	suiteStore := suitestore.NewS3SuiteStore(a.logger.WithGroup("SuiteStore"), s3Client, config.SuiteStoreBucket, config.SuiteStorePrefix, config.MaosDisplayName, accessor, 10*time.Second)
+	// read SuiteStoreScanInterval
+	suiteStoreScanInterval := 60 * time.Second // default to 1 minute
+	if config.SuiteStoreScanInterval != "" {
+		suiteStoreScanInterval, err = time.ParseDuration(config.SuiteStoreScanInterval)
+		if err != nil {
+			a.logger.Error("Failed to parse SuiteStoreScanInterval", "err", err)
+			os.Exit(1)
+		}
+	}
+	suiteStore := suitestore.NewS3SuiteStore(a.logger.WithGroup("SuiteStore"), s3Client, config.SuiteStoreBucket, config.SuiteStorePrefix, config.MaosDisplayName, accessor, suiteStoreScanInterval)
 	suiteStore.StartBackgroundScanner(ctx)
 	defer suiteStore.StopAndWaitForScannerToStop(10 * time.Second)
 
-	apiHandler := handler.NewAPIHandler(a.logger.WithGroup("APIHandler"), accessor, suiteStore)
+	// Create K8s controller
+	k8sController, err := k8s.NewK8sController()
+	if err != nil {
+		a.logger.Error("Failed to create K8s controller", "err", err)
+		os.Exit(1)
+	}
+
+	apiHandler := handler.NewAPIHandler(a.logger.WithGroup("APIHandler"), accessor, suiteStore, k8sController)
 	err = apiHandler.Start(ctx)
 	if err != nil {
 		a.logger.Error("Failed to initialize handler", "err", err)

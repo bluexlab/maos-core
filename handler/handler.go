@@ -12,16 +12,18 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 	"gitlab.com/navyx/ai/maos/maos-core/internal/suitestore"
 	"gitlab.com/navyx/ai/maos/maos-core/invocation"
+	"gitlab.com/navyx/ai/maos/maos-core/k8s"
 	"gitlab.com/navyx/ai/maos/maos-core/llm"
 	"gitlab.com/navyx/ai/maos/maos-core/llm/adapter"
 )
 
-func NewAPIHandler(logger *slog.Logger, accessor dbaccess.Accessor, suiteStore suitestore.SuiteStore) *APIHandler {
+func NewAPIHandler(logger *slog.Logger, accessor dbaccess.Accessor, suiteStore suitestore.SuiteStore, k8sController k8s.Controller) *APIHandler {
 	return &APIHandler{
 		logger:            logger,
 		accessor:          accessor,
 		invocationManager: invocation.NewManager(logger, accessor),
 		suiteStore:        suiteStore,
+		k8sController:     k8sController,
 	}
 }
 
@@ -30,6 +32,7 @@ type APIHandler struct {
 	accessor          dbaccess.Accessor
 	invocationManager *invocation.Manager
 	suiteStore        suitestore.SuiteStore
+	k8sController     k8s.Controller
 }
 
 func (s *APIHandler) Start(ctx context.Context) error {
@@ -339,7 +342,7 @@ func (s *APIHandler) AdminPublishDeployment(ctx context.Context, request api.Adm
 	if token == nil {
 		return api.AdminPublishDeployment401Response{}, nil
 	}
-	return admin.PublishDeployment(ctx, s.logger, s.accessor, s.suiteStore, request)
+	return admin.PublishDeployment(ctx, s.logger, s.accessor, s.suiteStore, s.k8sController, request)
 }
 
 func (s *APIHandler) AdminRejectDeployment(ctx context.Context, request api.AdminRejectDeploymentRequestObject) (api.AdminRejectDeploymentResponseObject, error) {

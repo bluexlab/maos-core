@@ -15,7 +15,25 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess/dbsqlc"
 	"gitlab.com/navyx/ai/maos/maos-core/internal/fixture"
 	"gitlab.com/navyx/ai/maos/maos-core/internal/testhelper"
+	"gitlab.com/navyx/ai/maos/maos-core/k8s"
 )
+
+type mockK8sController struct {
+	k8s.Controller
+	namespace             string
+	updatedDeploymentSets [][]k8s.DeploymentParams
+	restartedDeployments  []string
+}
+
+func (m *mockK8sController) UpdateDeploymentSet(ctx context.Context, deploymentSet []k8s.DeploymentParams) error {
+	m.updatedDeploymentSets = append(m.updatedDeploymentSets, deploymentSet)
+	return nil
+}
+
+func (m *mockK8sController) TriggerRollingRestart(ctx context.Context, deploymentName string) error {
+	m.restartedDeployments = append(m.restartedDeployments, deploymentName)
+	return nil
+}
 
 func TestListDeploymentsWithDB(t *testing.T) {
 	t.Parallel()
@@ -325,7 +343,7 @@ func TestGetDeployment(t *testing.T) {
 	ctx := context.Background()
 	logger := testhelper.Logger(t)
 
-	t.Run("Successful retrieval", func(t *testing.T) {
+	t.Run("Successful retrieval with default Kube configs", func(t *testing.T) {
 		t.Parallel()
 		dbPool := testhelper.TestDB(ctx, t)
 		accessor := dbaccess.New(dbPool)
@@ -383,7 +401,13 @@ func TestGetDeployment(t *testing.T) {
 		require.NotZero(t, config1.Id)
 		require.Equal(t, agent1.ID, config1.AgentId)
 		require.Equal(t, agent1.Name, config1.AgentName)
-		require.Equal(t, config1Content, config1.Content)
+		for key, value := range config1Content {
+			require.Equal(t, value, config1.Content[key])
+		}
+		// Check for default Kube configs
+		for key, defaultValue := range admin.KubeConfigsWithDefault {
+			require.Equal(t, defaultValue, config1.Content[key])
+		}
 		require.NotZero(t, config1.CreatedAt)
 		require.NotEmpty(t, config1.CreatedBy)
 
@@ -392,9 +416,59 @@ func TestGetDeployment(t *testing.T) {
 		require.NotZero(t, config2.Id)
 		require.Equal(t, agent2.ID, config2.AgentId)
 		require.Equal(t, agent2.Name, config2.AgentName)
-		require.Equal(t, config2Content, config2.Content)
+		for key, value := range config2Content {
+			require.Equal(t, value, config2.Content[key])
+		}
+		// Check for default Kube configs
+		for key, defaultValue := range admin.KubeConfigsWithDefault {
+			require.Equal(t, defaultValue, config2.Content[key])
+		}
 		require.NotZero(t, config2.CreatedAt)
 		require.NotEmpty(t, config2.CreatedBy)
+	})
+
+	t.Run("Retrieval with custom Kube configs", func(t *testing.T) {
+		t.Parallel()
+		dbPool := testhelper.TestDB(ctx, t)
+		accessor := dbaccess.New(dbPool)
+
+		agent := fixture.InsertAgent(t, ctx, dbPool, "agent-kube")
+
+		// Create a config suite
+		createResponse, err := admin.CreateDeployment(ctx, logger, accessor, api.AdminCreateDeploymentRequestObject{
+			Body: &api.AdminCreateDeploymentJSONRequestBody{
+				Name: "test-deployment-kube",
+				User: "test-user",
+			},
+		})
+		require.NoError(t, err)
+		createdDeployment := createResponse.(api.AdminCreateDeployment201JSONResponse).Data
+
+		// Create config with custom Kube settings
+		customKubeConfig := map[string]string{
+			"KUBE_REPLICAS":       "3",
+			"KUBE_DOCKER_IMAGE":   "custom-image:latest",
+			"KUBE_CPU_REQUEST":    "250m",
+			"KUBE_MEMORY_REQUEST": "512Mi",
+			"KUBE_CPU_LIMIT":      "500m",
+			"KUBE_MEMORY_LIMIT":   "1Gi",
+		}
+		fixture.InsertConfig2(t, ctx, dbPool, agent.ID, createdDeployment.ConfigSuiteId, "testuser", customKubeConfig)
+
+		request := api.AdminGetDeploymentRequestObject{Id: createdDeployment.Id}
+		response, err := admin.GetDeployment(ctx, logger, accessor, request)
+
+		require.NoError(t, err)
+		require.IsType(t, api.AdminGetDeployment200JSONResponse{}, response)
+
+		retrievedDeployment := response.(api.AdminGetDeployment200JSONResponse)
+		require.NotNil(t, retrievedDeployment.Configs)
+		require.Len(t, *retrievedDeployment.Configs, 1)
+
+		config := (*retrievedDeployment.Configs)[0]
+		for key, value := range customKubeConfig {
+			require.Equal(t, value, config.Content[key])
+		}
 	})
 
 	t.Run("Deployment not found", func(t *testing.T) {
@@ -597,7 +671,7 @@ func TestCreateDeployment(t *testing.T) {
 
 		request := api.AdminCreateDeploymentRequestObject{
 			Body: &api.AdminCreateDeploymentJSONRequestBody{
-				Name: "te								st-deployment",
+				Name: "test-deployment",
 				User: "test-user",
 			},
 		}
@@ -1080,8 +1154,20 @@ func TestPublishDeployment(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create configs for each agent
-		config1 := fixture.InsertConfig2(t, ctx, dbPool, agent1.ID, createdDeployment.ConfigSuiteID, "test-user", map[string]string{"key": "value1"})
-		config2 := fixture.InsertConfig2(t, ctx, dbPool, agent2.ID, createdDeployment.ConfigSuiteID, "test-user", map[string]string{"key": "value2"})
+		config1 := fixture.InsertConfig2(t, ctx, dbPool, agent1.ID, createdDeployment.ConfigSuiteID, "test-user", map[string]string{
+			"key":                 "value1",
+			"KUBE_DOCKER_IMAGE":   "agent1-image:latest",
+			"KUBE_REPLICAS":       "2",
+			"KUBE_MEMORY_REQUEST": "256Mi",
+			"KUBE_MEMORY_LIMIT":   "512Mi",
+		})
+		config2 := fixture.InsertConfig2(t, ctx, dbPool, agent2.ID, createdDeployment.ConfigSuiteID, "test-user", map[string]string{
+			"key":                 "value2",
+			"KUBE_DOCKER_IMAGE":   "agent2-image:latest",
+			"KUBE_REPLICAS":       "3",
+			"KUBE_MEMORY_REQUEST": "256Mi",
+			"KUBE_MEMORY_LIMIT":   "512Mi",
+		})
 		require.NotNil(t, config1)
 		require.NotNil(t, config2)
 
@@ -1106,7 +1192,8 @@ func TestPublishDeployment(t *testing.T) {
 			Id:   createdDeployment.ID,
 			Body: &api.AdminPublishDeploymentJSONRequestBody{User: "admin"},
 		}
-		publishResponse, err := admin.PublishDeployment(ctx, logger, accessor, suiteStore, publishRequest)
+		mockController := &mockK8sController{namespace: "default"}
+		publishResponse, err := admin.PublishDeployment(ctx, logger, accessor, suiteStore, mockController, publishRequest)
 		require.NoError(t, err)
 		require.IsType(t, api.AdminPublishDeployment201Response{}, publishResponse)
 
@@ -1133,9 +1220,21 @@ func TestPublishDeployment(t *testing.T) {
 		for _, agentConfig := range publishedSuite.ConfigSuites {
 			switch agentConfig.AgentName {
 			case "agent1":
-				require.Equal(t, map[string]string{"key": "value1"}, agentConfig.Configs)
+				require.Equal(t, map[string]string{
+					"key":                 "value1",
+					"KUBE_DOCKER_IMAGE":   "agent1-image:latest",
+					"KUBE_REPLICAS":       "2",
+					"KUBE_MEMORY_REQUEST": "256Mi",
+					"KUBE_MEMORY_LIMIT":   "512Mi",
+				}, agentConfig.Configs)
 			case "agent2":
-				require.Equal(t, map[string]string{"key": "value2"}, agentConfig.Configs)
+				require.Equal(t, map[string]string{
+					"key":                 "value2",
+					"KUBE_DOCKER_IMAGE":   "agent2-image:latest",
+					"KUBE_REPLICAS":       "3",
+					"KUBE_MEMORY_REQUEST": "256Mi",
+					"KUBE_MEMORY_LIMIT":   "512Mi",
+				}, agentConfig.Configs)
 			default:
 				t.Fatalf("Unexpected agent name: %s", agentConfig.AgentName)
 			}
@@ -1151,7 +1250,8 @@ func TestPublishDeployment(t *testing.T) {
 			Id:   createdDeployment.ID,
 			Body: &api.AdminPublishDeploymentJSONRequestBody{User: "admin"},
 		}
-		publishResponse, err := admin.PublishDeployment(ctx, logger, accessor, suiteStore, publishRequest)
+		mockController := &mockK8sController{namespace: "default"}
+		publishResponse, err := admin.PublishDeployment(ctx, logger, accessor, suiteStore, mockController, publishRequest)
 		require.NoError(t, err)
 		require.IsType(t, api.AdminPublishDeployment201Response{}, publishResponse)
 
@@ -1170,7 +1270,8 @@ func TestPublishDeployment(t *testing.T) {
 			Id:   createdDeployment.ID,
 			Body: &api.AdminPublishDeploymentJSONRequestBody{User: "admin"},
 		}
-		publishResponse, err := admin.PublishDeployment(ctx, logger, accessor, suiteStore, publishRequest)
+		mockController := &mockK8sController{namespace: "default"}
+		publishResponse, err := admin.PublishDeployment(ctx, logger, accessor, suiteStore, mockController, publishRequest)
 		require.NoError(t, err)
 		require.IsType(t, api.AdminPublishDeployment400JSONResponse{}, publishResponse)
 
@@ -1192,12 +1293,62 @@ func TestPublishDeployment(t *testing.T) {
 			Id:   createdDeployment.ID,
 			Body: &api.AdminPublishDeploymentJSONRequestBody{User: "admin"},
 		}
-		publishResponse, err := admin.PublishDeployment(ctx, logger, accessor, suiteStore, publishRequest)
+		mockController := &mockK8sController{namespace: "default"}
+		publishResponse, err := admin.PublishDeployment(ctx, logger, accessor, suiteStore, mockController, publishRequest)
 		require.NoError(t, err)
 		require.IsType(t, api.AdminPublishDeployment500JSONResponse{}, publishResponse)
 
 		errorResponse := publishResponse.(api.AdminPublishDeployment500JSONResponse)
 		require.Contains(t, errorResponse.Error, "Cannot publish deployment")
+	})
+
+	t.Run("Successfully publish and update k8s deployment", func(t *testing.T) {
+		t.Parallel()
+		_, accessor, createdDeployment, _, _, suiteStore := setupDeploymentTest(t, "reviewing")
+		mockController := &mockK8sController{namespace: "default"}
+
+		// Publish the deployment
+		publishRequest := api.AdminPublishDeploymentRequestObject{
+			Id:   createdDeployment.ID,
+			Body: &api.AdminPublishDeploymentJSONRequestBody{User: "admin"},
+		}
+		publishResponse, err := admin.PublishDeployment(ctx, logger, accessor, suiteStore, mockController, publishRequest)
+		require.NoError(t, err)
+		require.IsType(t, api.AdminPublishDeployment201Response{}, publishResponse)
+
+		// Verify that the status has changed to 'deployed'
+		dbDeployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), int64(createdDeployment.ID))
+		require.NoError(t, err)
+		require.EqualValues(t, "deployed", dbDeployment.Status)
+
+		// Verify that UpdateDeploymentSet was called
+		require.Len(t, mockController.updatedDeploymentSets, 1)
+		updatedSet := mockController.updatedDeploymentSets[0]
+		require.Len(t, updatedSet, 2) // We expect 2 agent configs
+
+		// Verify the content of the updated deployment set
+		for _, deployment := range updatedSet {
+			switch deployment.Name {
+			case "maos-agent1":
+				require.Equal(t, map[string]string{
+					"key":                 "value1",
+					"KUBE_DOCKER_IMAGE":   "agent1-image:latest",
+					"KUBE_REPLICAS":       "2",
+					"KUBE_MEMORY_REQUEST": "256Mi",
+					"KUBE_MEMORY_LIMIT":   "512Mi",
+				}, deployment.EnvVars)
+			case "maos-agent2":
+				require.Equal(t, map[string]string{
+					"key":                 "value2",
+					"KUBE_DOCKER_IMAGE":   "agent2-image:latest",
+					"KUBE_REPLICAS":       "3",
+					"KUBE_MEMORY_REQUEST": "256Mi",
+					"KUBE_MEMORY_LIMIT":   "512Mi",
+				}, deployment.EnvVars)
+			default:
+				t.Fatalf("Unexpected deployment name: %s", deployment.Name)
+			}
+		}
 	})
 }
 

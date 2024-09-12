@@ -86,4 +86,4 @@ $(GENERATED_API_SERVER): $(DOCFILES)
 
 $(GENERATED_SQLCFILES): $(SQLCFILES) $(MIGRATIONFILES)
 	@echo "Generating SQLC code..."
-	@cd ./dbaccess/dbsqlc && go run github.com/sqlc-dev/sqlc/cmd/sqlc@latest generate
+	@cd ./dbaccess/dbsqlc && go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.27.0 generate

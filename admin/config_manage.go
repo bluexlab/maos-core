@@ -34,6 +34,14 @@ func UpdateConfig(
 		}, nil
 	}
 
+	err = ValidateKubeConfig(*request.Body.Content)
+	if err != nil {
+		logger.Error("Invalid kube config", "error", err)
+		return api.AdminUpdateConfig400JSONResponse{
+			N400JSONResponse: api.N400JSONResponse{Error: fmt.Sprintf("Invalid kube config: %v", err)},
+		}, nil
+	}
+
 	minAgentVersion := util.DeserializeAgentVersion(request.Body.MinAgentVersion)
 	if minAgentVersion == nil && request.Body.MinAgentVersion != nil {
 		logger.Error("Invalid agent version", "version", request.Body.MinAgentVersion)

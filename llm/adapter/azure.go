@@ -74,6 +74,16 @@ func (a *AzureAdapter) GetCompletion(ctx context.Context, request llm.Completion
 		}
 		body.Messages = append(body.Messages, classifications...)
 	}
+	for _, tool := range request.Tools {
+		body.Tools = append(body.Tools, &azopenai.ChatCompletionsFunctionToolDefinition{
+			Type: to.Ptr("function"),
+			Function: &azopenai.FunctionDefinition{
+				Name:        to.Ptr(tool.Name),
+				Description: to.Ptr(tool.Description),
+				Parameters:  tool.Parameters,
+			},
+		})
+	}
 
 	resp, err := a.client.GetChatCompletions(ctx, body, nil)
 	if err != nil {
@@ -109,9 +119,23 @@ func ToChatRequestMessageClassification(msg llm.Message) ([]azopenai.ChatRequest
 		results := lo.Map(
 			msg.Content,
 			func(content llm.Content, _ int) azopenai.ChatRequestMessageClassification {
-				return &azopenai.ChatRequestAssistantMessage{
-					Content: to.Ptr(content.Text),
+				assistantMsg := &azopenai.ChatRequestAssistantMessage{}
+				if content.ToolCall != nil {
+					assistantMsg.ToolCalls = []azopenai.ChatCompletionsToolCallClassification{
+						&azopenai.ChatCompletionsFunctionToolCall{
+							ID:   to.Ptr(content.ToolCall.ID),
+							Type: to.Ptr("function"),
+							Function: &azopenai.FunctionCall{
+								Name:      to.Ptr(content.ToolCall.FunctionName),
+								Arguments: to.Ptr(content.ToolCall.Arguments),
+							},
+						},
+					}
+				} else {
+					assistantMsg.Content = to.Ptr(content.Text)
 				}
+
+				return assistantMsg
 			},
 		)
 		return results, nil
@@ -121,6 +145,17 @@ func ToChatRequestMessageClassification(msg llm.Message) ([]azopenai.ChatRequest
 			func(content llm.Content, _ int) azopenai.ChatRequestMessageClassification {
 				return &azopenai.ChatRequestSystemMessage{
 					Content: to.Ptr(content.Text),
+				}
+			},
+		)
+		return results, nil
+	} else if chatRole == azopenai.ChatRoleTool {
+		results := lo.Map(
+			msg.Content,
+			func(content llm.Content, _ int) azopenai.ChatRequestMessageClassification {
+				return &azopenai.ChatRequestToolMessage{
+					Content:    to.Ptr(content.ToolResult.Result),
+					ToolCallID: to.Ptr(content.ToolResult.ID),
 				}
 			},
 		)
@@ -159,29 +194,47 @@ func ToChatRequestMessageContent(content llm.Content) azopenai.ChatCompletionReq
 }
 
 func FromGetChatCompletionsResponse(resp azopenai.GetChatCompletionsResponse) llm.CompletionResult {
-	getRoleAndContent := func(choice azopenai.ChatChoice) (string, string) {
-		role, content := "", ""
+	// Convert azopenai.ChatChoice into llm.Message.
+	getRolesAndContents := func(choice azopenai.ChatChoice) (string, []llm.Content) {
+		role := ""
 		if choice.Message != nil && choice.Message.Role != nil {
 			role = string(*choice.Message.Role)
 		}
-		if choice.Message != nil && choice.Message.Content != nil {
-			content = string(*choice.Message.Content)
+		if role == "" {
+			return "", nil
 		}
-		return role, content
+
+		contents := make([]llm.Content, 0)
+		if choice.Message.Content != nil {
+			contents = append(contents, llm.Content{
+				Text: string(*choice.Message.Content),
+			})
+		}
+
+		for _, callInterface := range choice.Message.ToolCalls {
+			call, _ := callInterface.(*azopenai.ChatCompletionsFunctionToolCall)
+			if call != nil {
+				contents = append(contents, llm.Content{
+					ToolCall: &llm.ToolCall{
+						ID:           *call.ID,
+						FunctionName: *call.Function.Name,
+						Arguments:    *call.Function.Arguments,
+					},
+				})
+			}
+		}
+
+		return role, contents
 	}
 
 	return llm.CompletionResult{
 		Messages: lo.Map(
 			resp.Choices,
 			func(msg azopenai.ChatChoice, _ int) llm.Message {
-				role, content := getRoleAndContent(msg)
+				role, contents := getRolesAndContents(msg)
 				return llm.Message{
-					Role: role,
-					Content: []llm.Content{
-						{
-							Text: content,
-						},
-					},
+					Role:    role,
+					Content: contents,
 				}
 			},
 		),

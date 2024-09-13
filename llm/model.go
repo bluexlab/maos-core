@@ -1,5 +1,7 @@
 package llm
 
+import "encoding/json"
+
 type Model struct {
 	ID       string `json:"id"`
 	Provider string `json:"provider"`
@@ -19,15 +21,30 @@ type Message struct {
 
 // Content represents the content within a message
 type Content struct {
-	Text     string `json:"text,omitempty"`
-	Image    []byte `json:"image,omitempty"`
-	ImageURL string `json:"image_url,omitempty"`
+	Text       string      `json:"text,omitempty"`
+	Image      []byte      `json:"image,omitempty"`
+	ImageURL   string      `json:"image_url,omitempty"`
+	ToolResult *ToolResult `json:"tool_result,omitempty"`
+	ToolCall   *ToolCall   `json:"tool_call,omitempty"`
+}
+
+type ToolResult struct {
+	ID      string `json:"tool_call_id"`
+	Result  string `json:"result"`
+	IsError bool   `json:"is_error"`
+}
+
+type ToolCall struct {
+	ID           string `json:"id"`
+	FunctionName string `json:"name"`
+	Arguments    string `json:"arguments"`
 }
 
 // CompletionRequest represents the request body for the completion endpoint
 type CompletionRequest struct {
 	ModelID       string    `json:"model_id"`
 	Messages      []Message `json:"messages"`
+	Tools         []Tool    `json:"tools"`
 	StopSequences []string  `json:"stop_sequences,omitempty"`
 	Temperature   *float32  `json:"temperature,omitempty"`
 	MaxTokens     *int32    `json:"max_tokens,omitempty"`
@@ -35,4 +52,10 @@ type CompletionRequest struct {
 
 type CompletionResult struct {
 	Messages []Message `json:"messages"`
+}
+
+type Tool struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Parameters  json.RawMessage `json:"parameters"`
 }

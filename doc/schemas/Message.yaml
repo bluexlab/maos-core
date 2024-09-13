@@ -6,6 +6,7 @@ properties:
       - system
       - assistant
       - user
+      - tool
   content:
     type: array
     items:

@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"gitlab.com/navyx/ai/maos/maos-core/llm"
 	"gitlab.com/navyx/ai/maos/maos-core/util"
 )
@@ -75,13 +76,15 @@ func (a *_AnthropicAdapter) GetCompletion(ctx context.Context, request llm.Compl
 		Messages: []llm.Message{
 			{
 				Role: responseBody.Role,
-				Content: []llm.Content{
-					{
-						Text: responseText.String(),
-					},
-				},
 			},
 		},
+	}
+	for _, c := range responseBody.Content {
+		content, err := FromAnthropicContentMessage(c)
+		if err != nil {
+			return llm.CompletionResult{}, err
+		}
+		result.Messages[0].Content = append(result.Messages[0].Content, content)
 	}
 
 	return result, nil
@@ -140,6 +143,14 @@ func ToAnthropicMessageRequest(req llm.CompletionRequest) (MessageRequest, error
 		request.Messages = append(request.Messages, reqMsg)
 	}
 
+	for _, tool := range req.Tools {
+		request.Tools = append(request.Tools, Tool{
+			Name:        tool.Name,
+			Description: tool.Description,
+			InputSchema: tool.Parameters,
+		})
+	}
+
 	return request, nil
 }
 
@@ -162,11 +173,67 @@ func ToAnthropicMessage(msg llm.Message) (Message, error) {
 				MediaType: http.DetectContentType(c.Image),
 				Data:      c.Image,
 			}
+		} else if c.ToolCall != nil {
+			content.Type = "tool_use"
+			content.Id = to.Ptr(c.ToolCall.ID)
+			content.Name = to.Ptr(c.ToolCall.FunctionName)
+			input := json.RawMessage(c.ToolCall.Arguments)
+			content.Input = &input
+		} else if c.ToolResult != nil {
+			result.Role = "user"
+			content.Type = "tool_result"
+			content.ToolUseId = to.Ptr(c.ToolResult.ID)
+			content.IsError = to.Ptr(c.ToolResult.IsError)
+			content.Content = []Content{
+				{
+					Type: "text",
+					Text: to.Ptr(c.ToolResult.Result),
+				},
+			}
 		} else {
 			return Message{}, fmt.Errorf("content must have text or image")
 		}
 
 		result.Content = append(result.Content, content)
+	}
+
+	return result, nil
+}
+
+func FromAnthropicContentMessage(content Content) (llm.Content, error) {
+	result := llm.Content{}
+
+	switch content.Type {
+	case "text":
+		if content.Text == nil {
+			return llm.Content{}, fmt.Errorf("text content is nil")
+		}
+		result.Text = *content.Text
+	case "image":
+		if content.Source == nil {
+			return llm.Content{}, fmt.Errorf("image source is nil")
+		}
+		if content.Source.Type != "base64" {
+			return llm.Content{}, fmt.Errorf("invalid image source type %s", content.Source.Type)
+		}
+		result.Image = content.Source.Data
+	case "tool_use":
+		if content.Id == nil {
+			return llm.Content{}, fmt.Errorf("tool use ID is nil")
+		}
+		if content.Name == nil {
+			return llm.Content{}, fmt.Errorf("tool use name is nil")
+		}
+		if content.Input == nil {
+			return llm.Content{}, fmt.Errorf("tool use input is nil")
+		}
+		result.ToolCall = &llm.ToolCall{
+			ID:           *content.Id,
+			FunctionName: *content.Name,
+			Arguments:    string(*content.Input),
+		}
+	default:
+		return llm.Content{}, fmt.Errorf("invalid content type %s", content.Type)
 	}
 
 	return result, nil

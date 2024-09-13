@@ -224,7 +224,10 @@ SELECT DISTINCT ON (configs.agent_id)
     configs.min_agent_version,
     configs.config_suite_id,
     agents.id AS agent_id,
-    agents.name AS agent_name
+    agents.name AS agent_name,
+    agents.enabled AS agent_enabled,
+    agents.configurable AS agent_configurable,
+    agents.deployable AS agent_deployable
 FROM configs
 JOIN agents ON configs.agent_id = agents.id
 WHERE configs.config_suite_id = $1::bigint
@@ -232,15 +235,18 @@ ORDER BY configs.agent_id, configs.created_at DESC, configs.id DESC
 `
 
 type ConfigListBySuiteIdGroupByAgentRow struct {
-	ID              int64
-	AgentId         int64
-	Content         []byte
-	CreatedAt       int64
-	CreatedBy       string
-	MinAgentVersion []int32
-	ConfigSuiteID   *int64
-	AgentId_2       int64
-	AgentName       string
+	ID                int64
+	AgentId           int64
+	Content           []byte
+	CreatedAt         int64
+	CreatedBy         string
+	MinAgentVersion   []int32
+	ConfigSuiteID     *int64
+	AgentId_2         int64
+	AgentName         string
+	AgentEnabled      bool
+	AgentConfigurable bool
+	AgentDeployable   bool
 }
 
 func (q *Queries) ConfigListBySuiteIdGroupByAgent(ctx context.Context, db DBTX, configSuiteID int64) ([]*ConfigListBySuiteIdGroupByAgentRow, error) {
@@ -262,6 +268,9 @@ func (q *Queries) ConfigListBySuiteIdGroupByAgent(ctx context.Context, db DBTX, 
 			&i.ConfigSuiteID,
 			&i.AgentId_2,
 			&i.AgentName,
+			&i.AgentEnabled,
+			&i.AgentConfigurable,
+			&i.AgentDeployable,
 		); err != nil {
 			return nil, err
 		}

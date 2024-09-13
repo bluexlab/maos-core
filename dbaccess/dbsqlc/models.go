@@ -102,12 +102,15 @@ func (ns NullInvocationState) Value() (driver.Value, error) {
 }
 
 type Agent struct {
-	ID        int64
-	Name      string
-	QueueID   int64
-	CreatedAt int64
-	Metadata  []byte
-	UpdatedAt *int64
+	ID           int64
+	Name         string
+	QueueID      int64
+	CreatedAt    int64
+	Metadata     []byte
+	UpdatedAt    *int64
+	Enabled      bool
+	Deployable   bool
+	Configurable bool
 }
 
 type ApiToken struct {

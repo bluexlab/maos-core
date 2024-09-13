@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/samber/lo"
@@ -114,7 +116,11 @@ func GetDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.A
 		}, nil
 	}
 
-	resultConfigs := lo.Map(configs, func(row *dbsqlc.ConfigListBySuiteIdGroupByAgentRow, _ int) api.Config {
+	filteredConfigs := lo.Filter(configs, func(row *dbsqlc.ConfigListBySuiteIdGroupByAgentRow, _ int) bool {
+		return row.AgentConfigurable
+	})
+
+	resultConfigs := lo.Map(filteredConfigs, func(row *dbsqlc.ConfigListBySuiteIdGroupByAgentRow, _ int) api.Config {
 		var content map[string]string
 		err := json.Unmarshal(row.Content, &content)
 		if err != nil {
@@ -122,7 +128,9 @@ func GetDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.A
 		}
 
 		// insert kubernetes config
-		InsertMissingKubeConfigsWithDefault(content)
+		if row.AgentDeployable {
+			InsertMissingKubeConfigsWithDefault(content)
+		}
 
 		return api.Config{
 			Id:              row.ID,
@@ -409,7 +417,18 @@ func PublishDeployment(
 		}, nil
 	}
 
-	err = updateKubernetesDeployments(ctx, controller, deployment, configs)
+	// rotate agent api keys
+	// it generates new api keys for each agent
+	// and set the old ones to expire after 15 minutes
+	apiTokens, err := rotateAgentApiKeys(ctx, accessor, tx, configs, request.Body.User)
+	if err != nil {
+		logger.Error("Cannot rotate agent api keys", "error", err)
+		return api.AdminPublishDeployment500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot rotate agent api keys: %v", err)},
+		}, nil
+	}
+
+	err = updateKubernetesDeployments(ctx, controller, deployment, configs, apiTokens)
 	if err != nil {
 		logger.Error("Cannot update kubernetes deployments", "error", err)
 		return api.AdminPublishDeployment500JSONResponse{
@@ -477,6 +496,7 @@ func updateKubernetesDeployments(
 	controller k8s.Controller,
 	deployment *dbsqlc.Deployment,
 	configs []*dbsqlc.ConfigListBySuiteIdGroupByAgentRow,
+	apiTokens map[int64]string,
 ) error {
 	deploymentSet := make([]k8s.DeploymentParams, 0, len(configs))
 
@@ -487,7 +507,7 @@ func updateKubernetesDeployments(
 			return fmt.Errorf("failed to unmarshal config content: %v", err)
 		}
 
-		if content["KUBE_DOCKER_IMAGE"] == "" {
+		if !config.AgentDeployable || content["KUBE_DOCKER_IMAGE"] == "" {
 			continue
 		}
 
@@ -497,8 +517,8 @@ func updateKubernetesDeployments(
 			Replicas:      getReplicasFromContent(content),
 			Labels:        map[string]string{"app": config.AgentName},
 			Image:         content["KUBE_DOCKER_IMAGE"],
-			EnvVars:       content,
-			APIKey:        content["MAOS_API_KEY"],
+			EnvVars:       filterNonKubeConfigs(content),
+			APIKey:        apiTokens[config.AgentId],
 			MemoryRequest: content["KUBE_MEMORY_REQUEST"],
 			MemoryLimit:   content["KUBE_MEMORY_LIMIT"],
 		}
@@ -515,6 +535,17 @@ func updateKubernetesDeployments(
 	return nil
 }
 
+// New helper function to filter out KUBE configs
+func filterNonKubeConfigs(content map[string]string) map[string]string {
+	filteredContent := make(map[string]string)
+	for key, value := range content {
+		if !strings.HasPrefix(key, "KUBE_") {
+			filteredContent[key] = value
+		}
+	}
+	return filteredContent
+}
+
 func getReplicasFromContent(content map[string]string) int32 {
 	replicasStr, exists := content["KUBE_REPLICAS"]
 	if !exists {
@@ -527,4 +558,34 @@ func getReplicasFromContent(content map[string]string) int32 {
 	}
 
 	return int32(replicas)
+}
+
+func rotateAgentApiKeys(
+	ctx context.Context,
+	accessor dbaccess.Accessor,
+	tx pgx.Tx,
+	configs []*dbsqlc.ConfigListBySuiteIdGroupByAgentRow,
+	createdBy string,
+) (map[int64]string, error) {
+	apiTokens := make(map[int64]string)
+
+	for _, config := range configs {
+		newApiToken := GenerateAPIToken()
+
+		expirationTime := time.Now().Add(15 * time.Minute)
+		_, err := accessor.Querier().ApiTokenRotate(ctx, tx, &dbsqlc.ApiTokenRotateParams{
+			ID:          newApiToken,
+			AgentId:     config.AgentId,
+			NewExpireAt: int64(expirationTime.Unix()),
+			CreatedBy:   createdBy,
+			Permissions: []string{"agent:read", "agent:write"}, // TODO: read permissions from agent config
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to rorate API key of agent %s: %v", config.AgentName, err)
+		}
+
+		apiTokens[config.AgentId] = newApiToken
+	}
+
+	return apiTokens, nil
 }

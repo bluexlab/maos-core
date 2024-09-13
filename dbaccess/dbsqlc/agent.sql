@@ -8,9 +8,12 @@ SELECT
   agents.id,
   agents.name,
   agents.queue_id,
+  agents.enabled,
+  agents.deployable,
+  agents.configurable,
   agents.created_at,
   COUNT(*) OVER() AS total_count,
-  CASE WHEN atc.token_count IS NULL OR atc.token_count = 0 THEN true ELSE false END AS updatable
+  CASE WHEN atc.token_count IS NULL OR atc.token_count = 0 THEN true ELSE false END AS renameable
 FROM agents
 LEFT JOIN agent_token_count atc ON agents.id = atc.agent_id
 ORDER BY agents.name
@@ -26,16 +29,25 @@ WHERE id = @id;
 INSERT INTO agents(
     name,
     queue_id,
+    enabled,
+    deployable,
+    configurable,
     metadata
 ) VALUES (
     @name::text,
     @queue_id::bigint,
+    @enabled::boolean,
+    @deployable::boolean,
+    @configurable::boolean,
     coalesce(@metadata::jsonb, '{}')
 ) RETURNING *;
 
 -- name: AgentUpdate :one
 UPDATE agents SET
     name = COALESCE(sqlc.narg('name')::text, name),
+    enabled = COALESCE(sqlc.narg('enabled')::boolean, enabled),
+    deployable = COALESCE(sqlc.narg('deployable')::boolean, deployable),
+    configurable = COALESCE(sqlc.narg('configurable')::boolean, configurable),
     metadata = COALESCE(sqlc.narg('metadata')::jsonb, metadata)
 WHERE id = @id
 RETURNING *;

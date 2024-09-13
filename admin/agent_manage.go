@@ -33,10 +33,13 @@ func ListAgents(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acce
 		res,
 		func(row *dbsqlc.AgentListPagenatedRow) api.Agent {
 			return api.Agent{
-				Id:        row.ID,
-				Name:      row.Name,
-				CreatedAt: row.CreatedAt,
-				Updatable: row.Updatable,
+				Id:           row.ID,
+				Name:         row.Name,
+				CreatedAt:    row.CreatedAt,
+				Renameable:   row.Renameable,
+				Enabled:      row.Enabled,
+				Deployable:   row.Deployable,
+				Configurable: row.Configurable,
 			}
 		},
 	)
@@ -68,8 +71,11 @@ func CreateAgent(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acc
 	}
 
 	agent, err := accessor.Querier().AgentInsert(ctx, accessor.Source(), &dbsqlc.AgentInsertParams{
-		Name:    request.Body.Name,
-		QueueID: queue.ID,
+		Name:         request.Body.Name,
+		QueueID:      queue.ID,
+		Enabled:      lo.FromPtrOr(request.Body.Enabled, true),
+		Deployable:   lo.FromPtrOr(request.Body.Deployable, false),
+		Configurable: lo.FromPtrOr(request.Body.Configurable, false),
 	})
 	if err != nil {
 
@@ -79,9 +85,13 @@ func CreateAgent(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acc
 	}
 
 	return api.AdminCreateAgent201JSONResponse{
-		Id:        agent.ID,
-		Name:      agent.Name,
-		CreatedAt: agent.CreatedAt,
+		Id:           agent.ID,
+		Name:         agent.Name,
+		Enabled:      agent.Enabled,
+		Deployable:   agent.Deployable,
+		Configurable: agent.Configurable,
+		CreatedAt:    agent.CreatedAt,
+		Renameable:   true,
 	}, nil
 }
 
@@ -117,8 +127,11 @@ func UpdateAgent(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acc
 	logger.Info("UpdateAgent", "agentId", request.Id, "name", lo.FromPtrOr(request.Body.Name, "<nil>"))
 
 	agent, err := accessor.Querier().AgentUpdate(ctx, accessor.Source(), &dbsqlc.AgentUpdateParams{
-		ID:   int64(request.Id),
-		Name: request.Body.Name,
+		ID:           int64(request.Id),
+		Name:         request.Body.Name,
+		Enabled:      request.Body.Enabled,
+		Deployable:   request.Body.Deployable,
+		Configurable: request.Body.Configurable,
 	})
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -133,9 +146,12 @@ func UpdateAgent(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acc
 
 	return api.AdminUpdateAgent200JSONResponse{
 		Data: api.Agent{
-			Id:        agent.ID,
-			Name:      agent.Name,
-			CreatedAt: agent.CreatedAt,
+			Id:           agent.ID,
+			Name:         agent.Name,
+			Enabled:      agent.Enabled,
+			Deployable:   agent.Deployable,
+			Configurable: agent.Configurable,
+			CreatedAt:    agent.CreatedAt,
 		},
 	}, nil
 }

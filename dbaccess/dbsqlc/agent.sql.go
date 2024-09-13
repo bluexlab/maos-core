@@ -21,7 +21,7 @@ delete_agent AS (
     WHERE agents.id = $1
     AND EXISTS (SELECT 1 FROM check_agent WHERE agent_exists = true)
     AND NOT EXISTS (SELECT 1 FROM check_config WHERE config_exists = true)
-    RETURNING id, name, queue_id, created_at, metadata, updated_at
+    RETURNING id, name, queue_id, created_at, metadata, updated_at, enabled, deployable, configurable
 )
 SELECT
     CASE
@@ -40,7 +40,7 @@ func (q *Queries) AgentDelete(ctx context.Context, db DBTX, id int64) (string, e
 }
 
 const agentFindById = `-- name: AgentFindById :one
-SELECT id, name, queue_id, created_at, metadata, updated_at
+SELECT id, name, queue_id, created_at, metadata, updated_at, enabled, deployable, configurable
 FROM agents
 WHERE id = $1
 `
@@ -55,6 +55,9 @@ func (q *Queries) AgentFindById(ctx context.Context, db DBTX, id int64) (*Agent,
 		&i.CreatedAt,
 		&i.Metadata,
 		&i.UpdatedAt,
+		&i.Enabled,
+		&i.Deployable,
+		&i.Configurable,
 	)
 	return &i, err
 }
@@ -63,22 +66,38 @@ const agentInsert = `-- name: AgentInsert :one
 INSERT INTO agents(
     name,
     queue_id,
+    enabled,
+    deployable,
+    configurable,
     metadata
 ) VALUES (
     $1::text,
     $2::bigint,
-    coalesce($3::jsonb, '{}')
-) RETURNING id, name, queue_id, created_at, metadata, updated_at
+    $3::boolean,
+    $4::boolean,
+    $5::boolean,
+    coalesce($6::jsonb, '{}')
+) RETURNING id, name, queue_id, created_at, metadata, updated_at, enabled, deployable, configurable
 `
 
 type AgentInsertParams struct {
-	Name     string
-	QueueID  int64
-	Metadata []byte
+	Name         string
+	QueueID      int64
+	Enabled      bool
+	Deployable   bool
+	Configurable bool
+	Metadata     []byte
 }
 
 func (q *Queries) AgentInsert(ctx context.Context, db DBTX, arg *AgentInsertParams) (*Agent, error) {
-	row := db.QueryRow(ctx, agentInsert, arg.Name, arg.QueueID, arg.Metadata)
+	row := db.QueryRow(ctx, agentInsert,
+		arg.Name,
+		arg.QueueID,
+		arg.Enabled,
+		arg.Deployable,
+		arg.Configurable,
+		arg.Metadata,
+	)
 	var i Agent
 	err := row.Scan(
 		&i.ID,
@@ -87,6 +106,9 @@ func (q *Queries) AgentInsert(ctx context.Context, db DBTX, arg *AgentInsertPara
 		&i.CreatedAt,
 		&i.Metadata,
 		&i.UpdatedAt,
+		&i.Enabled,
+		&i.Deployable,
+		&i.Configurable,
 	)
 	return &i, err
 }
@@ -101,9 +123,12 @@ SELECT
   agents.id,
   agents.name,
   agents.queue_id,
+  agents.enabled,
+  agents.deployable,
+  agents.configurable,
   agents.created_at,
   COUNT(*) OVER() AS total_count,
-  CASE WHEN atc.token_count IS NULL OR atc.token_count = 0 THEN true ELSE false END AS updatable
+  CASE WHEN atc.token_count IS NULL OR atc.token_count = 0 THEN true ELSE false END AS renameable
 FROM agents
 LEFT JOIN agent_token_count atc ON agents.id = atc.agent_id
 ORDER BY agents.name
@@ -117,12 +142,15 @@ type AgentListPagenatedParams struct {
 }
 
 type AgentListPagenatedRow struct {
-	ID         int64
-	Name       string
-	QueueID    int64
-	CreatedAt  int64
-	TotalCount int64
-	Updatable  bool
+	ID           int64
+	Name         string
+	QueueID      int64
+	Enabled      bool
+	Deployable   bool
+	Configurable bool
+	CreatedAt    int64
+	TotalCount   int64
+	Renameable   bool
 }
 
 func (q *Queries) AgentListPagenated(ctx context.Context, db DBTX, arg *AgentListPagenatedParams) ([]*AgentListPagenatedRow, error) {
@@ -138,9 +166,12 @@ func (q *Queries) AgentListPagenated(ctx context.Context, db DBTX, arg *AgentLis
 			&i.ID,
 			&i.Name,
 			&i.QueueID,
+			&i.Enabled,
+			&i.Deployable,
+			&i.Configurable,
 			&i.CreatedAt,
 			&i.TotalCount,
-			&i.Updatable,
+			&i.Renameable,
 		); err != nil {
 			return nil, err
 		}
@@ -155,19 +186,32 @@ func (q *Queries) AgentListPagenated(ctx context.Context, db DBTX, arg *AgentLis
 const agentUpdate = `-- name: AgentUpdate :one
 UPDATE agents SET
     name = COALESCE($1::text, name),
-    metadata = COALESCE($2::jsonb, metadata)
-WHERE id = $3
-RETURNING id, name, queue_id, created_at, metadata, updated_at
+    enabled = COALESCE($2::boolean, enabled),
+    deployable = COALESCE($3::boolean, deployable),
+    configurable = COALESCE($4::boolean, configurable),
+    metadata = COALESCE($5::jsonb, metadata)
+WHERE id = $6
+RETURNING id, name, queue_id, created_at, metadata, updated_at, enabled, deployable, configurable
 `
 
 type AgentUpdateParams struct {
-	Name     *string
-	Metadata []byte
-	ID       int64
+	Name         *string
+	Enabled      *bool
+	Deployable   *bool
+	Configurable *bool
+	Metadata     []byte
+	ID           int64
 }
 
 func (q *Queries) AgentUpdate(ctx context.Context, db DBTX, arg *AgentUpdateParams) (*Agent, error) {
-	row := db.QueryRow(ctx, agentUpdate, arg.Name, arg.Metadata, arg.ID)
+	row := db.QueryRow(ctx, agentUpdate,
+		arg.Name,
+		arg.Enabled,
+		arg.Deployable,
+		arg.Configurable,
+		arg.Metadata,
+		arg.ID,
+	)
 	var i Agent
 	err := row.Scan(
 		&i.ID,
@@ -176,6 +220,9 @@ func (q *Queries) AgentUpdate(ctx context.Context, db DBTX, arg *AgentUpdatePara
 		&i.CreatedAt,
 		&i.Metadata,
 		&i.UpdatedAt,
+		&i.Enabled,
+		&i.Deployable,
+		&i.Configurable,
 	)
 	return &i, err
 }

@@ -95,29 +95,29 @@ func TestMigrator(t *testing.T) {
 		migrator, bundle := setup(t)
 		defer bundle.dbPool.Close()
 
-		// Run twice initially to reach the version before `invocations` are dropped.
-		// Defaults to one step when migrating down.
-		for i := 0; i < 2; i++ {
-			res, err := migrator.Migrate(ctx, DirectionDown, &MigrateOpts{})
-			require.NoError(t, err)
-			require.Equal(t, DirectionDown, res.Direction)
-			t.Logf("versions: %v", res.Versions)
-			require.Equal(t, []int{migrationsMaxVersion - i}, util.MapSlice(res.Versions, migrateVersionToInt))
+		// update to latest version
+		migrator.Migrate(ctx, migrate.DirectionUp, &migrate.MigrateOpts{})
 
-			_, err = bundle.accessor.Exec(ctx, "SELECT * FROM invocations")
-			require.NoError(t, err)
-		}
+		// Defaults to one step when migrating down.
+		res, err := migrator.Migrate(ctx, DirectionDown, &MigrateOpts{})
+		require.NoError(t, err)
+		require.Equal(t, DirectionDown, res.Direction)
+		t.Logf("versions: %v", res.Versions)
+		require.Equal(t, []int{migrationsMaxVersion + 2}, util.MapSlice(res.Versions, migrateVersionToInt))
+
+		_, err = bundle.accessor.Exec(ctx, "SELECT * FROM test_table")
+		require.NoError(t, err)
 
 		// Run once more to go down one more step
-		{
-			res, err := migrator.Migrate(ctx, DirectionDown, &MigrateOpts{})
-			require.NoError(t, err)
-			require.Equal(t, DirectionDown, res.Direction)
-			require.Equal(t, []int{migrationsMaxVersion - 2}, util.MapSlice(res.Versions, migrateVersionToInt))
 
-			_, err = bundle.accessor.Exec(ctx, "SELECT * FROM reference_config_suites")
-			require.Error(t, err)
-		}
+		res, err = migrator.Migrate(ctx, DirectionDown, &MigrateOpts{})
+		require.NoError(t, err)
+		require.Equal(t, DirectionDown, res.Direction)
+		require.Equal(t, []int{migrationsMaxVersion + 1}, util.MapSlice(res.Versions, migrateVersionToInt))
+
+		_, err = bundle.accessor.Exec(ctx, "SELECT name FROM test_table")
+		require.Error(t, err)
+
 	})
 
 	t.Run("MigrateDownAfterUp", func(t *testing.T) {

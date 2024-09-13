@@ -2,7 +2,14 @@ type: object
 properties:
   name:
     type: string
+  enabled:
+    type: boolean
+  deployable:
+    type: boolean
+  configurable:
+    type: boolean
 required:
   - name
 example:
   name: "agent-16888"
+  enabled: true

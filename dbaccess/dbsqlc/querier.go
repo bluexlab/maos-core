@@ -18,6 +18,7 @@ type Querier interface {
 	ApiTokenFindByID(ctx context.Context, db DBTX, id string) (*ApiTokenFindByIDRow, error)
 	ApiTokenInsert(ctx context.Context, db DBTX, arg *ApiTokenInsertParams) (*ApiToken, error)
 	ApiTokenListByPage(ctx context.Context, db DBTX, arg *ApiTokenListByPageParams) ([]*ApiTokenListByPageRow, error)
+	ApiTokenRotate(ctx context.Context, db DBTX, arg *ApiTokenRotateParams) (string, error)
 	// Find the active config for the given agent that is compatible with the given agent version
 	ConfigAgentActiveConfig(ctx context.Context, db DBTX, arg *ConfigAgentActiveConfigParams) (*Config, error)
 	// Find the retired config for the given agent that is compatible with the given agent version

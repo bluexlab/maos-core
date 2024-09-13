@@ -5,7 +5,13 @@ properties:
     format: int64
   name:
     type: string
-  updatable:
+  enabled:
+    type: boolean
+  deployable:
+    type: boolean
+  configurable:
+    type: boolean
+  renameable:
     type: boolean
   created_at:
     type: integer
@@ -14,7 +20,10 @@ properties:
 required:
   - id
   - name
-  - updatable
+  - enabled
+  - deployable
+  - configurable
+  - renameable
   - created_at
 example:
   id: 16888

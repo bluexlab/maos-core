@@ -51,7 +51,10 @@ SELECT DISTINCT ON (configs.agent_id)
     configs.min_agent_version,
     configs.config_suite_id,
     agents.id AS agent_id,
-    agents.name AS agent_name
+    agents.name AS agent_name,
+    agents.enabled AS agent_enabled,
+    agents.configurable AS agent_configurable,
+    agents.deployable AS agent_deployable
 FROM configs
 JOIN agents ON configs.agent_id = agents.id
 WHERE configs.config_suite_id = @config_suite_id::bigint

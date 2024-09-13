@@ -41,3 +41,29 @@ INSERT INTO api_tokens(
     @permissions::varchar(255)[],
     coalesce(@created_at::bigint, EXTRACT(EPOCH FROM NOW()))
 ) RETURNING *;
+
+-- name: ApiTokenRotate :one
+WITH new_token AS (
+  INSERT INTO api_tokens (
+    id,
+    agent_id,
+    expire_at,
+    created_by,
+    permissions,
+    created_at
+  ) VALUES (
+    @id::text,
+    @agent_id::bigint,
+    @new_expire_at::bigint,
+    @created_by::text,
+    @permissions::varchar(255)[],
+    EXTRACT(EPOCH FROM NOW())
+  )
+  RETURNING id
+), update_existing AS (
+  UPDATE api_tokens
+  SET expire_at = EXTRACT(EPOCH FROM NOW() + INTERVAL '15 minutes')
+  WHERE agent_id = @agent_id
+    AND id != (SELECT id FROM new_token)
+)
+SELECT id FROM new_token;

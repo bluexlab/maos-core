@@ -161,3 +161,51 @@ func (q *Queries) ApiTokenListByPage(ctx context.Context, db DBTX, arg *ApiToken
 	}
 	return items, nil
 }
+
+const apiTokenRotate = `-- name: ApiTokenRotate :one
+WITH new_token AS (
+  INSERT INTO api_tokens (
+    id,
+    agent_id,
+    expire_at,
+    created_by,
+    permissions,
+    created_at
+  ) VALUES (
+    $1::text,
+    $2::bigint,
+    $3::bigint,
+    $4::text,
+    $5::varchar(255)[],
+    EXTRACT(EPOCH FROM NOW())
+  )
+  RETURNING id
+), update_existing AS (
+  UPDATE api_tokens
+  SET expire_at = EXTRACT(EPOCH FROM NOW() + INTERVAL '15 minutes')
+  WHERE agent_id = $2
+    AND id != (SELECT id FROM new_token)
+)
+SELECT id FROM new_token
+`
+
+type ApiTokenRotateParams struct {
+	ID          string
+	AgentId     int64
+	NewExpireAt int64
+	CreatedBy   string
+	Permissions []string
+}
+
+func (q *Queries) ApiTokenRotate(ctx context.Context, db DBTX, arg *ApiTokenRotateParams) (string, error) {
+	row := db.QueryRow(ctx, apiTokenRotate,
+		arg.ID,
+		arg.AgentId,
+		arg.NewExpireAt,
+		arg.CreatedBy,
+		arg.Permissions,
+	)
+	var id string
+	err := row.Scan(&id)
+	return id, err
+}

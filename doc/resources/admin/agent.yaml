@@ -57,7 +57,12 @@ patch:
           properties:
             name:
               type: string
-          description: Agent data to update
+            enabled:
+              type: boolean
+            deployable:
+              type: boolean
+            configurable:
+              type: boolean
   responses:
     "200":
       description: Successful response

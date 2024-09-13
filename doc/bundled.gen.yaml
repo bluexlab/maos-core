@@ -1197,7 +1197,12 @@ paths:
               properties:
                 name:
                   type: string
-              description: Agent data to update
+                enabled:
+                  type: boolean
+                deployable:
+                  type: boolean
+                configurable:
+                  type: boolean
       responses:
         '200':
           description: Successful response
@@ -2021,7 +2026,13 @@ components:
           format: int64
         name:
           type: string
-        updatable:
+        enabled:
+          type: boolean
+        deployable:
+          type: boolean
+        configurable:
+          type: boolean
+        renameable:
           type: boolean
         created_at:
           type: integer
@@ -2029,7 +2040,10 @@ components:
       required:
         - id
         - name
-        - updatable
+        - enabled
+        - deployable
+        - configurable
+        - renameable
         - created_at
       example:
         id: 16888
@@ -2040,10 +2054,17 @@ components:
       properties:
         name:
           type: string
+        enabled:
+          type: boolean
+        deployable:
+          type: boolean
+        configurable:
+          type: boolean
       required:
         - name
       example:
         name: agent-16888
+        enabled: true
     Deployment:
       type: object
       properties:

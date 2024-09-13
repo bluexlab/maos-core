@@ -122,15 +122,21 @@ const (
 
 // Agent defines model for Agent.
 type Agent struct {
-	CreatedAt int64  `json:"created_at"`
-	Id        int64  `json:"id"`
-	Name      string `json:"name"`
-	Updatable bool   `json:"updatable"`
+	Configurable bool   `json:"configurable"`
+	CreatedAt    int64  `json:"created_at"`
+	Deployable   bool   `json:"deployable"`
+	Enabled      bool   `json:"enabled"`
+	Id           int64  `json:"id"`
+	Name         string `json:"name"`
+	Renameable   bool   `json:"renameable"`
 }
 
 // AgentCreate defines model for AgentCreate.
 type AgentCreate struct {
-	Name string `json:"name"`
+	Configurable *bool  `json:"configurable,omitempty"`
+	Deployable   *bool  `json:"deployable,omitempty"`
+	Enabled      *bool  `json:"enabled,omitempty"`
+	Name         string `json:"name"`
 }
 
 // ApiToken defines model for ApiToken.
@@ -390,7 +396,10 @@ type AdminListAgentsParams struct {
 
 // AdminUpdateAgentJSONBody defines parameters for AdminUpdateAgent.
 type AdminUpdateAgentJSONBody struct {
-	Name *string `json:"name,omitempty"`
+	Configurable *bool   `json:"configurable,omitempty"`
+	Deployable   *bool   `json:"deployable,omitempty"`
+	Enabled      *bool   `json:"enabled,omitempty"`
+	Name         *string `json:"name,omitempty"`
 }
 
 // AdminListApiTokensParams defines parameters for AdminListApiTokens.

@@ -9,6 +9,7 @@ import (
 const (
 	PROVIDER_AZURE     = "Azure"
 	PROVIDER_ANTHROPIC = "Anthropic"
+	PROVIDER_VOYAGE    = "VoyageAI"
 )
 
 var modelList = []llm.Model{

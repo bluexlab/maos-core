@@ -21,6 +21,48 @@ var embeddingModelList = []llm.EmbeddingModel{
 		Name:      "Azure text-embedding-3-large",
 		Dimension: 3072,
 	},
+	{
+		ID:        "c6bbe66a-ac3e-4687-99b6-3a7d64bdf97a-voyage-large-2-instruct",
+		Provider:  PROVIDER_VOYAGE,
+		Name:      "voyage-large-2-instruct",
+		Dimension: 1024,
+	},
+	{
+		ID:        "84586745-b0ce-4d54-860f-bdbf579224d4-voyage-finance-2",
+		Provider:  PROVIDER_VOYAGE,
+		Name:      "voyage-finance-2",
+		Dimension: 1024,
+	},
+	{
+		ID:        "369e2def-108c-4355-aea6-25cd3dc90b6f-voyage-multilingual-2",
+		Provider:  PROVIDER_VOYAGE,
+		Name:      "voyage-multilingual-2",
+		Dimension: 1024,
+	},
+	{
+		ID:        "e9b1d228-ec9d-4972-bfca-ce9593e80866-voyage-law-2",
+		Provider:  PROVIDER_VOYAGE,
+		Name:      "voyage-law-2",
+		Dimension: 1024,
+	},
+	{
+		ID:        "fb6aa59b-6791-41c5-9262-0ebab269a196-voyage-code-2",
+		Provider:  PROVIDER_VOYAGE,
+		Name:      "voyage-code-2",
+		Dimension: 1536,
+	},
+	{
+		ID:        "7a571008-601a-463f-a3b9-1ba48de38984-voyage-large-2",
+		Provider:  PROVIDER_VOYAGE,
+		Name:      "voyage-large-2",
+		Dimension: 1536,
+	},
+	{
+		ID:        "285d60de-ac64-4461-a59d-be86d82fff75-voyage-2",
+		Provider:  PROVIDER_VOYAGE,
+		Name:      "voyage-2",
+		Dimension: 1024,
+	},
 }
 
 var embeddingModelMap = map[string]llm.EmbeddingModel{}

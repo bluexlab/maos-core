@@ -74,8 +74,9 @@ type Tool struct {
 
 // EmbeddingRequest represents the request body for the embedding endpoint
 type EmbeddingRequest struct {
-	ModelID string   `json:"model_id"`
-	Input   []string `json:"input"`
+	ModelID   string   `json:"model_id"`
+	Input     []string `json:"input"`
+	InputType *string  `json:"input_type"` // default: null. Other options are "query" and "document".
 }
 
 // EmbeddingResult represents the response body for the embedding endpoint
@@ -85,6 +86,6 @@ type EmbeddingResult struct {
 
 // Embedding represents the embedding of a text
 type Embedding struct {
-	Embedding []float32 `json:"embedding"`
+	Embedding []float64 `json:"embedding"`
 	Index     int       `json:"index"`
 }

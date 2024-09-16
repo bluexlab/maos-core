@@ -17,6 +17,12 @@ post:
               items:
                 type: string
               description: The text to embedded.
+            input_type:
+              type: string
+              description: The type of the input.
+              enum:
+                - "document"
+                - "query"
           required:
             - model_id
             - input

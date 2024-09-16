@@ -78,8 +78,10 @@ func (a *AzureEmbeddingAdapter) GetEmbedding(ctx context.Context, request llm.Em
 	return llm.EmbeddingResult{
 		Data: lo.Map(resp.Embeddings.Data, func(item azopenai.EmbeddingItem, _ int) llm.Embedding {
 			return llm.Embedding{
-				Embedding: item.Embedding,
-				Index:     int(*item.Index),
+				Embedding: lo.Map(item.Embedding, func(item float32, _ int) float64 {
+					return float64(item)
+				}),
+				Index: int(*item.Index),
 			}
 		}),
 	}, nil

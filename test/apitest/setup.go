@@ -11,6 +11,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
@@ -20,20 +21,33 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/middleware"
 )
 
-type mockK8sController struct {
-	k8s.Controller
-	updatedDeploymentSets [][]k8s.DeploymentParams
-	restartedDeployments  []string
+type MockK8sController struct {
+	mock.Mock
 }
 
-func (m *mockK8sController) UpdateDeploymentSet(ctx context.Context, deploymentSet []k8s.DeploymentParams) error {
-	m.updatedDeploymentSets = append(m.updatedDeploymentSets, deploymentSet)
-	return nil
+func (m *MockK8sController) UpdateDeploymentSet(ctx context.Context, deploymentSet []k8s.DeploymentParams) error {
+	args := m.Called(ctx, deploymentSet)
+	return args.Error(0)
 }
 
-func (m *mockK8sController) TriggerRollingRestart(ctx context.Context, deploymentName string) error {
-	m.restartedDeployments = append(m.restartedDeployments, deploymentName)
-	return nil
+func (m *MockK8sController) TriggerRollingRestart(ctx context.Context, deploymentName string) error {
+	args := m.Called(ctx, deploymentName)
+	return args.Error(0)
+}
+
+func (m *MockK8sController) ListSecrets(ctx context.Context) ([]k8s.Secret, error) {
+	args := m.Called(ctx)
+	return args.Get(0).([]k8s.Secret), args.Error(1)
+}
+
+func (m *MockK8sController) UpdateSecret(ctx context.Context, secretName string, secretData map[string]string) error {
+	args := m.Called(ctx, secretName, secretData)
+	return args.Error(0)
+}
+
+func (m *MockK8sController) DeleteSecret(ctx context.Context, secretName string) error {
+	args := m.Called(ctx, secretName)
+	return args.Error(0)
 }
 
 // SetupHttpTestWithDb sets up two test servers and database accessors.
@@ -70,12 +84,27 @@ func SetupHttpTestWithDbAndSuiteStore(t *testing.T, ctx context.Context) (*httpt
 	return s, a, s2, suiteStore
 }
 
-func builder(t *testing.T, ctx context.Context, pool *pgxpool.Pool) (*httptest.Server, *dbaccess.PgAccessor, *testhelper.MockSuiteStore, k8s.Controller) {
+func SetupHttpTestWithDbAndK8s(t *testing.T, ctx context.Context) (*httptest.Server, dbaccess.Accessor, *MockK8sController) {
+	dbPool := testhelper.TestDB(ctx, t)
+	pool2, err := pgxpool.NewWithConfig(ctx, dbPool.Config())
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		dbPool.Close()
+		pool2.Close()
+	})
+
+	s, a, _, k8sController := builder(t, ctx, dbPool)
+
+	return s, a, k8sController
+}
+
+func builder(t *testing.T, ctx context.Context, pool *pgxpool.Pool) (*httptest.Server, *dbaccess.PgAccessor, *testhelper.MockSuiteStore, *MockK8sController) {
 	accessor := dbaccess.New(pool)
 	suiteStore := testhelper.NewMockSuiteStore()
 	logger := testhelper.Logger(t)
 
-	mockK8sController := &mockK8sController{}
+	mockK8sController := new(MockK8sController)
 
 	apiHandler := handler.NewAPIHandler(logger.WithGroup("APIHandler"), accessor, suiteStore, mockK8sController)
 	err := apiHandler.Start(ctx)

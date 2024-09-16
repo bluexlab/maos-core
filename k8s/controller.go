@@ -31,10 +31,18 @@ type DeploymentParams struct {
 	MemoryLimit   string
 }
 
+type Secret struct {
+	Name string
+	Keys []string
+}
+
 // Controller defines the methods that a Controller should implement
 type Controller interface {
 	UpdateDeploymentSet(ctx context.Context, deploymentSet []DeploymentParams) error
 	TriggerRollingRestart(ctx context.Context, deploymentName string) error
+	ListSecrets(ctx context.Context) ([]Secret, error)
+	UpdateSecret(ctx context.Context, secretName string, secretData map[string]string) error
+	DeleteSecret(ctx context.Context, secretName string) error
 }
 
 // K8sController implements the Controller interface
@@ -94,6 +102,7 @@ func (c *K8sController) UpdateDeploymentSet(ctx context.Context, deploymentSet [
 
 // TriggerRollingRestart triggers a rolling restart of the deployment
 func (c *K8sController) TriggerRollingRestart(ctx context.Context, deploymentName string) error {
+	slog.Info("Triggered rolling restart", "namespace", c.namespace, "deployment", deploymentName)
 	deployment, err := c.clientset.AppsV1().Deployments(c.namespace).Get(ctx, deploymentName, meta.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to get deployment: %v", err)
@@ -109,7 +118,83 @@ func (c *K8sController) TriggerRollingRestart(ctx context.Context, deploymentNam
 		return fmt.Errorf("failed to update deployment: %v", err)
 	}
 
-	slog.Info("Triggered rolling restart", "namespace", c.namespace, "deployment", deploymentName)
+	return nil
+}
+
+// ListSecrets lists all secrets in the namespace that are created by our application
+func (c *K8sController) ListSecrets(ctx context.Context) ([]Secret, error) {
+	secretList, err := c.clientset.CoreV1().Secrets(c.namespace).List(ctx, meta.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list secrets: %v", err)
+	}
+
+	secrets := make([]Secret, 0, len(secretList.Items))
+	for _, secret := range secretList.Items {
+		keys := make([]string, 0, len(secret.Data))
+		for k := range secret.Data {
+			keys = append(keys, k)
+		}
+		secrets = append(secrets, Secret{
+			Name: secret.Name,
+			Keys: keys,
+		})
+	}
+
+	return secrets, nil
+}
+
+func (c *K8sController) UpdateSecret(ctx context.Context, secretName string, secretData map[string]string) error {
+	secret, err := c.clientset.CoreV1().Secrets(c.namespace).Get(ctx, secretName, meta.GetOptions{})
+	if err != nil {
+		if errors.IsNotFound(err) {
+			slog.Info("Secret not found, creating", "name", secretName)
+			newSecret := &core.Secret{
+				ObjectMeta: meta.ObjectMeta{
+					Name:      secretName,
+					Namespace: c.namespace,
+					Labels: map[string]string{
+						"created-by": "maos",
+					},
+				},
+				StringData: secretData,
+				Type:       core.SecretTypeOpaque,
+			}
+			_, err = c.clientset.CoreV1().Secrets(c.namespace).Create(ctx, newSecret, meta.CreateOptions{})
+			if err != nil {
+				return fmt.Errorf("failed to create secret: %v", err)
+			}
+			return nil
+		}
+		return fmt.Errorf("failed to get secret: %v", err)
+	}
+
+	// Update the existing secret
+	if secret.Data == nil {
+		secret.Data = make(map[string][]byte)
+	}
+	for k, v := range secretData {
+		if v == "" {
+			delete(secret.Data, k)
+		} else {
+			secret.Data[k] = ([]byte(v))
+		}
+	}
+
+	_, err = c.clientset.CoreV1().Secrets(c.namespace).Update(ctx, secret, meta.UpdateOptions{
+		FieldValidation: "Strict",
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update secret: %v", err)
+	}
+
+	return nil
+}
+
+func (c *K8sController) DeleteSecret(ctx context.Context, secretName string) error {
+	err := c.clientset.CoreV1().Secrets(c.namespace).Delete(ctx, secretName, meta.DeleteOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to delete secret: %v", err)
+	}
 	return nil
 }
 
@@ -141,7 +226,7 @@ func (c *K8sController) createDeployment(ctx context.Context, params DeploymentP
 		return nil, fmt.Errorf("failed to create service account: %v", err)
 	}
 
-	if err := c.createOrUpdateSecret(ctx, params); err != nil {
+	if err := c.createOrUpdateApiKey(ctx, params); err != nil {
 		return nil, err
 	}
 
@@ -151,7 +236,7 @@ func (c *K8sController) createDeployment(ctx context.Context, params DeploymentP
 
 func (c *K8sController) updateDeployment(ctx context.Context, existingDeployment *apps.Deployment, params DeploymentParams) error {
 	slog.Info("Updating deployment", "name", existingDeployment.Name)
-	if err := c.createOrUpdateSecret(ctx, params); err != nil {
+	if err := c.createOrUpdateApiKey(ctx, params); err != nil {
 		return err
 	}
 
@@ -221,7 +306,7 @@ func (c *K8sController) createServiceAccount(ctx context.Context, name string) (
 	return c.clientset.CoreV1().ServiceAccounts(c.namespace).Create(ctx, sa, meta.CreateOptions{})
 }
 
-func (c *K8sController) createOrUpdateSecret(ctx context.Context, params DeploymentParams) error {
+func (c *K8sController) createOrUpdateApiKey(ctx context.Context, params DeploymentParams) error {
 	slog.Info("Creating/updating secret", "name", params.Name)
 
 	secretName := fmt.Sprintf("%s-api-key", params.Name)
@@ -229,6 +314,9 @@ func (c *K8sController) createOrUpdateSecret(ctx context.Context, params Deploym
 		ObjectMeta: meta.ObjectMeta{
 			Name:      secretName,
 			Namespace: c.namespace,
+			Labels: map[string]string{
+				"created-by": "maos-internal",
+			},
 		},
 		StringData: map[string]string{
 			"MAOS_API_KEY": params.APIKey,

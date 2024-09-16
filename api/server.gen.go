@@ -477,6 +477,9 @@ type AdminRejectDeploymentJSONBody struct {
 	User string `json:"user"`
 }
 
+// AdminUpdateSecretJSONBody defines parameters for AdminUpdateSecret.
+type AdminUpdateSecretJSONBody map[string]string
+
 // AdminUpdateSettingJSONBody defines parameters for AdminUpdateSetting.
 type AdminUpdateSettingJSONBody struct {
 	DeploymentApproveRequired *bool   `json:"deployment_approve_required,omitempty"`
@@ -624,6 +627,9 @@ type AdminPublishDeploymentJSONRequestBody AdminPublishDeploymentJSONBody
 
 // AdminRejectDeploymentJSONRequestBody defines body for AdminRejectDeployment for application/json ContentType.
 type AdminRejectDeploymentJSONRequestBody AdminRejectDeploymentJSONBody
+
+// AdminUpdateSecretJSONRequestBody defines body for AdminUpdateSecret for application/json ContentType.
+type AdminUpdateSecretJSONRequestBody AdminUpdateSecretJSONBody
 
 // AdminUpdateSettingJSONRequestBody defines body for AdminUpdateSetting for application/json ContentType.
 type AdminUpdateSettingJSONRequestBody AdminUpdateSettingJSONBody
@@ -799,6 +805,15 @@ type ServerInterface interface {
 	// List reference config suites
 	// (GET /v1/admin/reference_config_suites)
 	AdminListReferenceConfigSuites(w http.ResponseWriter, r *http.Request)
+	// List kubernetes secrets
+	// (GET /v1/admin/secrets)
+	AdminListSecrets(w http.ResponseWriter, r *http.Request)
+	// Delete a secret
+	// (DELETE /v1/admin/secrets/{name})
+	AdminDeleteSecret(w http.ResponseWriter, r *http.Request, name string)
+	// Update a secret
+	// (PATCH /v1/admin/secrets/{name})
+	AdminUpdateSecret(w http.ResponseWriter, r *http.Request, name string)
 	// Get system setting
 	// (GET /v1/admin/setting)
 	AdminGetSetting(w http.ResponseWriter, r *http.Request)
@@ -1432,6 +1447,85 @@ func (siw *ServerInterfaceWrapper) AdminListReferenceConfigSuites(w http.Respons
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminListReferenceConfigSuites(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// AdminListSecrets operation middleware
+func (siw *ServerInterfaceWrapper) AdminListSecrets(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminListSecrets(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// AdminDeleteSecret operation middleware
+func (siw *ServerInterfaceWrapper) AdminDeleteSecret(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var err error
+
+	// ------------- Path parameter "name" -------------
+	var name string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", mux.Vars(r)["name"], &name, runtime.BindStyledParameterOptions{Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminDeleteSecret(w, r, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// AdminUpdateSecret operation middleware
+func (siw *ServerInterfaceWrapper) AdminUpdateSecret(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var err error
+
+	// ------------- Path parameter "name" -------------
+	var name string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", mux.Vars(r)["name"], &name, runtime.BindStyledParameterOptions{Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminUpdateSecret(w, r, name)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2147,6 +2241,12 @@ func HandlerWithOptions(si ServerInterface, options GorillaServerOptions) http.H
 	r.HandleFunc(options.BaseURL+"/v1/admin/deployments/{id}/submit", wrapper.AdminSubmitDeployment).Methods("POST")
 
 	r.HandleFunc(options.BaseURL+"/v1/admin/reference_config_suites", wrapper.AdminListReferenceConfigSuites).Methods("GET")
+
+	r.HandleFunc(options.BaseURL+"/v1/admin/secrets", wrapper.AdminListSecrets).Methods("GET")
+
+	r.HandleFunc(options.BaseURL+"/v1/admin/secrets/{name}", wrapper.AdminDeleteSecret).Methods("DELETE")
+
+	r.HandleFunc(options.BaseURL+"/v1/admin/secrets/{name}", wrapper.AdminUpdateSecret).Methods("PATCH")
 
 	r.HandleFunc(options.BaseURL+"/v1/admin/setting", wrapper.AdminGetSetting).Methods("GET")
 
@@ -2979,6 +3079,111 @@ func (response AdminListReferenceConfigSuites401Response) VisitAdminListReferenc
 type AdminListReferenceConfigSuites500JSONResponse struct{ N500JSONResponse }
 
 func (response AdminListReferenceConfigSuites500JSONResponse) VisitAdminListReferenceConfigSuitesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminListSecretsRequestObject struct {
+}
+
+type AdminListSecretsResponseObject interface {
+	VisitAdminListSecretsResponse(w http.ResponseWriter) error
+}
+
+type AdminListSecrets200JSONResponse struct {
+	Data []struct {
+		Keys []string `json:"keys"`
+		Name string   `json:"name"`
+	} `json:"data"`
+}
+
+func (response AdminListSecrets200JSONResponse) VisitAdminListSecretsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminListSecrets401Response struct {
+}
+
+func (response AdminListSecrets401Response) VisitAdminListSecretsResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type AdminListSecrets500JSONResponse struct{ N500JSONResponse }
+
+func (response AdminListSecrets500JSONResponse) VisitAdminListSecretsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminDeleteSecretRequestObject struct {
+	Name string `json:"name"`
+}
+
+type AdminDeleteSecretResponseObject interface {
+	VisitAdminDeleteSecretResponse(w http.ResponseWriter) error
+}
+
+type AdminDeleteSecret200Response struct {
+}
+
+func (response AdminDeleteSecret200Response) VisitAdminDeleteSecretResponse(w http.ResponseWriter) error {
+	w.WriteHeader(200)
+	return nil
+}
+
+type AdminDeleteSecret401Response struct {
+}
+
+func (response AdminDeleteSecret401Response) VisitAdminDeleteSecretResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type AdminDeleteSecret500JSONResponse struct{ N500JSONResponse }
+
+func (response AdminDeleteSecret500JSONResponse) VisitAdminDeleteSecretResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminUpdateSecretRequestObject struct {
+	Name string `json:"name"`
+	Body *AdminUpdateSecretJSONRequestBody
+}
+
+type AdminUpdateSecretResponseObject interface {
+	VisitAdminUpdateSecretResponse(w http.ResponseWriter) error
+}
+
+type AdminUpdateSecret200Response struct {
+}
+
+func (response AdminUpdateSecret200Response) VisitAdminUpdateSecretResponse(w http.ResponseWriter) error {
+	w.WriteHeader(200)
+	return nil
+}
+
+type AdminUpdateSecret401Response struct {
+}
+
+func (response AdminUpdateSecret401Response) VisitAdminUpdateSecretResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type AdminUpdateSecret500JSONResponse struct{ N500JSONResponse }
+
+func (response AdminUpdateSecret500JSONResponse) VisitAdminUpdateSecretResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
 
@@ -3818,6 +4023,15 @@ type StrictServerInterface interface {
 	// List reference config suites
 	// (GET /v1/admin/reference_config_suites)
 	AdminListReferenceConfigSuites(ctx context.Context, request AdminListReferenceConfigSuitesRequestObject) (AdminListReferenceConfigSuitesResponseObject, error)
+	// List kubernetes secrets
+	// (GET /v1/admin/secrets)
+	AdminListSecrets(ctx context.Context, request AdminListSecretsRequestObject) (AdminListSecretsResponseObject, error)
+	// Delete a secret
+	// (DELETE /v1/admin/secrets/{name})
+	AdminDeleteSecret(ctx context.Context, request AdminDeleteSecretRequestObject) (AdminDeleteSecretResponseObject, error)
+	// Update a secret
+	// (PATCH /v1/admin/secrets/{name})
+	AdminUpdateSecret(ctx context.Context, request AdminUpdateSecretRequestObject) (AdminUpdateSecretResponseObject, error)
 	// Get system setting
 	// (GET /v1/admin/setting)
 	AdminGetSetting(ctx context.Context, request AdminGetSettingRequestObject) (AdminGetSettingResponseObject, error)
@@ -4416,6 +4630,89 @@ func (sh *strictHandler) AdminListReferenceConfigSuites(w http.ResponseWriter, r
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminListReferenceConfigSuitesResponseObject); ok {
 		if err := validResponse.VisitAdminListReferenceConfigSuitesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminListSecrets operation middleware
+func (sh *strictHandler) AdminListSecrets(w http.ResponseWriter, r *http.Request) {
+	var request AdminListSecretsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminListSecrets(ctx, request.(AdminListSecretsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminListSecrets")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminListSecretsResponseObject); ok {
+		if err := validResponse.VisitAdminListSecretsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminDeleteSecret operation middleware
+func (sh *strictHandler) AdminDeleteSecret(w http.ResponseWriter, r *http.Request, name string) {
+	var request AdminDeleteSecretRequestObject
+
+	request.Name = name
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminDeleteSecret(ctx, request.(AdminDeleteSecretRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminDeleteSecret")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminDeleteSecretResponseObject); ok {
+		if err := validResponse.VisitAdminDeleteSecretResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminUpdateSecret operation middleware
+func (sh *strictHandler) AdminUpdateSecret(w http.ResponseWriter, r *http.Request, name string) {
+	var request AdminUpdateSecretRequestObject
+
+	request.Name = name
+
+	var body AdminUpdateSecretJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminUpdateSecret(ctx, request.(AdminUpdateSecretRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminUpdateSecret")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminUpdateSecretResponseObject); ok {
+		if err := validResponse.VisitAdminUpdateSecretResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

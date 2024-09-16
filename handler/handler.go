@@ -393,6 +393,30 @@ func (s *APIHandler) AdminListReferenceConfigSuites(ctx context.Context, request
 	return admin.ListReferenceConfigSuites(ctx, s.logger, s.accessor, request)
 }
 
+func (s *APIHandler) AdminListSecrets(ctx context.Context, request api.AdminListSecretsRequestObject) (api.AdminListSecretsResponseObject, error) {
+	token := ValidatePermissions(ctx, "AdminListSecrets")
+	if token == nil {
+		return api.AdminListSecrets401Response{}, nil
+	}
+	return admin.ListSecrets(ctx, s.k8sController)
+}
+
+func (s *APIHandler) AdminUpdateSecret(ctx context.Context, request api.AdminUpdateSecretRequestObject) (api.AdminUpdateSecretResponseObject, error) {
+	token := ValidatePermissions(ctx, "AdminUpdateSecret")
+	if token == nil {
+		return api.AdminUpdateSecret401Response{}, nil
+	}
+	return admin.UpdateSecret(ctx, s.k8sController, request)
+}
+
+func (s *APIHandler) AdminDeleteSecret(ctx context.Context, request api.AdminDeleteSecretRequestObject) (api.AdminDeleteSecretResponseObject, error) {
+	token := ValidatePermissions(ctx, "AdminDeleteSecret")
+	if token == nil {
+		return api.AdminDeleteSecret401Response{}, nil
+	}
+	return admin.DeleteSecret(ctx, s.k8sController, request)
+}
+
 func (s *APIHandler) GetHealth(ctx context.Context, request api.GetHealthRequestObject) (api.GetHealthResponseObject, error) {
 	return api.GetHealth200JSONResponse{Status: "healthy"}, nil
 }

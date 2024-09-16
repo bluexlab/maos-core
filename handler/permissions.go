@@ -36,6 +36,9 @@ var (
 		"AdminListReferenceConfigSuites": {"admin"},
 		"AdminGetSetting":                {"admin"},
 		"AdminUpdateSetting":             {"admin"},
+		"AdminListSecrets":               {"admin"},
+		"AdminUpdateSecret":              {"admin"},
+		"AdminDeleteSecret":              {"admin"},
 	}
 )
 

@@ -8,12 +8,14 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess/dbsqlc"
 	"gitlab.com/navyx/ai/maos/maos-core/internal/fixture"
 	"gitlab.com/navyx/ai/maos/maos-core/internal/testhelper"
+	"gitlab.com/navyx/ai/maos/maos-core/k8s"
 )
 
 func TestAdminListDeploymentsEndpoint(t *testing.T) {
@@ -576,97 +578,94 @@ func TestAdminPublishDeploymentEndpoint(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	tests := []struct {
-		name           string
-		deploymentID   int
-		token          string
-		setupFunc      func(context.Context, *testing.T, dbaccess.Accessor) int64
-		expectedStatus int
-	}{
-		{
-			name:         "Valid admin token and draft deployment",
-			deploymentID: 1,
-			token:        "admin-token",
-			setupFunc: func(ctx context.Context, t *testing.T, accessor dbaccess.Accessor) int64 {
-				deployment, err := accessor.Querier().DeploymentInsertWithConfigSuite(ctx, accessor.Source(), &dbsqlc.DeploymentInsertWithConfigSuiteParams{
-					CreatedBy: "test-user",
-					Name:      "test-deployment",
-					Reviewers: []string{"reviewer1", "reviewer2"},
-				})
-				require.NoError(t, err)
-				require.NotNil(t, deployment)
-				return deployment.ID
-			},
-			expectedStatus: http.StatusCreated,
-		},
-		{
-			name:         "Valid admin token but non-draft deployment",
-			deploymentID: 2,
-			token:        "admin-token",
-			setupFunc: func(ctx context.Context, t *testing.T, accessor dbaccess.Accessor) int64 {
-				deployment, err := accessor.Querier().DeploymentInsertWithConfigSuite(ctx, accessor.Source(), &dbsqlc.DeploymentInsertWithConfigSuiteParams{
-					CreatedBy: "admin",
-					Name:      "test-deployment",
-					Reviewers: []string{"reviewer1", "reviewer2"},
-				})
-				require.NoError(t, err)
 
-				_, err = accessor.Source().Exec(ctx, "UPDATE deployments SET status = 'rejected' WHERE id = $1", deployment.ID)
-				require.NoError(t, err)
-				return deployment.ID
-			},
-			expectedStatus: http.StatusBadRequest,
-		},
-		{
-			name:           "Valid admin token but non-existent deployment",
-			deploymentID:   999,
-			token:          "admin-token",
-			expectedStatus: http.StatusNotFound,
-		},
-		{
-			name:           "Non-admin token",
-			deploymentID:   1,
-			token:          "user-token",
-			expectedStatus: http.StatusUnauthorized,
-		},
-		{
-			name:           "Invalid token",
-			deploymentID:   1,
-			token:          "invalid_token",
-			expectedStatus: http.StatusUnauthorized,
-		},
-	}
+	t.Run("Valid admin token and draft deployment", func(t *testing.T) {
+		server, accessor, mockK8sController := SetupHttpTestWithDbAndK8s(t, ctx)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+		agent := fixture.InsertAgent(t, ctx, accessor.Source(), "admin")
+		fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent.ID, 0, []string{"admin"})
 
-			agent1 := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
-			agent2 := fixture.InsertAgent(t, ctx, accessor.Source(), "agent2")
-			fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent1.ID, 0, []string{"admin"})
-			fixture.InsertToken(t, ctx, accessor.Source(), "user-token", agent2.ID, 0, []string{"user"})
-
-			var deploymentID int64
-			if tt.setupFunc != nil {
-				deploymentID = tt.setupFunc(ctx, t, accessor)
-			} else {
-				deploymentID = int64(tt.deploymentID)
-			}
-
-			resp, _ := PostHttp(t, fmt.Sprintf("%s/v1/admin/deployments/%d/publish", server.URL, deploymentID), `{"user":"admin"}`, tt.token)
-			require.Equal(t, tt.expectedStatus, resp.StatusCode)
-
-			if tt.expectedStatus == http.StatusCreated {
-				// Verify the deployment status was actually updated in the database
-				updatedDeployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), deploymentID)
-				require.NoError(t, err)
-				require.EqualValues(t, api.DeploymentStatusDeployed, updatedDeployment.Status)
-
-				// Verify the associated config suite was activated
-				configSuite, err := accessor.Querier().ConfigSuiteGetById(ctx, accessor.Source(), *updatedDeployment.ConfigSuiteID)
-				require.NoError(t, err)
-				require.True(t, configSuite.Active)
-			}
+		mockK8sController.On("UpdateDeploymentSet", mock.Anything, []k8s.DeploymentParams{}).Return(nil)
+		deployment, err := accessor.Querier().DeploymentInsertWithConfigSuite(ctx, accessor.Source(), &dbsqlc.DeploymentInsertWithConfigSuiteParams{
+			CreatedBy: "test-user",
+			Name:      "test-deployment",
+			Reviewers: []string{"reviewer1", "reviewer2"},
 		})
-	}
+		require.NoError(t, err)
+		require.NotNil(t, deployment)
+
+		resp, _ := PostHttp(t, fmt.Sprintf("%s/v1/admin/deployments/%d/publish", server.URL, deployment.ID), `{"user":"admin"}`, "admin-token")
+		require.Equal(t, http.StatusCreated, resp.StatusCode)
+
+		// Verify the deployment status was actually updated in the database
+		updatedDeployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), deployment.ID)
+		require.NoError(t, err)
+		require.EqualValues(t, api.DeploymentStatusDeployed, updatedDeployment.Status)
+
+		// Verify the associated config suite was activated
+		configSuite, err := accessor.Querier().ConfigSuiteGetById(ctx, accessor.Source(), *updatedDeployment.ConfigSuiteID)
+		require.NoError(t, err)
+		require.True(t, configSuite.Active)
+	})
+
+	t.Run("Valid admin token but non-draft deployment", func(t *testing.T) {
+		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+
+		agent := fixture.InsertAgent(t, ctx, accessor.Source(), "admin")
+		fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent.ID, 0, []string{"admin"})
+
+		deployment, err := accessor.Querier().DeploymentInsertWithConfigSuite(ctx, accessor.Source(), &dbsqlc.DeploymentInsertWithConfigSuiteParams{
+			CreatedBy: "admin",
+			Name:      "test-deployment",
+			Reviewers: []string{"reviewer1", "reviewer2"},
+		})
+		require.NoError(t, err)
+
+		_, err = accessor.Source().Exec(ctx, "UPDATE deployments SET status = 'rejected' WHERE id = $1", deployment.ID)
+		require.NoError(t, err)
+
+		resp, _ := PostHttp(t, fmt.Sprintf("%s/v1/admin/deployments/%d/publish", server.URL, deployment.ID), `{"user":"admin"}`, "admin-token")
+		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	})
+
+	t.Run("Valid admin token but non-existent deployment", func(t *testing.T) {
+		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+
+		agent := fixture.InsertAgent(t, ctx, accessor.Source(), "admin")
+		fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent.ID, 0, []string{"admin"})
+
+		resp, _ := PostHttp(t, fmt.Sprintf("%s/v1/admin/deployments/%d/publish", server.URL, 999), `{"user":"admin"}`, "admin-token")
+		require.Equal(t, http.StatusNotFound, resp.StatusCode)
+	})
+
+	t.Run("Non-admin token", func(t *testing.T) {
+		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+
+		agent := fixture.InsertAgent(t, ctx, accessor.Source(), "user")
+		fixture.InsertToken(t, ctx, accessor.Source(), "user-token", agent.ID, 0, []string{"user"})
+
+		deployment, err := accessor.Querier().DeploymentInsertWithConfigSuite(ctx, accessor.Source(), &dbsqlc.DeploymentInsertWithConfigSuiteParams{
+			CreatedBy: "test-user",
+			Name:      "test-deployment",
+			Reviewers: []string{"reviewer1", "reviewer2"},
+		})
+		require.NoError(t, err)
+
+		resp, _ := PostHttp(t, fmt.Sprintf("%s/v1/admin/deployments/%d/publish", server.URL, deployment.ID), `{"user":"user"}`, "user-token")
+		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	})
+
+	t.Run("Invalid token", func(t *testing.T) {
+		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+
+		deployment, err := accessor.Querier().DeploymentInsertWithConfigSuite(ctx, accessor.Source(), &dbsqlc.DeploymentInsertWithConfigSuiteParams{
+			CreatedBy: "test-user",
+			Name:      "test-deployment",
+			Reviewers: []string{"reviewer1", "reviewer2"},
+		})
+		require.NoError(t, err)
+
+		resp, _ := PostHttp(t, fmt.Sprintf("%s/v1/admin/deployments/%d/publish", server.URL, deployment.ID), `{"user":"admin"}`, "invalid_token")
+		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	})
 }

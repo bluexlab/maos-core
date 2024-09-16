@@ -8,9 +8,21 @@ type Model struct {
 	Name     string `json:"name"`
 }
 
+type EmbeddingModel struct {
+	ID        string `json:"id"`
+	Provider  string `json:"provider"`
+	Name      string `json:"name"`
+	Dimension int    `json:"dimension"`
+}
+
 // ModelListResponse represents the response for the model list endpoint
 type ModelListResponse struct {
 	Data []Model `json:"data"`
+}
+
+// EmbeddingListResponse represents the response for the embedding model list endpoint
+type EmbeddingListResponse struct {
+	Data []EmbeddingModel `json:"data"`
 }
 
 // Message represents a message used for generating completions
@@ -58,4 +70,21 @@ type Tool struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
 	Parameters  json.RawMessage `json:"parameters"`
+}
+
+// EmbeddingRequest represents the request body for the embedding endpoint
+type EmbeddingRequest struct {
+	ModelID string   `json:"model_id"`
+	Input   []string `json:"input"`
+}
+
+// EmbeddingResult represents the response body for the embedding endpoint
+type EmbeddingResult struct {
+	Data []Embedding `json:"data"`
+}
+
+// Embedding represents the embedding of a text
+type Embedding struct {
+	Embedding []float32 `json:"embedding"`
+	Index     int       `json:"index"`
 }

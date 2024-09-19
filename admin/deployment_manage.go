@@ -572,13 +572,13 @@ func rotateAgentApiKeys(
 	for _, config := range configs {
 		newApiToken := GenerateAPIToken()
 
-		expirationTime := time.Now().Add(15 * time.Minute)
+		expirationTime := time.Now().Add(60 * 24 * time.Hour)
 		_, err := accessor.Querier().ApiTokenRotate(ctx, tx, &dbsqlc.ApiTokenRotateParams{
 			ID:          newApiToken,
 			AgentId:     config.AgentId,
 			NewExpireAt: int64(expirationTime.Unix()),
 			CreatedBy:   createdBy,
-			Permissions: []string{"agent:read", "agent:write"}, // TODO: read permissions from agent config
+			Permissions: []string{"read:invocation"}, // TODO: read permissions from agent config
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to rorate API key of agent %s: %v", config.AgentName, err)

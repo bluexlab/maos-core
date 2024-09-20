@@ -2,6 +2,7 @@
 SELECT
   t.id,
   a.id as agent_id,
+  a.name as agent_name,
   a.queue_id,
   t.permissions,
   t.created_at,
@@ -10,6 +11,7 @@ SELECT
   COUNT(*) OVER() AS total_count
 FROM api_tokens t
 JOIN agents a ON t.agent_id = a.id
+WHERE (sqlc.narg('agent_id')::bigint IS NULL OR a.id = sqlc.narg('agent_id')::bigint)
 ORDER BY t.created_at DESC, t.id
 LIMIT sqlc.arg(page_size)::bigint
 OFFSET sqlc.arg(page_size) * (sqlc.arg(page)::bigint - 1);
@@ -39,8 +41,11 @@ INSERT INTO api_tokens(
     @expire_at::bigint,
     @created_by::text,
     @permissions::varchar(255)[],
-    coalesce(@created_at::bigint, EXTRACT(EPOCH FROM NOW()))
+    EXTRACT(EPOCH FROM NOW())
 ) RETURNING *;
+
+-- name: ApiTokenDelete :exec
+DELETE FROM api_tokens WHERE id = @id;
 
 -- name: ApiTokenRotate :one
 WITH new_token AS (

@@ -294,6 +294,14 @@ func (s *APIHandler) AdminCreateApiToken(ctx context.Context, request api.AdminC
 	return admin.CreateApiToken(ctx, s.accessor, request)
 }
 
+func (s *APIHandler) AdminDeleteApiToken(ctx context.Context, request api.AdminDeleteApiTokenRequestObject) (api.AdminDeleteApiTokenResponseObject, error) {
+	token := ValidatePermissions(ctx, "AdminDeleteApiToken")
+	if token == nil {
+		return api.AdminDeleteApiToken401Response{}, nil
+	}
+	return admin.DeleteApiToken(ctx, s.accessor, request)
+}
+
 func (s *APIHandler) AdminListDeployments(ctx context.Context, request api.AdminListDeploymentsRequestObject) (api.AdminListDeploymentsResponseObject, error) {
 	token := ValidatePermissions(ctx, "AdminListDeployments")
 	if token == nil {

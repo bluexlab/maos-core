@@ -17,6 +17,7 @@ func ListApiTokens(ctx context.Context, accessor dbaccess.Accessor, request api.
 	page, _ := lo.Coalesce[*int](request.Params.Page, &defaultPage)
 	pageSize, _ := lo.Coalesce[*int](request.Params.PageSize, &defaultPageSize)
 	res, err := accessor.Querier().ApiTokenListByPage(ctx, accessor.Source(), &dbsqlc.ApiTokenListByPageParams{
+		AgentId:  request.Params.AgentId,
 		Page:     max(int64(*page), 1),
 		PageSize: min(max(int64(*pageSize), 1), 100),
 	})
@@ -71,11 +72,22 @@ func CreateApiToken(ctx context.Context, accessor dbaccess.Accessor, request api
 	return api.AdminCreateApiToken201JSONResponse{
 		Id:          apiToken.ID,
 		AgentId:     apiToken.AgentId,
-		CreatedAt:   apiToken.ExpireAt,
+		CreatedAt:   apiToken.CreatedAt,
 		CreatedBy:   apiToken.CreatedBy,
 		ExpireAt:    apiToken.ExpireAt,
 		Permissions: util.MapSlice(apiToken.Permissions, func(p string) api.Permission { return api.Permission(p) }),
 	}, nil
+}
+
+func DeleteApiToken(ctx context.Context, accessor dbaccess.Accessor, request api.AdminDeleteApiTokenRequestObject) (api.AdminDeleteApiTokenResponseObject, error) {
+	err := accessor.Querier().ApiTokenDelete(ctx, accessor.Source(), request.Id)
+	if err != nil {
+		return api.AdminDeleteApiToken500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot delete API token: %s", err.Error())},
+		}, nil
+	}
+
+	return api.AdminDeleteApiToken204Response{}, nil
 }
 
 func GenerateAPIToken() string {

@@ -11,6 +11,9 @@ properties:
     type: boolean
   configurable:
     type: boolean
+  token_count:
+    type: integer
+    format: int64
   renameable:
     type: boolean
   created_at:
@@ -25,7 +28,9 @@ required:
   - configurable
   - renameable
   - created_at
+  - token_count
 example:
   id: 16888
   name: "agent-16888"
   created_at: 1640995200
+  token_count: 1

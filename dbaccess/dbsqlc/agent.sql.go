@@ -40,24 +40,52 @@ func (q *Queries) AgentDelete(ctx context.Context, db DBTX, id int64) (string, e
 }
 
 const agentFindById = `-- name: AgentFindById :one
-SELECT id, name, queue_id, created_at, metadata, updated_at, enabled, deployable, configurable
+WITH agent_token_count AS (
+  SELECT agent_id, COUNT(*) AS token_count
+  FROM api_tokens
+  WHERE agent_id = $1
+  GROUP BY agent_id
+)
+SELECT
+  agents.id,
+  agents.name,
+  agents.queue_id,
+  agents.enabled,
+  agents.deployable,
+  agents.configurable,
+  agents.created_at,
+  COALESCE(atc.token_count, 0) AS token_count,
+  CASE WHEN atc.token_count IS NULL OR atc.token_count = 0 THEN true ELSE false END AS renameable
 FROM agents
-WHERE id = $1
+LEFT JOIN agent_token_count atc ON agents.id = atc.agent_id
+WHERE agents.id = $1
 `
 
-func (q *Queries) AgentFindById(ctx context.Context, db DBTX, id int64) (*Agent, error) {
+type AgentFindByIdRow struct {
+	ID           int64
+	Name         string
+	QueueID      int64
+	Enabled      bool
+	Deployable   bool
+	Configurable bool
+	CreatedAt    int64
+	TokenCount   int64
+	Renameable   bool
+}
+
+func (q *Queries) AgentFindById(ctx context.Context, db DBTX, id int64) (*AgentFindByIdRow, error) {
 	row := db.QueryRow(ctx, agentFindById, id)
-	var i Agent
+	var i AgentFindByIdRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.QueueID,
-		&i.CreatedAt,
-		&i.Metadata,
-		&i.UpdatedAt,
 		&i.Enabled,
 		&i.Deployable,
 		&i.Configurable,
+		&i.CreatedAt,
+		&i.TokenCount,
+		&i.Renameable,
 	)
 	return &i, err
 }
@@ -115,9 +143,9 @@ func (q *Queries) AgentInsert(ctx context.Context, db DBTX, arg *AgentInsertPara
 
 const agentListPagenated = `-- name: AgentListPagenated :many
 WITH agent_token_count AS (
-    SELECT agent_id, COUNT(*) AS token_count
-    FROM api_tokens
-    GROUP BY agent_id
+  SELECT agent_id, COUNT(*) AS token_count
+  FROM api_tokens
+  GROUP BY agent_id
 )
 SELECT
   agents.id,
@@ -128,6 +156,7 @@ SELECT
   agents.configurable,
   agents.created_at,
   COUNT(*) OVER() AS total_count,
+  COALESCE(atc.token_count, 0) AS token_count,
   CASE WHEN atc.token_count IS NULL OR atc.token_count = 0 THEN true ELSE false END AS renameable
 FROM agents
 LEFT JOIN agent_token_count atc ON agents.id = atc.agent_id
@@ -150,6 +179,7 @@ type AgentListPagenatedRow struct {
 	Configurable bool
 	CreatedAt    int64
 	TotalCount   int64
+	TokenCount   int64
 	Renameable   bool
 }
 
@@ -171,6 +201,7 @@ func (q *Queries) AgentListPagenated(ctx context.Context, db DBTX, arg *AgentLis
 			&i.Configurable,
 			&i.CreatedAt,
 			&i.TotalCount,
+			&i.TokenCount,
 			&i.Renameable,
 		); err != nil {
 			return nil, err

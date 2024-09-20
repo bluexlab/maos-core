@@ -97,6 +97,7 @@ const (
 const (
 	Assistant MessageRole = "assistant"
 	System    MessageRole = "system"
+	Tool      MessageRole = "tool"
 	User      MessageRole = "user"
 )
 
@@ -129,6 +130,7 @@ type Agent struct {
 	Id           int64  `json:"id"`
 	Name         string `json:"name"`
 	Renameable   bool   `json:"renameable"`
+	TokenCount   int64  `json:"token_count"`
 }
 
 // AgentCreate defines model for AgentCreate.
@@ -346,6 +348,34 @@ type MessageContent2 struct {
 	ImageUrl string `json:"image_url"`
 }
 
+// MessageContent3 defines model for .
+type MessageContent3 struct {
+	// ToolResult The result of a tool call.
+	ToolResult struct {
+		IsError *bool `json:"is_error,omitempty"`
+
+		// Result The result of the tool call.
+		Result map[string]interface{} `json:"result"`
+
+		// ToolCallId The ID of the tool call. It must be the same as the ID of the tool call in the tool_call property.
+		ToolCallId string `json:"tool_call_id"`
+	} `json:"tool_result"`
+}
+
+// MessageContent4 defines model for .
+type MessageContent4 struct {
+	ToolCall struct {
+		// Arguments The arguments of the tool/function.
+		Arguments *map[string]interface{} `json:"arguments,omitempty"`
+
+		// Id The ID of the tool call. It must be the same as the ID of the tool_call_id in the tool_result property.
+		Id *string `json:"id,omitempty"`
+
+		// Name The name of the tool/function.
+		Name *string `json:"name,omitempty"`
+	} `json:"tool_call"`
+}
+
 // Permission defines model for Permission.
 type Permission string
 
@@ -411,7 +441,7 @@ type AdminListApiTokensParams struct {
 	PageSize *int `form:"page_size,omitempty" json:"page_size,omitempty"`
 
 	// AgentId Filter by agent ID
-	AgentId *int `form:"agent_id,omitempty" json:"agent_id,omitempty"`
+	AgentId *int64 `form:"agent_id,omitempty" json:"agent_id,omitempty"`
 
 	// CreatedBy Filter by creator
 	CreatedBy *string `form:"created_by,omitempty" json:"created_by,omitempty"`
@@ -739,6 +769,58 @@ func (t *MessageContent) MergeMessageContent2(v MessageContent2) error {
 	return err
 }
 
+// AsMessageContent3 returns the union data inside the MessageContent as a MessageContent3
+func (t MessageContent) AsMessageContent3() (MessageContent3, error) {
+	var body MessageContent3
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromMessageContent3 overwrites any union data inside the MessageContent as the provided MessageContent3
+func (t *MessageContent) FromMessageContent3(v MessageContent3) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeMessageContent3 performs a merge with any union data inside the MessageContent, using the provided MessageContent3
+func (t *MessageContent) MergeMessageContent3(v MessageContent3) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsMessageContent4 returns the union data inside the MessageContent as a MessageContent4
+func (t MessageContent) AsMessageContent4() (MessageContent4, error) {
+	var body MessageContent4
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromMessageContent4 overwrites any union data inside the MessageContent as the provided MessageContent4
+func (t *MessageContent) FromMessageContent4(v MessageContent4) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeMessageContent4 performs a merge with any union data inside the MessageContent, using the provided MessageContent4
+func (t *MessageContent) MergeMessageContent4(v MessageContent4) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 func (t MessageContent) MarshalJSON() ([]byte, error) {
 	b, err := t.union.MarshalJSON()
 	return b, err
@@ -775,6 +857,9 @@ type ServerInterface interface {
 	// Create a new API token
 	// (POST /v1/admin/api_tokens)
 	AdminCreateApiToken(w http.ResponseWriter, r *http.Request)
+	// Delete an API token. If token not found, it will do nothing and return 204
+	// (DELETE /v1/admin/api_tokens/{id})
+	AdminDeleteApiToken(w http.ResponseWriter, r *http.Request, id string)
 	// Update a specific Config. Only draft configs can be updated.
 	// (PATCH /v1/admin/configs/{id})
 	AdminUpdateConfig(w http.ResponseWriter, r *http.Request, id int64)
@@ -1127,6 +1212,36 @@ func (siw *ServerInterfaceWrapper) AdminCreateApiToken(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminCreateApiToken(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// AdminDeleteApiToken operation middleware
+func (siw *ServerInterfaceWrapper) AdminDeleteApiToken(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminDeleteApiToken(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2222,6 +2337,8 @@ func HandlerWithOptions(si ServerInterface, options GorillaServerOptions) http.H
 
 	r.HandleFunc(options.BaseURL+"/v1/admin/api_tokens", wrapper.AdminCreateApiToken).Methods("POST")
 
+	r.HandleFunc(options.BaseURL+"/v1/admin/api_tokens/{id}", wrapper.AdminDeleteApiToken).Methods("DELETE")
+
 	r.HandleFunc(options.BaseURL+"/v1/admin/configs/{id}", wrapper.AdminUpdateConfig).Methods("PATCH")
 
 	r.HandleFunc(options.BaseURL+"/v1/admin/deployments", wrapper.AdminListDeployments).Methods("GET")
@@ -2619,6 +2736,39 @@ func (response AdminCreateApiToken401Response) VisitAdminCreateApiTokenResponse(
 type AdminCreateApiToken500JSONResponse struct{ N500JSONResponse }
 
 func (response AdminCreateApiToken500JSONResponse) VisitAdminCreateApiTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminDeleteApiTokenRequestObject struct {
+	Id string `json:"id"`
+}
+
+type AdminDeleteApiTokenResponseObject interface {
+	VisitAdminDeleteApiTokenResponse(w http.ResponseWriter) error
+}
+
+type AdminDeleteApiToken204Response struct {
+}
+
+func (response AdminDeleteApiToken204Response) VisitAdminDeleteApiTokenResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AdminDeleteApiToken401Response struct {
+}
+
+func (response AdminDeleteApiToken401Response) VisitAdminDeleteApiTokenResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type AdminDeleteApiToken500JSONResponse struct{ N500JSONResponse }
+
+func (response AdminDeleteApiToken500JSONResponse) VisitAdminDeleteApiTokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
 
@@ -3993,6 +4143,9 @@ type StrictServerInterface interface {
 	// Create a new API token
 	// (POST /v1/admin/api_tokens)
 	AdminCreateApiToken(ctx context.Context, request AdminCreateApiTokenRequestObject) (AdminCreateApiTokenResponseObject, error)
+	// Delete an API token. If token not found, it will do nothing and return 204
+	// (DELETE /v1/admin/api_tokens/{id})
+	AdminDeleteApiToken(ctx context.Context, request AdminDeleteApiTokenRequestObject) (AdminDeleteApiTokenResponseObject, error)
 	// Update a specific Config. Only draft configs can be updated.
 	// (PATCH /v1/admin/configs/{id})
 	AdminUpdateConfig(ctx context.Context, request AdminUpdateConfigRequestObject) (AdminUpdateConfigResponseObject, error)
@@ -4339,6 +4492,32 @@ func (sh *strictHandler) AdminCreateApiToken(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminCreateApiTokenResponseObject); ok {
 		if err := validResponse.VisitAdminCreateApiTokenResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminDeleteApiToken operation middleware
+func (sh *strictHandler) AdminDeleteApiToken(w http.ResponseWriter, r *http.Request, id string) {
+	var request AdminDeleteApiTokenRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminDeleteApiToken(ctx, request.(AdminDeleteApiTokenRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminDeleteApiToken")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminDeleteApiTokenResponseObject); ok {
+		if err := validResponse.VisitAdminDeleteApiTokenResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

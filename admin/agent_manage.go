@@ -37,6 +37,7 @@ func ListAgents(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acce
 				Name:         row.Name,
 				CreatedAt:    row.CreatedAt,
 				Renameable:   row.Renameable,
+				TokenCount:   row.TokenCount,
 				Enabled:      row.Enabled,
 				Deployable:   row.Deployable,
 				Configurable: row.Configurable,
@@ -90,6 +91,7 @@ func CreateAgent(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acc
 		Enabled:      agent.Enabled,
 		Deployable:   agent.Deployable,
 		Configurable: agent.Configurable,
+		TokenCount:   0,
 		CreatedAt:    agent.CreatedAt,
 		Renameable:   true,
 	}, nil
@@ -116,9 +118,14 @@ func GetAgent(ctx context.Context, logger *slog.Logger, accessor dbaccess.Access
 
 	return api.AdminGetAgent200JSONResponse{
 		Data: api.Agent{
-			Id:        agent.ID,
-			Name:      agent.Name,
-			CreatedAt: agent.CreatedAt,
+			Id:           agent.ID,
+			Name:         agent.Name,
+			TokenCount:   agent.TokenCount,
+			CreatedAt:    agent.CreatedAt,
+			Renameable:   agent.Renameable,
+			Enabled:      agent.Enabled,
+			Deployable:   agent.Deployable,
+			Configurable: agent.Configurable,
 		},
 	}, nil
 }

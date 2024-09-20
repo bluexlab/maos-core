@@ -2,11 +2,13 @@ package admin
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/samber/lo"
 
 	"github.com/stretchr/testify/assert"
@@ -209,5 +211,70 @@ func TestCreateApiTokenWithDB(t *testing.T) {
 				N500JSONResponse: api.N500JSONResponse{Error: "Cannot insert API tokens: closed pool"},
 			},
 			response)
+	})
+}
+
+func TestDeleteApiToken(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	// Test case 1: Successful deletion
+	t.Run("Successful deletion", func(t *testing.T) {
+		dbPool := testhelper.TestDB(ctx, t)
+		defer dbPool.Close()
+		accessor := dbaccess.New(dbPool)
+		agent := fixture.InsertAgent(t, ctx, dbPool, "agent1")
+		token := fixture.InsertToken(t, ctx, dbPool, "token001", agent.ID, time.Now().Add(24*time.Hour).Unix(), []string{"read"})
+
+		request := api.AdminDeleteApiTokenRequestObject{
+			Id: token.ID,
+		}
+
+		response, err := DeleteApiToken(ctx, accessor, request)
+
+		assert.NoError(t, err)
+		assert.IsType(t, api.AdminDeleteApiToken204Response{}, response)
+
+		// Verify token is deleted
+		_, err = accessor.Querier().ApiTokenFindByID(ctx, accessor.Source(), token.ID)
+		assert.Error(t, err)
+		assert.True(t, errors.Is(err, pgx.ErrNoRows))
+	})
+
+	// Test case 2: Token not found
+	t.Run("Token not found", func(t *testing.T) {
+		dbPool := testhelper.TestDB(ctx, t)
+		defer dbPool.Close()
+		accessor := dbaccess.New(dbPool)
+
+		request := api.AdminDeleteApiTokenRequestObject{
+			Id: "non-existent-token",
+		}
+
+		response, err := DeleteApiToken(ctx, accessor, request)
+
+		assert.NoError(t, err)
+		assert.IsType(t, api.AdminDeleteApiToken204Response{}, response)
+	})
+
+	// Test case 3: Database error
+	t.Run("Database error", func(t *testing.T) {
+		dbPool := testhelper.TestDB(ctx, t)
+		accessor := dbaccess.New(dbPool)
+		agent := fixture.InsertAgent(t, ctx, dbPool, "agent1")
+		token := fixture.InsertToken(t, ctx, dbPool, "token001", agent.ID, time.Now().Add(24*time.Hour).Unix(), []string{"read"})
+
+		request := api.AdminDeleteApiTokenRequestObject{
+			Id: token.ID,
+		}
+
+		dbPool.Close()
+		response, err := DeleteApiToken(ctx, accessor, request)
+
+		assert.NoError(t, err)
+		assert.IsType(t, api.AdminDeleteApiToken500JSONResponse{}, response)
+		jsonResponse := response.(api.AdminDeleteApiToken500JSONResponse)
+		assert.Contains(t, jsonResponse.Error, "closed pool")
 	})
 }

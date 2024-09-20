@@ -24,6 +24,7 @@ var (
 		"AdminGetAgentConfig":            {"admin"},
 		"AdminListApiTokens":             {"admin"},
 		"AdminCreateApiToken":            {"admin"},
+		"AdminDeleteApiToken":            {"admin"},
 		"AdminUpdateConfig":              {"admin"},
 		"AdminListDeployments":           {"admin"},
 		"AdminGetDeployment":             {"admin"},

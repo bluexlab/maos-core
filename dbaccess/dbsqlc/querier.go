@@ -10,11 +10,12 @@ import (
 
 type Querier interface {
 	AgentDelete(ctx context.Context, db DBTX, id int64) (string, error)
-	AgentFindById(ctx context.Context, db DBTX, id int64) (*Agent, error)
+	AgentFindById(ctx context.Context, db DBTX, id int64) (*AgentFindByIdRow, error)
 	AgentInsert(ctx context.Context, db DBTX, arg *AgentInsertParams) (*Agent, error)
 	AgentListPagenated(ctx context.Context, db DBTX, arg *AgentListPagenatedParams) ([]*AgentListPagenatedRow, error)
 	AgentUpdate(ctx context.Context, db DBTX, arg *AgentUpdateParams) (*Agent, error)
 	ApiTokenCount(ctx context.Context, db DBTX) (int64, error)
+	ApiTokenDelete(ctx context.Context, db DBTX, id string) error
 	ApiTokenFindByID(ctx context.Context, db DBTX, id string) (*ApiTokenFindByIDRow, error)
 	ApiTokenInsert(ctx context.Context, db DBTX, arg *ApiTokenInsertParams) (*ApiToken, error)
 	ApiTokenListByPage(ctx context.Context, db DBTX, arg *ApiTokenListByPageParams) ([]*ApiTokenListByPageRow, error)

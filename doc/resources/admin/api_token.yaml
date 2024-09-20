@@ -1,0 +1,19 @@
+delete:
+  summary: Delete an API token. If token not found, it will do nothing and return 204
+  operationId: adminDeleteApiToken
+  tags:
+    - Admin
+  parameters:
+    - name: id
+      in: path
+      description: The ID of the API token to delete
+      required: true
+      schema:
+        type: string
+  responses:
+    "204":
+      description: API token deleted successfully
+    "401":
+      description: Unauthorized
+    "500":
+      $ref: "../../responses/500.yaml"

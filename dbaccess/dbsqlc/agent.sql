@@ -1,8 +1,8 @@
 -- name: AgentListPagenated :many
 WITH agent_token_count AS (
-    SELECT agent_id, COUNT(*) AS token_count
-    FROM api_tokens
-    GROUP BY agent_id
+  SELECT agent_id, COUNT(*) AS token_count
+  FROM api_tokens
+  GROUP BY agent_id
 )
 SELECT
   agents.id,
@@ -13,6 +13,7 @@ SELECT
   agents.configurable,
   agents.created_at,
   COUNT(*) OVER() AS total_count,
+  COALESCE(atc.token_count, 0) AS token_count,
   CASE WHEN atc.token_count IS NULL OR atc.token_count = 0 THEN true ELSE false END AS renameable
 FROM agents
 LEFT JOIN agent_token_count atc ON agents.id = atc.agent_id
@@ -21,9 +22,25 @@ LIMIT sqlc.arg(page_size)::bigint
 OFFSET sqlc.arg(page_size)::bigint * (sqlc.arg(page)::bigint - 1);
 
 -- name: AgentFindById :one
-SELECT *
+WITH agent_token_count AS (
+  SELECT agent_id, COUNT(*) AS token_count
+  FROM api_tokens
+  WHERE agent_id = @id
+  GROUP BY agent_id
+)
+SELECT
+  agents.id,
+  agents.name,
+  agents.queue_id,
+  agents.enabled,
+  agents.deployable,
+  agents.configurable,
+  agents.created_at,
+  COALESCE(atc.token_count, 0) AS token_count,
+  CASE WHEN atc.token_count IS NULL OR atc.token_count = 0 THEN true ELSE false END AS renameable
 FROM agents
-WHERE id = @id;
+LEFT JOIN agent_token_count atc ON agents.id = atc.agent_id
+WHERE agents.id = @id;
 
 -- name: AgentInsert :one
 INSERT INTO agents(

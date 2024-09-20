@@ -18,6 +18,7 @@ get:
       name: agent_id
       schema:
         type: integer
+        format: int64
       description: Filter by agent ID
     - in: query
       name: created_by
@@ -25,7 +26,7 @@ get:
         type: string
       description: Filter by creator
   responses:
-    '200':
+    "200":
       description: Successful response
       content:
         application/json:
@@ -35,7 +36,7 @@ get:
               data:
                 type: array
                 items:
-                  $ref: '../../schemas/ApiToken.yaml'
+                  $ref: "../../schemas/ApiToken.yaml"
               meta:
                 type: object
                 properties:
@@ -48,22 +49,22 @@ get:
               - meta
           example:
             data:
-            - id: "token123"
-              agent_id: 1
-              expire_at: 1672531200
-              created_by: "admin@example.com"
-              created_at: 1640995200
-              permissions: ["config:read", "invocation:read"]
-            - id: "token456"
-              agent_id: 2
-              expire_at: 1704067200
-              created_by: "manager@example.com"
-              created_at: 1641081600
-              permissions: ["config:read"]
-    '401':
+              - id: "token123"
+                agent_id: 1
+                expire_at: 1672531200
+                created_by: "admin@example.com"
+                created_at: 1640995200
+                permissions: ["config:read", "invocation:read"]
+              - id: "token456"
+                agent_id: 2
+                expire_at: 1704067200
+                created_by: "manager@example.com"
+                created_at: 1641081600
+                permissions: ["config:read"]
+    "401":
       description: Unauthorized
-    '500':
-      $ref : "../../responses/500.yaml"
+    "500":
+      $ref: "../../responses/500.yaml"
 
 post:
   summary: Create a new API token
@@ -75,18 +76,18 @@ post:
     content:
       application/json:
         schema:
-          $ref: '../../schemas/ApiTokenCreate.yaml'
+          $ref: "../../schemas/ApiTokenCreate.yaml"
         example:
           AgentID: 3
           ExpireAt: 1735689600
           Permissions: ["config:read", "invocation:read"]
   responses:
-    '201':
+    "201":
       description: Successfully created
       content:
         application/json:
           schema:
-            $ref: '../../schemas/ApiToken.yaml'
+            $ref: "../../schemas/ApiToken.yaml"
           example:
             ID: "token789"
             AgentID: 3
@@ -94,9 +95,9 @@ post:
             CreatedBy: "system"
             CreatedAt: 1641168000
             Permissions: ["config:read", "invocation:read"]
-    '400':
-      $ref : "../../responses/400.yaml"
-    '401':
+    "400":
+      $ref: "../../responses/400.yaml"
+    "401":
       description: Unauthorized
-    '500':
-      $ref : "../../responses/500.yaml"
+    "500":
+      $ref: "../../responses/500.yaml"

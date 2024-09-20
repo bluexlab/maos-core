@@ -972,6 +972,7 @@ paths:
           name: agent_id
           schema:
             type: integer
+            format: int64
           description: Filter by agent ID
         - in: query
           name: created_by
@@ -1056,6 +1057,28 @@ paths:
                   - invocation:read
         '400':
           $ref: '#/components/responses/400'
+        '401':
+          description: Unauthorized
+        '500':
+          $ref: '#/components/responses/500'
+  /v1/admin/api_tokens/{id}:
+    delete:
+      summary: >-
+        Delete an API token. If token not found, it will do nothing and return
+        204
+      operationId: adminDeleteApiToken
+      tags:
+        - Admin
+      parameters:
+        - name: id
+          in: path
+          description: The ID of the API token to delete
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: API token deleted successfully
         '401':
           description: Unauthorized
         '500':
@@ -1892,6 +1915,45 @@ components:
                 by all providers.
           required:
             - image_url
+        - type: object
+          properties:
+            tool_result:
+              type: object
+              description: The result of a tool call.
+              properties:
+                tool_call_id:
+                  type: string
+                  description: >-
+                    The ID of the tool call. It must be the same as the ID of
+                    the tool call in the tool_call property.
+                result:
+                  type: object
+                  description: The result of the tool call.
+                is_error:
+                  type: boolean
+              required:
+                - tool_call_id
+                - result
+          required:
+            - tool_result
+        - type: object
+          properties:
+            tool_call:
+              type: object
+              properties:
+                id:
+                  type: string
+                  description: >-
+                    The ID of the tool call. It must be the same as the ID of
+                    the tool_call_id in the tool_result property.
+                name:
+                  type: string
+                  description: The name of the tool/function.
+                arguments:
+                  type: object
+                  description: The arguments of the tool/function.
+          required:
+            - tool_call
     Message:
       type: object
       properties:
@@ -1901,6 +1963,7 @@ components:
             - system
             - assistant
             - user
+            - tool
         content:
           type: array
           items:
@@ -2113,6 +2176,9 @@ components:
           type: boolean
         configurable:
           type: boolean
+        token_count:
+          type: integer
+          format: int64
         renameable:
           type: boolean
         created_at:
@@ -2126,10 +2192,12 @@ components:
         - configurable
         - renameable
         - created_at
+        - token_count
       example:
         id: 16888
         name: agent-16888
         created_at: 1640995200
+        token_count: 1
     AgentCreate:
       type: object
       properties:

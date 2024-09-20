@@ -21,6 +21,15 @@ func (q *Queries) ApiTokenCount(ctx context.Context, db DBTX) (int64, error) {
 	return count, err
 }
 
+const apiTokenDelete = `-- name: ApiTokenDelete :exec
+DELETE FROM api_tokens WHERE id = $1
+`
+
+func (q *Queries) ApiTokenDelete(ctx context.Context, db DBTX, id string) error {
+	_, err := db.Exec(ctx, apiTokenDelete, id)
+	return err
+}
+
 const apiTokenFindByID = `-- name: ApiTokenFindByID :one
 SELECT t.id, a.id as agent_id, a.queue_id, t.permissions, t.expire_at, t.created_by
 FROM api_tokens t
@@ -66,7 +75,7 @@ INSERT INTO api_tokens(
     $3::bigint,
     $4::text,
     $5::varchar(255)[],
-    coalesce($6::bigint, EXTRACT(EPOCH FROM NOW()))
+    EXTRACT(EPOCH FROM NOW())
 ) RETURNING id, agent_id, expire_at, created_by, created_at, permissions
 `
 
@@ -76,7 +85,6 @@ type ApiTokenInsertParams struct {
 	ExpireAt    int64
 	CreatedBy   string
 	Permissions []string
-	CreatedAt   int64
 }
 
 func (q *Queries) ApiTokenInsert(ctx context.Context, db DBTX, arg *ApiTokenInsertParams) (*ApiToken, error) {
@@ -86,7 +94,6 @@ func (q *Queries) ApiTokenInsert(ctx context.Context, db DBTX, arg *ApiTokenInse
 		arg.ExpireAt,
 		arg.CreatedBy,
 		arg.Permissions,
-		arg.CreatedAt,
 	)
 	var i ApiToken
 	err := row.Scan(
@@ -104,6 +111,7 @@ const apiTokenListByPage = `-- name: ApiTokenListByPage :many
 SELECT
   t.id,
   a.id as agent_id,
+  a.name as agent_name,
   a.queue_id,
   t.permissions,
   t.created_at,
@@ -112,12 +120,14 @@ SELECT
   COUNT(*) OVER() AS total_count
 FROM api_tokens t
 JOIN agents a ON t.agent_id = a.id
+WHERE ($1::bigint IS NULL OR a.id = $1::bigint)
 ORDER BY t.created_at DESC, t.id
-LIMIT $1::bigint
-OFFSET $1 * ($2::bigint - 1)
+LIMIT $2::bigint
+OFFSET $2 * ($3::bigint - 1)
 `
 
 type ApiTokenListByPageParams struct {
+	AgentId  *int64
 	PageSize interface{}
 	Page     int64
 }
@@ -125,6 +135,7 @@ type ApiTokenListByPageParams struct {
 type ApiTokenListByPageRow struct {
 	ID          string
 	AgentId     int64
+	AgentName   string
 	QueueID     int64
 	Permissions []string
 	CreatedAt   int64
@@ -134,7 +145,7 @@ type ApiTokenListByPageRow struct {
 }
 
 func (q *Queries) ApiTokenListByPage(ctx context.Context, db DBTX, arg *ApiTokenListByPageParams) ([]*ApiTokenListByPageRow, error) {
-	rows, err := db.Query(ctx, apiTokenListByPage, arg.PageSize, arg.Page)
+	rows, err := db.Query(ctx, apiTokenListByPage, arg.AgentId, arg.PageSize, arg.Page)
 	if err != nil {
 		return nil, err
 	}
@@ -145,6 +156,7 @@ func (q *Queries) ApiTokenListByPage(ctx context.Context, db DBTX, arg *ApiToken
 		if err := rows.Scan(
 			&i.ID,
 			&i.AgentId,
+			&i.AgentName,
 			&i.QueueID,
 			&i.Permissions,
 			&i.CreatedAt,

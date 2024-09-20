@@ -2,9 +2,14 @@ package apitest
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess/dbsqlc"
 	"gitlab.com/navyx/ai/maos/maos-core/internal/fixture"
@@ -15,77 +20,145 @@ func TestAdminTokenCreateEndpoint(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	tests := []struct {
-		name           string
-		body           string
-		token          string
-		expectedStatus int
-		expectedBody   string
-	}{
-		{
-			name:           "Valid admin token creation",
-			body:           `{"agent_id":1,"created_by":"admin","expire_at":2000,"permissions":["config:read","admin"]}`,
-			token:          "admin-token",
-			expectedStatus: http.StatusCreated,
-			expectedBody:   `{"agent_id":1, "id":"(ignore)", "created_at":2000, "created_by":"admin", "expire_at":2000, "permissions":["config:read", "admin"]}`,
-		},
-		{
-			name:           "Invalid body",
-			body:           `{"invalid_json"}`,
-			token:          "admin-token",
-			expectedStatus: http.StatusBadRequest,
-			expectedBody:   "invalid character ",
-		},
-		{
-			name:           "Missing required fields",
-			body:           `{"agent_id":1}`,
-			token:          "admin-token",
-			expectedStatus: http.StatusBadRequest,
-			expectedBody:   "Missing required fields",
-		},
-		{
-			name:           "Non-admin token",
-			body:           `{"agent_id":1,"created_by":"user","expire_at":2000,"permissions":["config:read"]}`,
-			token:          "agent-token",
-			expectedStatus: http.StatusUnauthorized,
-			expectedBody:   "",
-		},
-		{
-			name:           "Invalid token",
-			body:           `{"agent_id":1,"created_by":"admin","expire_at":2000,"permissions":["config:read","admin"]}`,
-			token:          "invalid_token",
-			expectedStatus: http.StatusUnauthorized,
-			expectedBody:   "",
-		},
-	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+	t.Run("Valid admin token creation", func(t *testing.T) {
+		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
 
-			agent := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
-			fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent.ID, 0, []string{"admin"})
-			fixture.InsertToken(t, ctx, accessor.Source(), "agent-token", agent.ID, 0, []string{"user"})
+		agent := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
+		fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent.ID, 0, []string{"admin"})
 
-			resp, resBody := PostHttp(t, server.URL+"/v1/admin/api_tokens", tt.body, tt.token)
-			require.Equal(t, tt.expectedStatus, resp.StatusCode)
+		body := `{"agent_id":1,"created_by":"admin","expire_at":2000000000,"permissions":["config:read","admin"]}`
+		resp, resBody := PostHttp(t, server.URL+"/v1/admin/api_tokens", body, "admin-token")
+		var token struct {
+			ID          string   `json:"id"`
+			AgentID     int64    `json:"agent_id"`
+			CreatedAt   int64    `json:"created_at"`
+			CreatedBy   string   `json:"created_by"`
+			ExpireAt    int64    `json:"expire_at"`
+			Permissions []string `json:"permissions"`
+		}
+		err := json.Unmarshal([]byte(resBody), &token)
+		require.NoError(t, err)
 
-			if tt.expectedStatus == http.StatusCreated {
-				tokens, err := accessor.Querier().ApiTokenListByPage(ctx, accessor.Source(), &dbsqlc.ApiTokenListByPageParams{})
-				require.NoError(t, err)
-				require.GreaterOrEqual(t, len(tokens), 1)
-				testhelper.AssertEqualIgnoringFields(t,
-					testhelper.JsonToMap(t, tt.expectedBody),
-					testhelper.JsonToMap(t, resBody),
-					"id",
-				)
-			} else {
-				if tt.expectedBody != "" {
-					resJson := testhelper.JsonToMap(t, resBody)
-					require.Contains(t, resJson, "error")
-					require.Contains(t, resJson["error"], tt.expectedBody)
-				}
-			}
-		})
-	}
+		require.Equal(t, http.StatusCreated, resp.StatusCode)
+
+		tokens, err := accessor.Querier().ApiTokenListByPage(ctx, accessor.Source(), &dbsqlc.ApiTokenListByPageParams{})
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, len(tokens), 1)
+
+		expectedBody := fmt.Sprintf(`{"agent_id":1, "id":"(ignore)", "created_at":%d, "created_by":"admin", "expire_at":%d, "permissions":["config:read", "admin"]}`, token.CreatedAt, 2000000000)
+		testhelper.AssertEqualIgnoringFields(t,
+			testhelper.JsonToMap(t, expectedBody),
+			testhelper.JsonToMap(t, resBody),
+			"id",
+		)
+	})
+
+	t.Run("Invalid body", func(t *testing.T) {
+		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+
+		agent := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
+		fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent.ID, 0, []string{"admin"})
+
+		body := `{"invalid_json"}`
+		resp, resBody := PostHttp(t, server.URL+"/v1/admin/api_tokens", body, "admin-token")
+
+		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+		resJson := testhelper.JsonToMap(t, resBody)
+		require.Contains(t, resJson, "error")
+		require.Contains(t, resJson["error"], "invalid character ")
+	})
+
+	t.Run("Missing required fields", func(t *testing.T) {
+		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+
+		agent := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
+		fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent.ID, 0, []string{"admin"})
+
+		body := `{"agent_id":1}`
+		resp, resBody := PostHttp(t, server.URL+"/v1/admin/api_tokens", body, "admin-token")
+
+		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+		resJson := testhelper.JsonToMap(t, resBody)
+		require.Contains(t, resJson, "error")
+		require.Contains(t, resJson["error"], "Missing required fields")
+	})
+
+	t.Run("Non-admin token", func(t *testing.T) {
+		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+
+		agent := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
+		fixture.InsertToken(t, ctx, accessor.Source(), "agent-token", agent.ID, 0, []string{"user"})
+
+		body := `{"agent_id":1,"created_by":"user","expire_at":2000,"permissions":["config:read"]}`
+		resp, _ := PostHttp(t, server.URL+"/v1/admin/api_tokens", body, "agent-token")
+
+		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	})
+
+	t.Run("Invalid token", func(t *testing.T) {
+		server, _, _ := SetupHttpTestWithDb(t, ctx)
+
+		body := `{"agent_id":1,"created_by":"admin","expire_at":2000,"permissions":["config:read","admin"]}`
+		resp, _ := PostHttp(t, server.URL+"/v1/admin/api_tokens", body, "invalid_token")
+
+		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	})
+}
+
+func TestDeleteApiToken(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("Successful deletion", func(t *testing.T) {
+		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+
+		agent := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
+		fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent.ID, 0, []string{"admin"})
+		tokenToDelete := fixture.InsertToken(t, ctx, accessor.Source(), "token-to-delete", agent.ID, time.Now().Add(24*time.Hour).Unix(), []string{"read"})
+
+		resp, _ := DeleteHttp(t, fmt.Sprintf("%s/v1/admin/api_tokens/%s", server.URL, tokenToDelete.ID), "admin-token")
+
+		require.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+		// Verify token is deleted
+		_, err := accessor.Querier().ApiTokenFindByID(ctx, accessor.Source(), tokenToDelete.ID)
+		require.Error(t, err)
+		require.True(t, errors.Is(err, pgx.ErrNoRows))
+	})
+
+	t.Run("Non-existent token", func(t *testing.T) {
+		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+
+		agent := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
+		fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent.ID, 0, []string{"admin"})
+
+		resp, _ := DeleteHttp(t, fmt.Sprintf("%s/v1/admin/api_tokens/non-existent-token", server.URL), "admin-token")
+
+		require.Equal(t, http.StatusNoContent, resp.StatusCode)
+	})
+
+	t.Run("Non-admin token", func(t *testing.T) {
+		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+
+		agent := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
+		fixture.InsertToken(t, ctx, accessor.Source(), "user-token", agent.ID, 0, []string{"user"})
+		tokenToDelete := fixture.InsertToken(t, ctx, accessor.Source(), "token-to-delete", agent.ID, time.Now().Add(24*time.Hour).Unix(), []string{"read"})
+
+		resp, _ := DeleteHttp(t, fmt.Sprintf("%s/v1/admin/api_tokens/%s", server.URL, tokenToDelete.ID), "user-token")
+
+		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	})
+
+	t.Run("Invalid token", func(t *testing.T) {
+		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+
+		agent := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
+		tokenToDelete := fixture.InsertToken(t, ctx, accessor.Source(), "token-to-delete", agent.ID, time.Now().Add(24*time.Hour).Unix(), []string{"read"})
+
+		resp, _ := DeleteHttp(t, fmt.Sprintf("%s/v1/admin/api_tokens/%s", server.URL, tokenToDelete.ID), "invalid_token")
+
+		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	})
 }

@@ -1,0 +1,44 @@
+get:
+  summary: Get model list.
+  operationId: listCompletionModels
+  tags:
+    - Completion
+  responses:
+    200:
+      description: OK
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    provider:
+                      type: string
+                    name:
+                      type: string
+                  required:
+                    - id
+                    - provider
+                    - name
+            required:
+              - data
+          examples:
+            model_list:
+              value:
+                - id: 9fadfda1-dcdf-4e4d-a42a-e158e54b4c4b
+                  provider: "openai"
+                  name: "gpt4o"
+                - id: bd4f6262-a3b7-4dd1-9582-3ac182605cfb
+                  provider: "azure"
+                  name: "gpt4o"
+                - id: 04968a60-62a5-436d-9431-b5f190c1d570
+                  provider: "anthropic"
+                  name: claude-3-5-sonnet-20240620
+    401:
+      description: Unauthorized

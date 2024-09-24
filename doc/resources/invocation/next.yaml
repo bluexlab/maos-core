@@ -1,0 +1,42 @@
+get:
+  summary: Retrieve the next available invocation job for processing
+  description: |
+    This endpoint is used by agents to fetch the next available invocation job.
+    It allows agents to retrieve jobs for processing.
+
+    Key features:
+    - State transition: Upon successful retrieval, the job state changes from 'available' to 'running'.
+    - Exclusive access: Once a job is retrieved, it's locked for the assigned agent to prevent duplicate processing.
+
+    Note:
+    - If no jobs are available, a 404 status is returned.
+    - Agents should implement appropriate error handling and retry mechanisms.
+
+  operationId: getNextInvocation
+  tags:
+    - Invocation
+  parameters:
+    - in: query
+      name: wait
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 60
+        default: 10
+      description: Maximum time (in seconds) to wait for a job if none are immediately available. Default is 10s.
+  responses:
+    '200':
+      description: Successful response
+      content:
+        application/json:
+          schema:
+            $ref: '../../schemas/InvocationJob.yaml'
+    '404':
+      description: No invocation job available
+    '400':
+      $ref : "../../responses/400.yaml"
+    '401':
+      description: Unauthorized
+    '500':
+      $ref : "../../responses/500.yaml"

@@ -1,0 +1,50 @@
+type: object
+properties:
+  id:
+    type: integer
+    format: int64
+  name:
+    type: string
+  status:
+    type: string
+    enum:
+      - draft
+      - reviewing
+      - approved
+      - rejected
+      - deployed
+      - retired
+      - cancelled
+  reviewers:
+    type: array
+    items:
+      type: string
+  notes:
+    type: object
+  created_at:
+    type: integer
+    format: int64
+  created_by:
+    type: string
+  approved_at:
+    type: integer
+    format: int64
+  approved_by:
+    type: string
+  finished_at:
+    type: integer
+    format: int64
+  finished_by:
+    type: string
+  configs:
+    type: array
+    items:
+      $ref: "Config.yaml"
+
+required:
+  - id
+  - name
+  - status
+  - reviewers
+  - created_at
+  - created_by

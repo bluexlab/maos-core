@@ -1,0 +1,49 @@
+get:
+  summary: Get system setting
+  operationId: adminGetSetting
+  tags:
+    - Admin
+  responses:
+    "200":
+      description: Current system setting
+      content:
+        application/json:
+          schema:
+            $ref: "../../schemas/Setting.yaml"
+    "401":
+      description: Unauthorized
+    "500":
+      $ref: "../../responses/500.yaml"
+
+patch:
+  summary: Update system setting
+  operationId: adminUpdateSetting
+  tags:
+    - Admin
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            display_name:
+              type: string
+            deployment_approve_required:
+              type: boolean
+
+  responses:
+    "200":
+      description: Updated system setting
+      content:
+        application/json:
+          schema:
+            $ref: "../../schemas/Setting.yaml"
+    "401":
+      description: Unauthorized
+    "404":
+      description: Deployment not found
+    "400":
+      $ref: "../../responses/400.yaml"
+    "500":
+      $ref: "../../responses/500.yaml"

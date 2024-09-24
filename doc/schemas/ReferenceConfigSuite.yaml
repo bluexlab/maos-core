@@ -1,0 +1,22 @@
+type: object
+properties:
+  agent_name:
+    type: string
+  config_suites:
+    type: array
+    items:
+      type: object
+      properties:
+        suite_name:
+          type: string
+        configs:
+          type: object
+          additionalProperties:
+            type: string
+      required:
+        - suite_name
+        - configs
+
+required:
+  - agent_name
+  - config_suites

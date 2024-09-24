@@ -1,0 +1,66 @@
+post:
+  summary: Create a new asynchronous invocation job.
+  description: |
+    This endpoint allows an agent user to create a new asynchronous invocation job.
+    The job is added to a queue and will be processed by the next available agent.
+
+    Key features:
+    - Asynchronous execution: The endpoint returns immediately with an invocation ID.
+    - Job queuing: The invocation is queued for processing by available agents.
+    - Status tracking: The returned invocation ID can be used to query the job's status and results.
+
+    Usage flow:
+    1. Submit the invocation job using this endpoint.
+    2. Receive an immediate response with the invocation ID.
+    3. Use the invocation ID to check the job's status and retrieve results by calling:
+       GET /v1/invocations/{id}
+
+    Note:
+    - This endpoint is designed for non-blocking operations where immediate results are not required.
+    - The status and results of the invocation can be queried using the /v1/invocations/{id} endpoint,
+      where {id} is the invocation ID returned by this POST request.
+
+  operationId: createInvocationAsync
+  tags:
+    - Invocation
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            agent:
+              type: string
+              description: The name of the agent to process the invocation job
+            meta:
+              type: object
+              description: The metadata of the invocation job
+            payload:
+              type: object
+              description: The payload for the invocation job
+          required:
+            - agent
+            - meta
+            - payload
+  responses:
+    '201':
+      description: Async invocation created
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              id:
+                type: string
+                description: The unique identifier of the created invocation job
+            required:
+              - id
+          example:
+            id: 'inv-16888'
+    '400':
+      $ref : "../../responses/400.yaml"
+    '401':
+      description: Unauthorized
+    '500':
+      $ref : "../../responses/500.yaml"

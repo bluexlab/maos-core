@@ -1,0 +1,36 @@
+type: object
+properties:
+  id:
+    type: integer
+    format: int64
+  name:
+    type: string
+  enabled:
+    type: boolean
+  deployable:
+    type: boolean
+  configurable:
+    type: boolean
+  token_count:
+    type: integer
+    format: int64
+  renameable:
+    type: boolean
+  created_at:
+    type: integer
+    format: int64
+
+required:
+  - id
+  - name
+  - enabled
+  - deployable
+  - configurable
+  - renameable
+  - created_at
+  - token_count
+example:
+  id: 16888
+  name: "agent-16888"
+  created_at: 1640995200
+  token_count: 1

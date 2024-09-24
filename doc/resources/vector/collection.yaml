@@ -1,0 +1,50 @@
+post:
+  summary: Upsert data into a collection.
+  operationId: upsertCollection
+  tags:
+    - VectorStore
+  parameters:
+    - in: path
+      name: name
+      required: true
+      schema:
+        type: string
+      description: The name of the collection.
+  requestBody:
+    content:
+      application/json:
+        schema:
+          type: object
+          description: The data to be upserted. The key and value must be able to match with the collection scheme.
+
+  responses:
+    200:
+      description: OK
+      content:
+        application/json:
+          schema:
+            type: object
+    401:
+      description: Unauthorized
+
+get:
+  summary: query data from a collection.
+  operationId: queryCollection
+  tags:
+    - VectorStore
+  parameters:
+    - in: path
+      name: name
+      required: true
+      schema:
+        type: string
+      description: The name of the collection.
+  responses:
+    200:
+      description: OK
+      content:
+        application/json:
+          schema:
+            type: object
+    401:
+      description: Unauthorized

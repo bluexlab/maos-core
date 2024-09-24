@@ -1,0 +1,7 @@
+type: string
+enum:
+  - config:read
+  - invocation:create
+  - invocation:read
+  - invocation:respond
+  - admin

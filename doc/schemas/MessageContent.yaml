@@ -1,0 +1,57 @@
+oneOf:
+  - type: object
+    properties:
+      text:
+        type: string
+    required:
+      - text
+  - type: object
+    properties:
+      image:
+        type: string
+        description: The based64 encoded image file. Only "jpeg" and "png" are supported by all providers.
+    required:
+      - image
+  - type: object
+    properties:
+      image_url:
+        type: string
+        format: uri
+        description: The URL of the image file. Only "jpeg" and "png" are supported by all providers.
+    required:
+      - image_url
+  - type: object
+    properties:
+      tool_result:
+        type: object
+        description: The result of a tool call.
+        properties:
+          tool_call_id:
+            type: string
+            description: The ID of the tool call. It must be the same as the ID of the tool call in the tool_call property.
+          result:
+            type: object
+            description: The result of the tool call.
+          is_error:
+            type: boolean
+        required:
+          - tool_call_id
+          - result
+    required: 
+      - tool_result
+  - type: object
+    properties:
+      tool_call:
+        type: object
+        properties:
+          id:
+            type: string
+            description: The ID of the tool call. It must be the same as the ID of the tool_call_id in the tool_result property.
+          name:
+            type: string
+            description: The name of the tool/function.
+          arguments:
+            type: object
+            description: The arguments of the tool/function.
+    required:
+      - tool_call

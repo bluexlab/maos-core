@@ -1,0 +1,24 @@
+type: object
+properties:
+  id:
+    type: string
+    description: The unique identifier for the invocation job
+  state:
+    $ref: "./InvocationState.yaml"
+  attempted_at:
+    type: integer
+    format: int64
+    description: The timestamp when the job was retrieved and attempted by agent
+  finalized_at:
+    type: integer
+    format: int64
+    description: The timestamp when the job was finalized
+  result:
+    type: object
+    description: The result of the invocation job
+  errors:
+    type: object
+    description: The errors of the invocation job
+required:
+  - id
+  - state

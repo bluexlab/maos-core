@@ -1,0 +1,59 @@
+post:
+  summary: Create embedding of text.
+  operationId: createEmbedding
+  tags:
+    - Embedding
+  requestBody:
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            model_id:
+              type: string
+              description: The model id.
+            input:
+              type: array
+              items:
+                type: string
+              description: The text to embedded.
+            input_type:
+              type: string
+              description: The type of the input.
+              enum:
+                - "document"
+                - "query"
+          required:
+            - model_id
+            - input
+        examples:
+          embedding:
+            value:
+              model_id: "bert-base-uncased"
+              input:
+                - "The capital of France is Paris."
+                - "The capital of Italy is Rome."
+                - "The capital of Spain is Madrid."
+  responses:
+    200:
+      description: OK
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                type: array
+                items:
+                  $ref: "../../schemas/Embedding.yaml"
+                description: The embeddings of the text.
+          examples:
+            embedding:
+              value:
+                data:
+                  - embedding: [0.1, 0.2, 0.3]
+                    index: 0
+                  - embedding: [0.4, 0.5, 0.6]
+                    index: 1
+    401:
+      description: Unauthorized

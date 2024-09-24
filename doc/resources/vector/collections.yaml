@@ -1,0 +1,90 @@
+get:
+  summary: List collection.
+  operationId: listCollection
+  tags:
+    - VectorStore
+  parameters:
+    - name: MAOS_VECTOR_DATABASE_NAME
+      description: The name of the database to be accessed.
+      in: header
+      required: true
+      schema:
+        type: string
+  responses:
+    200:
+      description: OK
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                type: array
+                items:
+                  type: string
+                description: The list of collections.
+          examples:
+            collection:
+              value:
+                data:
+                  - name: "collection1"
+                  - name: "collection2"
+                  - name: "collection3"
+    401:
+      description: Unauthorized
+
+post:
+  summary: Create a collection.
+  operationId: createCollection
+  tags:
+    - VectorStore
+  parameters:
+    - name: MAOS_VECTOR_DATABASE_NAME
+      description: The name of the database to be accessed.
+      in: header
+      required: true
+      schema:
+        type: string
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            name:
+              type: string
+              description: The name of the collection.
+            fields:
+              type: array
+              items:
+                $ref: "../../schemas/CollectionField.yaml"
+            indexes:
+              type: array
+              items:
+                $ref: "../../schemas/CollectionIndex.yaml"
+          required:
+            - name
+            - fields
+        examples:
+          collection:
+            value:
+              name: "collection1"
+  responses:
+    200:
+      description: OK
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                type: string
+                description: The name of the collection.
+          examples:
+            collection:
+              value:
+                data:
+                  name: "collection1"
+    401:
+      description: Unauthorized

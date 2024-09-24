@@ -1,0 +1,11 @@
+type: object
+properties:
+  text:
+    type: string
+    description: The document.
+  score:
+    type: number
+    description: The score of the document.
+  index:
+    type: integer
+    description: The index of the document in the original list.

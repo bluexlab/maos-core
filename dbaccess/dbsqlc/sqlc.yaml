@@ -1,0 +1,46 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    schema: "../../migrate/migration"
+    queries:
+      - migration.sql
+      - queue.sql
+      - agent.sql
+      - config.sql
+      - deployment.sql
+      - config_suite.sql
+      - api_token.sql
+      - invocation.sql
+      - notify.sql
+      - setting.sql
+    gen:
+      go:
+        package: "dbsqlc"
+        sql_package: "pgx/v5"
+        out: "."
+        emit_exact_table_names: true
+        emit_methods_with_db_argument: true
+        emit_params_struct_pointers: true
+        emit_result_struct_pointers: true
+        emit_pointers_for_null_types: true
+        emit_interface: true
+
+        rename:
+          ttl: "TTL"
+          agents: "Agent"
+          queues: "Queue"
+          configs: "Config"
+          config_suites: "ConfigSuite"
+          deployments: "Deployment"
+          api_tokens: "ApiToken"
+          invocations: "Invocation"
+          agent_id: "AgentId"
+
+        overrides:
+          - db_type: "pg_catalog.interval"
+            go_type: "time.Duration"
+
+          # specific columns
+          - column: "jobs.errors"
+            go_type:
+              type: "[]AttemptError"

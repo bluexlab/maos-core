@@ -1,0 +1,26 @@
+post:
+  summary:
+    Submit the Deployment for reviewing. Only draft deployments can be submitted.
+    After submitting, the deployment will be in `reviewing` status. Reviewers will be notified.
+  operationId: adminSubmitDeployment
+  tags:
+    - Admin
+  parameters:
+    - in: path
+      name: id
+      schema:
+        type: integer
+        format: int64
+      required: true
+      description: Deployment ID
+  responses:
+    "200":
+      description: Successful response
+    "401":
+      description: Unauthorized
+    "404":
+      description: Deployment not found
+    "400":
+      $ref: "../../responses/400.yaml"
+    "500":
+      $ref: "../../responses/500.yaml"

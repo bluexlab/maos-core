@@ -1,0 +1,33 @@
+type: object
+properties:
+  id:
+    type: string
+  agent_id:
+    type: integer
+    format: int64
+  expire_at:
+    type: integer
+    format: int64
+  created_by:
+    type: string
+  created_at:
+    type: integer
+    format: int64
+  permissions:
+    type: array
+    items:
+      $ref: "./Permission.yaml"
+required:
+  - id
+  - agent_id
+  - expire_at
+  - created_by
+  - created_at
+  - permissions
+example:
+  ID: "token123"
+  agent_id: 1
+  expire_at: 1672531200
+  created_by: "admin@example.com"
+  created_at: 1640995200
+  Permissions: ["config:read", "invocation:read"]

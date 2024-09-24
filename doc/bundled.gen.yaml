@@ -1,0 +1,2413 @@
+openapi: 3.0.0
+info:
+  title: MAOS Core API
+  version: 1.0.0
+  description: API for managing invocation jobs and configurations in the MAOS system
+servers:
+  - url: https://api.example.com/v1
+security:
+  - bearerAuth: []
+  - trace: []
+paths:
+  /health:
+    get:
+      summary: Get health status
+      operationId: getHealth
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    description: >-
+                      The health status of the service. it can be "healthy" or
+                      "unhealthy"
+                required:
+                  - status
+  /v1/config:
+    get:
+      summary: Get configuration of the caller
+      operationId: getCallerConfig
+      tags:
+        - Configuration
+      parameters:
+        - in: header
+          name: X-Agent-Version
+          required: false
+          schema:
+            type: string
+            pattern: ^\d+\.\d+\.\d+(\.\d+)?$
+          description: >-
+            Specifies the version of the agent in the format x.y.z where x, y,
+            and z are non-negative integers.
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Configuration'
+                required:
+                  - data
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Config not found
+        '500':
+          $ref: '#/components/responses/500'
+  /v1/invocations/async:
+    post:
+      summary: Create a new asynchronous invocation job.
+      description: >
+        This endpoint allows an agent user to create a new asynchronous
+        invocation job.
+
+        The job is added to a queue and will be processed by the next available
+        agent.
+
+
+        Key features:
+
+        - Asynchronous execution: The endpoint returns immediately with an
+        invocation ID.
+
+        - Job queuing: The invocation is queued for processing by available
+        agents.
+
+        - Status tracking: The returned invocation ID can be used to query the
+        job's status and results.
+
+
+        Usage flow:
+
+        1. Submit the invocation job using this endpoint.
+
+        2. Receive an immediate response with the invocation ID.
+
+        3. Use the invocation ID to check the job's status and retrieve results
+        by calling:
+           GET /v1/invocations/{id}
+
+        Note:
+
+        - This endpoint is designed for non-blocking operations where immediate
+        results are not required.
+
+        - The status and results of the invocation can be queried using the
+        /v1/invocations/{id} endpoint,
+          where {id} is the invocation ID returned by this POST request.
+      operationId: createInvocationAsync
+      tags:
+        - Invocation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agent:
+                  type: string
+                  description: The name of the agent to process the invocation job
+                meta:
+                  type: object
+                  description: The metadata of the invocation job
+                payload:
+                  type: object
+                  description: The payload for the invocation job
+              required:
+                - agent
+                - meta
+                - payload
+      responses:
+        '201':
+          description: Async invocation created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    description: The unique identifier of the created invocation job
+                required:
+                  - id
+              example:
+                id: inv-16888
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          description: Unauthorized
+        '500':
+          $ref: '#/components/responses/500'
+  /v1/invocations/sync:
+    post:
+      summary: Create a new synchronous invocation job
+      description: >
+        This endpoint allows an agent user to create and execute a new
+        invocation job synchronously.
+
+        The request will wait for the job to complete before returning the
+        result.
+
+
+        Key features:
+
+        - Synchronous execution: The endpoint waits for the job to finish before
+        responding.
+
+        - Immediate results: The response includes the complete result of the
+        invocation.
+
+        - Blocking operation: This call may take some time to complete,
+        depending on the job's complexity.
+
+
+        Usage flow:
+
+        1. Submit the invocation job using this endpoint.
+
+        2. The agent retrieves and processes the job.
+
+        3. Once the job is completed, the endpoint returns with the full result.
+
+
+        Response includes:
+
+        - Invocation ID
+
+        - Job status (which should be 'completed' unless an error occurred)
+
+        - Full result data or error details
+
+
+        Note: This endpoint is suitable for operations where immediate results
+        are required and
+
+        the client can wait for the job to complete. For long-running tasks,
+        consider using
+
+        the asynchronous version of this endpoint to avoid timeout issues.
+
+
+        Caution: Depending on the nature of the invocation job, this endpoint
+        may have
+
+        longer response times. Set client timeouts accordingly.
+      operationId: createInvocationSync
+      tags:
+        - Invocation
+      parameters:
+        - in: query
+          name: wait
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 60
+          description: >-
+            The maximum time (in seconds) to wait for job completion. default is
+            10s
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agent:
+                  type: string
+                  description: The name of the agent to process the invocation job
+                meta:
+                  type: object
+                  description: The metadata of the invocation job
+                payload:
+                  type: object
+                  description: The payload for the invocation job
+              required:
+                - agent
+                - meta
+                - payload
+      responses:
+        '201':
+          description: Async invocation created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvocationResult'
+              example:
+                id: inv_123456789
+                state: completed
+                attempted_at: 1737456000
+                finalized_at: 1737466000
+                result:
+                  key: value
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          description: Unauthorized
+        '408':
+          description: Request timeout
+        '500':
+          $ref: '#/components/responses/500'
+  /v1/invocations/next:
+    get:
+      summary: Retrieve the next available invocation job for processing
+      description: >
+        This endpoint is used by agents to fetch the next available invocation
+        job.
+
+        It allows agents to retrieve jobs for processing.
+
+
+        Key features:
+
+        - State transition: Upon successful retrieval, the job state changes
+        from 'available' to 'running'.
+
+        - Exclusive access: Once a job is retrieved, it's locked for the
+        assigned agent to prevent duplicate processing.
+
+
+        Note:
+
+        - If no jobs are available, a 404 status is returned.
+
+        - Agents should implement appropriate error handling and retry
+        mechanisms.
+      operationId: getNextInvocation
+      tags:
+        - Invocation
+      parameters:
+        - in: query
+          name: wait
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 60
+            default: 10
+          description: >-
+            Maximum time (in seconds) to wait for a job if none are immediately
+            available. Default is 10s.
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvocationJob'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          description: Unauthorized
+        '404':
+          description: No invocation job available
+        '500':
+          $ref: '#/components/responses/500'
+  /v1/invocations/{id}:
+    get:
+      summary: Get the status and result of an invocation job by ID
+      description: >
+        Retrieves the current status and result (if available) of an invocation
+        job.
+
+        This endpoint is used by the caller to check the progress of an
+        asynchronous invocation.
+
+
+        Possible invocation states:
+
+        - available: The job is queued and waiting to be processed.
+
+        - running: The job is currently being executed.
+
+        - completed: The job has finished successfully.
+
+        - cancelled: The job was cancelled before completion.
+
+        - discarded: The job was discarded due to an error or system issue.
+      operationId: getInvocationById
+      tags:
+        - Invocation
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: The unique identifier of the invocation job.
+        - in: query
+          name: wait
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 60
+          description: >-
+            The maximum time (in seconds) to wait for job completion. If not
+            specified, returns immediately.
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvocationResult'
+              example:
+                id: inv_123456789
+                state: completed
+                attempted_at: 1737456000
+                finalized_at: 1737466000
+                result:
+                  key: value
+        '202':
+          description: Invocation is still in progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvocationResult'
+              example:
+                id: inv_123456789
+                state: running
+                attempted_at: 1737456000
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Invocation job not found
+        '500':
+          $ref: '#/components/responses/500'
+  /v1/invocations/{invoke_id}/response:
+    post:
+      summary: Return invocation result
+      operationId: returnInvocationResponse
+      tags:
+        - Invocation
+      parameters:
+        - name: invoke_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                result:
+                  type: object
+                  description: The result of the invocation
+      responses:
+        '200':
+          description: Successful response
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Invocation job not found
+        '500':
+          $ref: '#/components/responses/500'
+  /v1/invocations/{invoke_id}/error:
+    post:
+      summary: Return invocation error
+      operationId: returnInvocationError
+      tags:
+        - Invocation
+      parameters:
+        - name: invoke_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                errors:
+                  type: object
+                  description: The error details of the invocation
+      responses:
+        '200':
+          description: Successful response
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Invocation job not found
+        '500':
+          $ref: '#/components/responses/500'
+  /v1/completion/models:
+    get:
+      summary: Get model list.
+      operationId: listCompletionModels
+      tags:
+        - Completion
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        provider:
+                          type: string
+                        name:
+                          type: string
+                      required:
+                        - id
+                        - provider
+                        - name
+                required:
+                  - data
+              examples:
+                model_list:
+                  value:
+                    - id: 9fadfda1-dcdf-4e4d-a42a-e158e54b4c4b
+                      provider: openai
+                      name: gpt4o
+                    - id: bd4f6262-a3b7-4dd1-9582-3ac182605cfb
+                      provider: azure
+                      name: gpt4o
+                    - id: 04968a60-62a5-436d-9431-b5f190c1d570
+                      provider: anthropic
+                      name: claude-3-5-sonnet-20240620
+        '401':
+          description: Unauthorized
+  /v1/completion:
+    post:
+      summary: Generate text completion.
+      operationId: createCompletion
+      tags:
+        - Completion
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                model_id:
+                  type: string
+                  description: The model id.
+                messages:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Message'
+                stop_sequences:
+                  description: >-
+                    Custom text sequences that will cause the model to stop
+                    generating.
+                  type: array
+                  items:
+                    type: string
+                temperature:
+                  type: number
+                  minimum: 0
+                max_tokens:
+                  type: integer
+              required:
+                - model_id
+                - messages
+            examples:
+              text_completion:
+                value:
+                  model_id: gpt4o
+                  temperature: 0.7
+                  max_tokens: 200
+                  messages:
+                    - role: system
+                      content: The capital of France is Paris.
+                    - role: user
+                      content:
+                        - text: What is the capital of France?
+                        - text: Who is the president of France?
+                        - image: >-
+                            /9j/4AAQSkZJRgABAQEBLAEsAAD/4iOISUNDX1BST0ZJTEUAAQEAACN4bGNtcwIQAABtbnRyUkdCIFhZWiAH3wALAAoADAASADhhY3NwKm5peAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA9tYAAQAAAADTLWxjbXMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAtkZXNjAAABCAAAALBjcHJ0AAABuAAAARJ3dHB0AAACzAAAABRjaGFkAAAC4AAAACxyWFlaAAADDAAAABRiWFlaAAADIAAAABRnWFlaAAADNAAAABRyVFJDAAADSAAAIAxnVFJDAAADSAAAIAxiVFJDAAADSAAAIAxjaHJtAAAjVAAAACRkZXNjAAAAAAAAABxzUkdCLWVsbGUtVjItc3JnYnRyYy5pY2MAAAAAAAAAAAAAAB0AcwBSAEcAQgAtAGUAbABsAGUALQBWADIALQBzAHIAZwBiAHQAcgBjAC4AaQBjAGMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHRleHQAAAAAQ29weXJpZ2h0IDIwMTUsIEVsbGUgU3RvbmUgKHdlYnNpdGU6IGh0dHA6Ly9uaW5lZGVncmVlc2JlbG93LmNvbS87IGVtYWlsOiBlbGxlc3RvbmVAbmluZWRlZ3JlZXNiZWxvdy5jb20pLiBUaGlzIElDQyBwcm9maWxlIGlzIGxpY2Vuc2VkIHVuZGVyIGEgQ3JlYXRpdmUgQ29tbW9ucyBBdHRyaWJ1dGlvbi1TaGFyZUFsaWtlIDMuMCBVbnBvcnRlZCBMaWNlbnNlIChodHRwczovL2NyZWF0aXZlY29tbW9ucy5vcmcvbGljZW5zZXMvYnktc2EvMy4wL2xlZ2FsY29kZSkuAAAAAFhZWiAAAAAAAAD21gABAAAAANMtc2YzMgAAAAAAAQxCAAAF3v//8yUAAAeTAAD9kP//+6H///2iAAAD3AAAwG5YWVogAAAAAAAAb6AAADj1AAADkFhZWiAAAAAAAAAknwAAD4QAALbEWFlaIAAAAAAAAGKXAAC3hwAAGNljdXJ2AAAAAAAAEAAAAAABAAIABAAFAAYABwAJAAoACwAMAA4ADwAQABEAEwAUABUAFgAYABkAGgAbABwAHgAfACAAIQAjACQAJQAmACgAKQAqACsALQAuAC8AMAAyADMANAA1ADcAOAA5ADoAOwA9AD4APwBAAEIAQwBEAEUARwBIAEkASgBMAE0ATgBPAFEAUgBTAFQAVQBXAFgAWQBaAFwAXQBeAF8AYQBiAGMAZABmAGcAaABpAGsAbABtAG4AbwBxAHIAcwB0AHYAdwB4AHkAewB8AH0AfgCAAIEAggCDAIUAhgCHAIgAiQCLAIwAjQCOAJAAkQCSAJMAlQCWAJcAmACaAJsAnACdAJ8AoAChAKIApAClAKYApwCoAKoAqwCsAK0ArwCwALEAsgC0ALUAtgC3ALkAugC7ALwAvgC/AMAAwQDCAMQAxQDGAMcAyQDKAMsAzADOAM8A0ADRANMA1ADVANcA2ADZANoA3ADdAN4A4ADhAOIA5ADlAOYA6ADpAOoA7ADtAO8A8ADxAPMA9AD2APcA+AD6APsA/QD+AP8BAQECAQQBBQEHAQgBCgELAQ0BDgEPAREBEgEUARUBFwEYARoBGwEdAR8BIAEiASMBJQEmASgBKQErAS0BLgEwATEBMwE0ATYBOAE5ATsBPAE+AUABQQFDAUUBRgFIAUoBSwFNAU8BUAFSAVQBVQFXAVkBWgFcAV4BYAFhAWMBZQFnAWgBagFsAW4BbwFxAXMBdQF2AXgBegF8AX4BfwGBAYMBhQGHAYkBigGMAY4BkAGSAZQBlgGXAZkBmwGdAZ8BoQGjAaUBpwGpAasBrAGuAbABsgG0AbYBuAG6AbwBvgHAAcIBxAHGAcgBygHMAc4B0AHSAdQB1gHYAdoB3AHeAeEB4wHlAecB6QHrAe0B7wHxAfMB9QH4AfoB/AH+AgACAgIEAgcCCQILAg0CDwISAhQCFgIYAhoCHQIfAiECIwIlAigCKgIsAi4CMQIzAjUCOAI6AjwCPgJBAkMCRQJIAkoCTAJPAlECUwJWAlgCWgJdAl8CYQJkAmYCaQJrAm0CcAJyAnUCdwJ5AnwCfgKBAoMChgKIAosCjQKQApIClQKXApoCnAKfAqECpAKmAqkCqwKuArACswK1ArgCuwK9AsACwgLFAsgCygLNAs8C0gLVAtcC2gLdAt8C4gLkAucC6gLsAu8C8gL1AvcC+gL9Av8DAgMFAwgDCgMNAxADEwMVAxgDGwMeAyADIwMmAykDLAMuAzEDNAM3AzoDPQM/A0IDRQNIA0sDTgNRA1QDVgNZA1wDXwNiA2UDaANrA24DcQN0A3cDegN9A4ADggOFA4gDiwOOA5EDlAOYA5sDngOhA6QDpwOqA60DsAOzA7YDuQO8A78DwgPFA8kDzAPPA9ID1QPYA9sD3wPiA+UD6APrA+4D8gP1A/gD+wP+BAIEBQQIBAsEDwQSBBUEGAQcBB8EIgQlBCkELAQvBDMENgQ5BD0EQARDBEcESgRNBFEEVARXBFsEXgRiBGUEaARsBG8EcwR2BHkEfQSABIQEhwSLBI4EkgSVBJkEnASgBKMEpwSqBK4EsQS1BLgEvAS/BMMExgTKBM4E0QTVBNgE3ATgBOME5wTqBO4E8gT1BPkE/QUABQQFCAULBQ8FEwUWBRoFHgUiBSUFKQUtBTEFNAU4BTwFQAVDBUcFSwVPBVIFVgVaBV4FYgVmBWkFbQVxBXUFeQV9BYEFhAWIBYwFkAWUBZgFnAWgBaQFqAWsBa8FswW3BbsFvwXDBccFywXPBdMF1wXbBd8F4wXnBesF7wX0BfgF/AYABgQGCAYMBhAGFAYYBhwGIQYlBikGLQYxBjUGOQY+BkIGRgZKBk4GUwZXBlsGXwZjBmgGbAZwBnQGeQZ9BoEGhQaKBo4GkgaXBpsGnwakBqgGrAaxBrUGuQa+BsIGxgbLBs8G1AbYBtwG4QblBuoG7gbyBvcG+wcABwQHCQcNBxIHFgcbBx8HJAcoBy0HMQc2BzoHPwdDB0gHTQdRB1YHWgdfB2MHaAdtB3EHdgd7B38HhAeJB40HkgeXB5sHoAelB6kHrgezB7cHvAfBB8YHygfPB9QH2QfdB+IH5wfsB/EH9Qf6B/8IBAgJCA0IEggXCBwIIQgmCCsILwg0CDkIPghDCEgITQhSCFcIXAhhCGYIawhwCHUIegh/CIQIiQiOCJMImAidCKIIpwisCLEItgi7CMAIxQjKCM8I1AjZCN8I5AjpCO4I8wj4CP0JAwkICQ0JEgkXCR0JIgknCSwJMQk3CTwJQQlGCUwJUQlWCVsJYQlmCWsJcQl2CXsJgQmGCYsJkQmWCZsJoQmmCasJsQm2CbwJwQnGCcwJ0QnXCdwJ4gnnCe0J8gn4Cf0KAgoICg0KEwoZCh4KJAopCi8KNAo6Cj8KRQpKClAKVgpbCmEKZgpsCnIKdwp9CoMKiAqOCpQKmQqfCqUKqgqwCrYKvArBCscKzQrTCtgK3grkCuoK7wr1CvsLAQsHCwwLEgsYCx4LJAsqCy8LNQs7C0ELRwtNC1MLWQtfC2QLagtwC3YLfAuCC4gLjguUC5oLoAumC6wLsgu4C74LxAvKC9AL1gvcC+IL6QvvC/UL+wwBDAcMDQwTDBkMIAwmDCwMMgw4DD4MRQxLDFEMVwxdDGQMagxwDHYMfQyDDIkMjwyWDJwMogyoDK8MtQy7DMIMyAzODNUM2wzhDOgM7gz1DPsNAQ0IDQ4NFQ0bDSENKA0uDTUNOw1CDUgNTw1VDVwNYg1pDW8Ndg18DYMNiQ2QDZYNnQ2kDaoNsQ23Db4NxQ3LDdIN2Q3fDeYN7A3zDfoOAQ4HDg4OFQ4bDiIOKQ4vDjYOPQ5EDkoOUQ5YDl8OZg5sDnMOeg6BDogOjg6VDpwOow6qDrEOuA6+DsUOzA7TDtoO4Q7oDu8O9g79DwQPCw8SDxkPIA8nDy4PNQ88D0MPSg9RD1gPXw9mD20PdA97D4IPiQ+QD5gPnw+mD60PtA+7D8IPyg/RD9gP3w/mD+0P9Q/8EAMQChASEBkQIBAnEC8QNhA9EEQQTBBTEFoQYhBpEHAQeBB/EIYQjhCVEJ0QpBCrELMQuhDCEMkQ0BDYEN8Q5xDuEPYQ/REFEQwRFBEbESMRKhEyETkRQRFIEVARVxFfEWcRbhF2EX0RhRGNEZQRnBGkEasRsxG7EcIRyhHSEdkR4RHpEfAR+BIAEggSDxIXEh8SJxIuEjYSPhJGEk4SVRJdEmUSbRJ1En0ShBKMEpQSnBKkEqwStBK8EsQSzBLUEtsS4xLrEvMS+xMDEwsTExMbEyMTKxMzEzsTRBNME1QTXBNkE2wTdBN8E4QTjBOUE50TpROtE7UTvRPFE80T1hPeE+YT7hP2E/8UBxQPFBcUIBQoFDAUOBRBFEkUURRaFGIUahRzFHsUgxSMFJQUnBSlFK0UthS+FMYUzxTXFOAU6BTxFPkVARUKFRIVGxUjFSwVNBU9FUUVThVXFV8VaBVwFXkVgRWKFZMVmxWkFawVtRW+FcYVzxXYFeAV6RXyFfoWAxYMFhQWHRYmFi8WNxZAFkkWUhZaFmMWbBZ1Fn4WhhaPFpgWoRaqFrMWuxbEFs0W1hbfFugW8Rb6FwMXDBcUFx0XJhcvFzgXQRdKF1MXXBdlF24XdxeAF4kXkhecF6UXrhe3F8AXyRfSF9sX5BftF/cYABgJGBIYGxgkGC4YNxhAGEkYUhhcGGUYbhh3GIEYihiTGJwYphivGLgYwhjLGNQY3hjnGPAY+hkDGQwZFhkfGSkZMhk7GUUZThlYGWEZaxl0GX4ZhxmRGZoZpBmtGbcZwBnKGdMZ3RnmGfAZ+hoDGg0aFhogGioaMxo9GkYaUBpaGmMabRp3GoEaihqUGp4apxqxGrsaxRrOGtga4hrsGvUa/xsJGxMbHRsnGzAbOhtEG04bWBtiG2wbdRt/G4kbkxudG6cbsRu7G8UbzxvZG+Mb7Rv3HAEcCxwVHB8cKRwzHD0cRxxRHFscZRxwHHochByOHJgcohysHLYcwRzLHNUc3xzpHPQc/h0IHRIdHB0nHTEdOx1FHVAdWh1kHW8deR2DHY4dmB2iHa0dtx3BHcwd1h3hHesd9R4AHgoeFR4fHioeNB4+HkkeUx5eHmgecx59Hogekx6dHqgesh69Hsce0h7cHuce8h78HwcfEh8cHycfMh88H0cfUh9cH2cfch98H4cfkh+dH6cfsh+9H8gf0h/dH+gf8x/+IAggEyAeICkgNCA/IEogVCBfIGogdSCAIIsgliChIKwgtyDCIM0g2CDjIO4g+SEEIQ8hGiElITAhOyFGIVEhXCFnIXIhfiGJIZQhnyGqIbUhwCHMIdch4iHtIfgiBCIPIhoiJSIwIjwiRyJSIl4iaSJ0In8iiyKWIqEirSK4IsMizyLaIuYi8SL8IwgjEyMfIyojNSNBI0wjWCNjI28jeiOGI5EjnSOoI7QjvyPLI9Yj4iPuI/kkBSQQJBwkKCQzJD8kSyRWJGIkbiR5JIUkkSScJKgktCS/JMsk1yTjJO4k+iUGJRIlHiUpJTUlQSVNJVklZSVwJXwliCWUJaAlrCW4JcQl0CXcJecl8yX/JgsmFyYjJi8mOyZHJlMmXyZrJncmhCaQJpwmqCa0JsAmzCbYJuQm8Cb9JwknFSchJy0nOSdGJ1InXidqJ3YngyePJ5snpye0J8AnzCfZJ+Un8Sf9KAooFigjKC8oOyhIKFQoYChtKHkohiiSKJ4oqyi3KMQo0CjdKOko9ikCKQ8pGykoKTQpQSlNKVopZylzKYApjCmZKaYpsim/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ZNRk6WT+ZRNlKWU+ZVNlaGV9ZZNlqGW9ZdJl6GX9ZhJmJ2Y9ZlJmZ2Z9ZpJmp2a9ZtJm6Gb9ZxJnKGc9Z1NnaGd+Z5NnqWe+Z9Rn6Wf/aBRoKmg/aFVoamiAaJZoq2jBaNZo7GkCaRdpLWlDaVhpbmmEaZlpr2nFadtp8GoGahxqMmpIal1qc2qJap9qtWrKauBq9msMayJrOGtOa2RremuQa6ZrvGvSa+hr/mwUbCpsQGxWbGxsgmyYbK5sxGzabPBtBm0cbTNtSW1fbXVti22hbbhtzm3kbfpuEW4nbj1uU25qboBulm6tbsNu2W7wbwZvHG8zb0lvYG92b4xvo2+5b9Bv5m/9cBNwKnBAcFdwbXCEcJpwsXDHcN5w9HELcSJxOHFPcWZxfHGTcapxwHHXce5yBHIbcjJySHJfcnZyjXKkcrpy0XLocv9zFnMsc0NzWnNxc4hzn3O2c81z5HP6dBF0KHQ/dFZ0bXSEdJt0snTJdOB093UOdSZ1PXVUdWt1gnWZdbB1x3XedfZ2DXYkdjt2UnZqdoF2mHavdsd23nb1dwx3JHc7d1J3aneBd5h3sHfHd9539ngNeCV4PHhUeGt4gniaeLF4yXjgePh5D3kneT55VnlueYV5nXm0ecx543n7ehN6KnpCelp6cXqJeqF6uHrQeuh7AHsXey97R3tfe3Z7jnume7571nvufAV8HXw1fE18ZXx9fJV8rXzFfNx89H0MfSR9PH1UfWx9hH2cfbR9zX3lff1+FX4tfkV+XX51fo1+pX6+ftZ+7n8Gfx5/N39Pf2d/f3+Xf7B/yH/gf/mAEYApgEGAWoBygIqAo4C7gNSA7IEEgR2BNYFOgWaBf4GXgbCByIHhgfmCEoIqgkOCW4J0goyCpYK+gtaC74MHgyCDOYNRg2qDg4Obg7SDzYPlg/6EF4QwhEiEYYR6hJOErITEhN2E9oUPhSiFQYVahXKFi4Wkhb2F1oXvhgiGIYY6hlOGbIaFhp6Gt4bQhumHAocbhzSHTYdnh4CHmYeyh8uH5If9iBeIMIhJiGKIe4iViK6Ix4jgiPqJE4ksiUaJX4l4iZGJq4nEid6J94oQiiqKQ4pdinaKj4qpisKK3Ir1iw+LKItCi1uLdYuOi6iLwovbi/WMDowojEKMW4x1jI+MqIzCjNyM9Y0PjSmNQo1cjXaNkI2pjcON3Y33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+lj6fPqg+sT66PsM+zD7VPt4+5z7wPvk/Aj8LPxQ/HX8mfy9/OH9Bf0p/U39cv2W/br93v4C/if+S/5v/pT+uP7c/wD/Jf9J/23/kv+2/9v//2Nocm0AAAAAAAMAAAAAo9cAAFR8AABMzQAAmZoAACZnAAAPXP/bAEMA///////////////////////////////////////////////////////////////////////////////////////bAEMB///////////////////////////////////////////////////////////////////////////////////////AABEIAnkCRgMBIgACEQEDEQH/xAAXAAEBAQEAAAAAAAAAAAAAAAAAAgED/8QAKRABAQACAAQGAgMBAQEAAAAAAAECESExMnESQVFhgcEDkSKx8EKh0f/EABQBAQAAAAAAAAAAAAAAAAAAAAD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwDoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJuUnCnjx/0BQnx4/6NmUu9eQNGSy8mgAyWXkDQAAABlsnNoAAAAAAAAAAAy2Tm0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE3GXjU5YyTh6uiM+Xz9UCYyycPJupJdejceU7F5XsCcOV7rccd3hOE823G48ZQdUzGTfu2XclRh5/H2DoOd3llrepGXHXGXkDqMxu5toMs21GfKd226x37Aoc5jvjbzJvHLXOUHQAAc7vK6nKFw1xlB0E4Xc4+SgBluptzmNy42grPlO6pynaOWUs4XjOcdd6m/YGjlJc+NvAsuHGXgDqMl3NufHO+kB1HKy48ZVZXeO+wLGY9MRn5A6Ccum9kSXKa3qQHUcuOFjfDcuNoOg542y3Gtyy1wnOgsc/B63iY2y+G/AOg55+Xz9HhuXG0HROfTUY7xy1eTc557+AVj0xSMceV38LAAAAAAAAAAAAAAAAAAAAAAAAAAARny+fqrRny+fqgrHlOxeV7GPKdi8r2BOHK925dNZhyvduXTQMOmfP8AacPP4+1YdM+f7Th5/H2BlLLuEz9Z+lTLds5GUll3+wbLvjGow5XusEZ8p3bZvHXszPlO7bdTfYEbyx4X/wB/+rmcvtWy7m3POSWa5g6gAm5Sd/ZPjt5T7ZhJbbebpbqUEfj83Rz/AB+boCM+U7qnKdonOcOzcbuT9AzPlO5l0z4ZneU+W2bx+JQbj0xuXK9mYXc7GV1O4JnRfluHT8kn8O+zC8NAtGfS3K6nv5Mu7hu/7iDcemJ/J5Kx6YnO8oCsum9jDpMum9jDp/YJ/J5fP06Of5PL5+nQHOdd/wB5Myv8vXWmzrv+8jLhlL/vQDx30Zu3KXWuX9uqfF/LU4gn8nl8/To5/k8vn6dAc8uufH9qz6f0nLrnx/as+n9AY9MUnHpjdzluA0AAAAAAAAAAAAAAAAAAAAAAAAABOU3Ne6gGSakjQBOM8LbNyxoDJNTTMcfDv3UAjLHfGcKzw5XneHzXQBkmpqNAE5Y+JuuGmgOfgs5X6bMOO7d1YAADncLveN02Y3/q79lgJxx8O/dQAOfgs6bp0Ac/Bw58fV08gBzuHHeN0TC73ldugAi4cdy6qwHOYX/q7dNcNADn4LOV/uHg4c+Pq6AMs3NGM1NNATlj4teygBPh/lttks1WgOfgy8rw71WOOveqATlj4teygBNx3lL6Ns3NNARjjZd7bcd5b36KAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf/Z
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Message'
+                      description: The completion of the input text.
+                required:
+                  - messages
+              examples:
+                completion:
+                  value:
+                    messages:
+                      - role: system
+                        content: The capital of France is Paris.
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          description: Unauthorized
+        '500':
+          $ref: '#/components/responses/500'
+  /v1/embedding/models:
+    get:
+      summary: List embedding models.
+      operationId: listEmbeddingModels
+      tags:
+        - Embedding
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        provider:
+                          type: string
+                        name:
+                          type: string
+                        dimension:
+                          type: integer
+                          description: The dimension of the output vector.
+              examples:
+                model_list:
+                  value:
+                    - id: 9fadfda1-dcdf-4e4d-a42a-e158e54b4c4b
+                      provider: voyage
+                      name: voyage-large-2
+                      dimension: 1536
+                    - id: bd4f6262-a3b7-4dd1-9582-3ac182605cfb
+                      provider: openai
+                      name: text-embedding-ada-002
+                      dimension: 1536
+        '401':
+          description: Unauthorized
+  /v1/embedding:
+    post:
+      summary: Create embedding of text.
+      operationId: createEmbedding
+      tags:
+        - Embedding
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                model_id:
+                  type: string
+                  description: The model id.
+                input:
+                  type: array
+                  items:
+                    type: string
+                  description: The text to embedded.
+              required:
+                - model_id
+                - input
+            examples:
+              embedding:
+                value:
+                  model_id: bert-base-uncased
+                  input:
+                    - The capital of France is Paris.
+                    - The capital of Italy is Rome.
+                    - The capital of Spain is Madrid.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Embedding'
+                    description: The embeddings of the text.
+              examples:
+                embedding:
+                  value:
+                    data:
+                      - embedding:
+                          - 0.1
+                          - 0.2
+                          - 0.3
+                        index: 0
+                      - embedding:
+                          - 0.4
+                          - 0.5
+                          - 0.6
+                        index: 1
+        '401':
+          description: Unauthorized
+  /v1/vector/list:
+    get:
+      summary: List database.
+      operationId: listVectoreStores
+      tags:
+        - VectorStore
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: string
+                    description: The list of databases.
+              examples:
+                db:
+                  value:
+                    data:
+                      - name: db1
+                      - name: db2
+                      - name: db3
+        '401':
+          description: Unauthorized
+  /v1/vector/collection:
+    get:
+      summary: List collection.
+      operationId: listCollection
+      tags:
+        - VectorStore
+      parameters:
+        - name: MAOS_VECTOR_DATABASE_NAME
+          description: The name of the database to be accessed.
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: string
+                    description: The list of collections.
+              examples:
+                collection:
+                  value:
+                    data:
+                      - name: collection1
+                      - name: collection2
+                      - name: collection3
+        '401':
+          description: Unauthorized
+    post:
+      summary: Create a collection.
+      operationId: createCollection
+      tags:
+        - VectorStore
+      parameters:
+        - name: MAOS_VECTOR_DATABASE_NAME
+          description: The name of the database to be accessed.
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: The name of the collection.
+                fields:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/CollectionField'
+                indexes:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/CollectionIndex'
+              required:
+                - name
+                - fields
+            examples:
+              collection:
+                value:
+                  name: collection1
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: string
+                    description: The name of the collection.
+              examples:
+                collection:
+                  value:
+                    data:
+                      name: collection1
+        '401':
+          description: Unauthorized
+  /v1/vector/collection/{name}:
+    post:
+      summary: Upsert data into a collection.
+      operationId: upsertCollection
+      tags:
+        - VectorStore
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+          description: The name of the collection.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              description: >-
+                The data to be upserted. The key and value must be able to match
+                with the collection scheme.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          description: Unauthorized
+    get:
+      summary: query data from a collection.
+      operationId: queryCollection
+      tags:
+        - VectorStore
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+          description: The name of the collection.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          description: Unauthorized
+  /v1/rerank/models:
+    get:
+      summary: List models.
+      operationId: listRerankModels
+      tags:
+        - Rerank
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        provider:
+                          type: string
+                        name:
+                          type: string
+              examples:
+                model_list:
+                  value:
+                    - id: 9fadfda1-dcdf-4e4d-a42a-e158e54b4c4b
+                      provider: voyage
+                      name: voyage-large-2
+                      dimension: 1536
+                    - id: bd4f6262-a3b7-4dd1-9582-3ac182605cfb
+                      provider: openai
+                      name: text-embedding-ada-002
+                      dimension: 1536
+        '401':
+          description: Unauthorized
+  /v1/rerank:
+    post:
+      summary: Measure the relevance of a list of documents to a query.
+      operationId: createRerank
+      tags:
+        - Rerank
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                model_id:
+                  type: string
+                  description: The model id.
+                documents:
+                  type: array
+                  items:
+                    type: string
+                  description: The list of documents.
+                query:
+                  type: string
+                  description: The query.
+              required:
+                - model_id
+                - documents
+                - query
+            examples:
+              rerank:
+                summary: Rerank documents with a query.
+                value:
+                  model_id: bert-base-uncased
+                  documents:
+                    - The capital of France is Paris.
+                    - The capital of Italy is Rome.
+                    - The capital of Spain is Madrid.
+                  query: What is the capital of France?
+      responses:
+        '201':
+          description: The result of the rerank.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RerankResult'
+              examples:
+                rerank:
+                  summary: Rerank documents with a query.
+                  value:
+                    data:
+                      - text: The capital of France is Paris.
+                        score: 0.9
+                        index: 0
+                      - text: The capital of Italy is Rome.
+                        score: 0.8
+                        index: 1
+                      - text: The capital of Spain is Madrid.
+                        score: 0.7
+                        index: 2
+        '401':
+          description: Unauthorized
+  /v1/admin/api_tokens:
+    get:
+      summary: List API tokens
+      operationId: adminListApiTokens
+      tags:
+        - Admin
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+          description: Page number (default 1)
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+          description: Page number (default 10)
+        - in: query
+          name: agent_id
+          schema:
+            type: integer
+            format: int64
+          description: Filter by agent ID
+        - in: query
+          name: created_by
+          schema:
+            type: string
+          description: Filter by creator
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ApiToken'
+                  meta:
+                    type: object
+                    properties:
+                      total_pages:
+                        type: integer
+                    required:
+                      - total_pages
+                required:
+                  - data
+                  - meta
+              example:
+                data:
+                  - id: token123
+                    agent_id: 1
+                    expire_at: 1672531200
+                    created_by: admin@example.com
+                    created_at: 1640995200
+                    permissions:
+                      - config:read
+                      - invocation:read
+                  - id: token456
+                    agent_id: 2
+                    expire_at: 1704067200
+                    created_by: manager@example.com
+                    created_at: 1641081600
+                    permissions:
+                      - config:read
+        '401':
+          description: Unauthorized
+        '500':
+          $ref: '#/components/responses/500'
+    post:
+      summary: Create a new API token
+      operationId: adminCreateApiToken
+      tags:
+        - Admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApiTokenCreate'
+            example:
+              AgentID: 3
+              ExpireAt: 1735689600
+              Permissions:
+                - config:read
+                - invocation:read
+      responses:
+        '201':
+          description: Successfully created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiToken'
+              example:
+                ID: token789
+                AgentID: 3
+                ExpireAt: 1735689600
+                CreatedBy: system
+                CreatedAt: 1641168000
+                Permissions:
+                  - config:read
+                  - invocation:read
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          description: Unauthorized
+        '500':
+          $ref: '#/components/responses/500'
+  /v1/admin/api_tokens/{id}:
+    delete:
+      summary: >-
+        Delete an API token. If token not found, it will do nothing and return
+        204
+      operationId: adminDeleteApiToken
+      tags:
+        - Admin
+      parameters:
+        - name: id
+          in: path
+          description: The ID of the API token to delete
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: API token deleted successfully
+        '401':
+          description: Unauthorized
+        '500':
+          $ref: '#/components/responses/500'
+  /v1/admin/agents:
+    get:
+      summary: List Agents
+      operationId: adminListAgents
+      tags:
+        - Admin
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+          description: Page number (default 1)
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+          description: Page number (default 10)
+        - in: query
+          name: name
+          schema:
+            type: string
+          description: Filter by agent ID
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Agent'
+                  meta:
+                    type: object
+                    properties:
+                      total_pages:
+                        type: integer
+                    required:
+                      - total_pages
+                required:
+                  - data
+                  - meta
+        '401':
+          description: Unauthorized
+        '500':
+          $ref: '#/components/responses/500'
+    post:
+      summary: Create a new Agent
+      operationId: adminCreateAgent
+      tags:
+        - Admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentCreate'
+            example:
+              name: agent-16888
+      responses:
+        '201':
+          description: Successfully created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+              example:
+                id: 16888
+                name: agent-16888
+                created_at: 1640995200
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          description: Unauthorized
+        '500':
+          $ref: '#/components/responses/500'
+  /v1/admin/agents/{id}:
+    get:
+      summary: Get one specific Agents
+      operationId: adminGetAgent
+      tags:
+        - Admin
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: Agent ID
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Agent'
+                required:
+                  - data
+              example:
+                data:
+                  id: 16888
+                  name: agent-16888
+                  created_at: 1640995200
+        '401':
+          description: Unauthorized
+        '404':
+          description: Agent not found
+        '500':
+          $ref: '#/components/responses/500'
+    patch:
+      summary: Update one specific Agent
+      operationId: adminUpdateAgent
+      tags:
+        - Admin
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: Agent ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                enabled:
+                  type: boolean
+                deployable:
+                  type: boolean
+                configurable:
+                  type: boolean
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Agent'
+                required:
+                  - data
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Agent not found
+        '500':
+          $ref: '#/components/responses/500'
+    delete:
+      summary: Delete one specific Agent
+      operationId: adminDeleteAgent
+      tags:
+        - Admin
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: Agent ID
+      responses:
+        '200':
+          description: Successful response
+        '401':
+          description: Unauthorized
+        '404':
+          description: Agent not found
+        '409':
+          description: Agent is referenced by config
+        '500':
+          $ref: '#/components/responses/500'
+  /v1/admin/deployments:
+    get:
+      summary: List Deployments
+      operationId: adminListDeployments
+      tags:
+        - Admin
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+          description: Page number (default 1)
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+          description: Page number (default 10)
+        - in: query
+          name: reviewer
+          schema:
+            type: string
+          description: Filter by if the given user is a reviewer
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum:
+              - draft
+              - reviewing
+              - approved
+              - rejected
+              - deployed
+              - retired
+              - cancelled
+          description: Filter by deployment status.
+        - in: query
+          name: name
+          schema:
+            type: string
+          description: Filter by deployment name
+        - in: query
+          name: id
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+          description: Filter by list of deployment id
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Deployment'
+                  meta:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                        format: int64
+                        description: Total number of deployments
+                      page:
+                        type: integer
+                        description: Current page number
+                      page_size:
+                        type: integer
+                        description: Number of deployments per page
+                    required:
+                      - total
+                      - page
+                      - page_size
+                required:
+                  - data
+                  - meta
+        '401':
+          description: Unauthorized
+        '500':
+          $ref: '#/components/responses/500'
+    post:
+      summary: Create a new Deployment
+      operationId: adminCreateDeployment
+      tags:
+        - Admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                reviewers:
+                  type: array
+                  items:
+                    type: string
+                user:
+                  type: string
+              required:
+                - name
+                - user
+      responses:
+        '201':
+          description: Successfully created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Deployment'
+                required:
+                  - data
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          description: Unauthorized
+        '500':
+          $ref: '#/components/responses/500'
+  /v1/admin/deployments/{id}:
+    get:
+      summary: Get a specific Deployment.
+      operationId: adminGetDeployment
+      tags:
+        - Admin
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: Deployment ID
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeploymentDetail'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Deployment not found
+        '500':
+          $ref: '#/components/responses/500'
+    patch:
+      summary: Update a specific Deployment. Only draft deployments can be updated.
+      operationId: adminUpdateDeployment
+      tags:
+        - Admin
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: Deployment ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user:
+                  type: string
+                name:
+                  type: string
+                reviewers:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Deployment'
+                required:
+                  - data
+        '401':
+          description: Unauthorized
+        '404':
+          description: Deployment not found
+        '500':
+          $ref: '#/components/responses/500'
+    delete:
+      summary: Delete a specific Deployment. Only draft deployments can be deleted.
+      operationId: adminDeleteDeployment
+      tags:
+        - Admin
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: Deployment ID
+      responses:
+        '200':
+          description: Deployment deleted successfully
+        '401':
+          description: Unauthorized
+        '404':
+          description: Deployment not found
+        '500':
+          $ref: '#/components/responses/500'
+  /v1/admin/deployments/{id}/submit:
+    post:
+      summary: >-
+        Submit the Deployment for reviewing. Only draft deployments can be
+        submitted. After submitting, the deployment will be in `reviewing`
+        status. Reviewers will be notified.
+      operationId: adminSubmitDeployment
+      tags:
+        - Admin
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: Deployment ID
+      responses:
+        '200':
+          description: Successful response
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Deployment not found
+        '500':
+          $ref: '#/components/responses/500'
+  /v1/admin/deployments/{id}/publish:
+    post:
+      summary: >-
+        Publish the Deployment. Only draft deployments can be published. After
+        publishing, the deployment will be in `deployed` status.
+      operationId: adminPublishDeployment
+      tags:
+        - Admin
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: Deployment ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user:
+                  type: string
+                  description: who is publishing the deployment
+              required:
+                - user
+      responses:
+        '201':
+          description: Successful response
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Deployment not found
+        '500':
+          $ref: '#/components/responses/500'
+  /v1/admin/deployments/{id}/reject:
+    post:
+      summary: >-
+        Reject the Deployment. Only draft deployments can be rejected. And only
+        the reviewer can reject the deployment. After rejecting, the deployment
+        will be in `rejected` status.
+      operationId: adminRejectDeployment
+      tags:
+        - Admin
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: Deployment ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  description: The reason for rejecting the deployment
+                user:
+                  type: string
+                  description: The user who is rejecting the deployment
+              required:
+                - user
+                - reason
+      responses:
+        '201':
+          description: Successful response
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Deployment not found
+        '500':
+          $ref: '#/components/responses/500'
+  /v1/admin/configs/{id}:
+    patch:
+      summary: Update a specific Config. Only draft configs can be updated.
+      operationId: adminUpdateConfig
+      tags:
+        - Admin
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          description: Config ID
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user:
+                  type: string
+                min_agent_version:
+                  type: string
+                content:
+                  type: object
+                  additionalProperties:
+                    type: string
+              required:
+                - user
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Config'
+                required:
+                  - data
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Config not found
+        '500':
+          $ref: '#/components/responses/500'
+  /v1/admin/setting:
+    get:
+      summary: Get system setting
+      operationId: adminGetSetting
+      tags:
+        - Admin
+      responses:
+        '200':
+          description: Current system setting
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Setting'
+        '401':
+          description: Unauthorized
+        '500':
+          $ref: '#/components/responses/500'
+    patch:
+      summary: Update system setting
+      operationId: adminUpdateSetting
+      tags:
+        - Admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                display_name:
+                  type: string
+                deployment_approve_required:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated system setting
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Setting'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Deployment not found
+        '500':
+          $ref: '#/components/responses/500'
+  /v1/admin/reference_config_suites:
+    get:
+      summary: List reference config suites
+      operationId: adminListReferenceConfigSuites
+      tags:
+        - Admin
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ReferenceConfigSuite'
+                required:
+                  - data
+        '401':
+          description: Unauthorized
+        '500':
+          $ref: '#/components/responses/500'
+  /v1/admin/secrets:
+    get:
+      summary: List kubernetes secrets
+      operationId: adminListSecrets
+      tags:
+        - Admin
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        keys:
+                          type: array
+                          items:
+                            type: string
+                      required:
+                        - name
+                        - keys
+                required:
+                  - data
+        '401':
+          description: Unauthorized
+        '500':
+          $ref: '#/components/responses/500'
+  /v1/admin/secrets/{name}:
+    patch:
+      summary: Update a secret
+      operationId: adminUpdateSecret
+      tags:
+        - Admin
+      parameters:
+        - name: name
+          in: path
+          description: The name of the secret to update
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+      responses:
+        '200':
+          description: Secret updated successfully
+        '401':
+          description: Unauthorized
+        '500':
+          $ref: '#/components/responses/500'
+    delete:
+      summary: Delete a secret
+      operationId: adminDeleteSecret
+      tags:
+        - Admin
+      parameters:
+        - name: name
+          in: path
+          description: The name of the secret to delete
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Secret deleted successfully
+        '401':
+          description: Unauthorized
+        '500':
+          $ref: '#/components/responses/500'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Enter the pre-assigned API key as a bearer token
+    trace:
+      type: apiKey
+      in: header
+      name: MAOS-TRACE-ID
+      description: The unique trace id.
+  schemas:
+    Configuration:
+      type: object
+      additionalProperties:
+        type: string
+      description: A key-value structure representing the caller's configuration
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: The error message
+    InvocationState:
+      type: string
+      enum:
+        - available
+        - running
+        - completed
+        - cancelled
+        - discarded
+      description: |
+        The state of the invocation job
+        - available: The job is queued and waiting to be processed.
+        - running: The job is currently being executed.
+        - completed: The job has finished successfully.
+        - cancelled: The job was cancelled before completion.
+        - discarded: The job was discarded due to an error or system issue.
+    InvocationResult:
+      type: object
+      properties:
+        id:
+          type: string
+          description: The unique identifier for the invocation job
+        state:
+          $ref: '#/components/schemas/InvocationState'
+        attempted_at:
+          type: integer
+          format: int64
+          description: The timestamp when the job was retrieved and attempted by agent
+        finalized_at:
+          type: integer
+          format: int64
+          description: The timestamp when the job was finalized
+        result:
+          type: object
+          description: The result of the invocation job
+        errors:
+          type: object
+          description: The errors of the invocation job
+      required:
+        - id
+        - state
+    InvocationJob:
+      type: object
+      properties:
+        id:
+          type: string
+          description: The unique identifier for the invocation job
+        meta:
+          type: object
+          description: >-
+            The metadata of the invocation job. it contains 'kind' to specify
+            the type of the invocation job
+        payload:
+          type: object
+          description: The payload for the invocation job
+      required:
+        - id
+        - meta
+        - payload
+    MessageContent:
+      oneOf:
+        - type: object
+          properties:
+            text:
+              type: string
+          required:
+            - text
+        - type: object
+          properties:
+            image:
+              type: string
+              description: >-
+                The based64 encoded image file. Only "jpeg" and "png" are
+                supported by all providers.
+          required:
+            - image
+        - type: object
+          properties:
+            image_url:
+              type: string
+              format: uri
+              description: >-
+                The URL of the image file. Only "jpeg" and "png" are supported
+                by all providers.
+          required:
+            - image_url
+        - type: object
+          properties:
+            tool_result:
+              type: object
+              description: The result of a tool call.
+              properties:
+                tool_call_id:
+                  type: string
+                  description: >-
+                    The ID of the tool call. It must be the same as the ID of
+                    the tool call in the tool_call property.
+                result:
+                  type: object
+                  description: The result of the tool call.
+                is_error:
+                  type: boolean
+              required:
+                - tool_call_id
+                - result
+          required:
+            - tool_result
+        - type: object
+          properties:
+            tool_call:
+              type: object
+              properties:
+                id:
+                  type: string
+                  description: >-
+                    The ID of the tool call. It must be the same as the ID of
+                    the tool_call_id in the tool_result property.
+                name:
+                  type: string
+                  description: The name of the tool/function.
+                arguments:
+                  type: object
+                  description: The arguments of the tool/function.
+          required:
+            - tool_call
+    Message:
+      type: object
+      properties:
+        role:
+          type: string
+          enum:
+            - system
+            - assistant
+            - user
+            - tool
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageContent'
+      required:
+        - role
+        - content
+    Embedding:
+      type: object
+      properties:
+        embedding:
+          type: array
+          items:
+            type: number
+          description: The embedding of the text.
+        index:
+          type: integer
+          description: The index of the text in the original list.
+    CollectionDataType:
+      type: string
+      enum:
+        - INT64
+        - VARCHAR
+        - BOOL
+        - INT8
+        - INT16
+        - INT32
+        - INT64
+        - FLOAT
+        - JSON
+        - ARRAY
+        - BINARY_VECTOR
+        - FLOAT_VECTOR
+        - FLOAT16_VECTOR
+        - BFLOAT16_VECTOR
+        - SPARSE_FLOAT_VECTOR
+    CollectionField:
+      type: object
+      properties:
+        name:
+          type: string
+        data_type:
+          $ref: '#/components/schemas/CollectionDataType'
+        max_length:
+          type: integer
+          minimum: 1
+          maximum: 65535
+          description: >-
+            The maximum length of the field. It's mandatory for VARCHAR data
+            type.
+        is_primary:
+          type: boolean
+    CollectionIndex:
+      type: object
+      properties:
+        index_name:
+          type: string
+        field_name:
+          type: string
+        index_type:
+          type: string
+          enum:
+            - FLAT
+            - IVF_FLAT
+            - IVF_SQ8
+            - IVF_PQ
+            - GPU_IVF_FLAT
+            - GPU_IVF_PQ
+            - HNSW
+            - DISKANN
+            - BIN_FLAT
+            - BIN_IVF_FLAT
+            - SPARSE_INVERTED_INDEX
+            - SPARSE_WAND
+        metric_type:
+          type: string
+          enum:
+            - L2
+            - IP
+            - COSINE
+            - JACCARD
+            - HAMMING
+        parameter:
+          type: object
+          properties:
+            nlist:
+              type: integer
+              description: Number of cluster units
+            nfactors:
+              type: integer
+              description: Number of factors of product quantization
+            M:
+              type: integer
+              description: >-
+                M defines tha maximum number of outgoing connections in the
+                graph. Higher M leads to higher accuracy/run_time at fixed
+                ef/efConstruction. Required when index type is *HNSW*.
+            efConstruction:
+              type: integer
+              description: >-
+                ef_construction controls index search speed/build speed
+                tradeoff. Increasing the efConstruction parameter may enhance
+                index quality, but it also tends to lengthen the indexing time.
+                Required when index type is *HNSW*.
+            drop_ratio_build:
+              type: number
+              minimum: 0
+              maximum: 1
+              description: >-
+                The proportion of small vector values that are excluded during
+                the indexing process. This option allows fine-tuning of the
+                indexing process, making a trade-off between efficiency and
+                accuracy by disregarding small values when building the index.
+                It's required when index type is *SPARSE_INVERTED_INDEX* or
+                *SPARSE_WAND*.
+    RerankResult:
+      type: object
+      properties:
+        text:
+          type: string
+          description: The document.
+        score:
+          type: number
+          description: The score of the document.
+        index:
+          type: integer
+          description: The index of the document in the original list.
+    Permission:
+      type: string
+      enum:
+        - config:read
+        - invocation:create
+        - invocation:read
+        - invocation:respond
+        - admin
+    ApiToken:
+      type: object
+      properties:
+        id:
+          type: string
+        agent_id:
+          type: integer
+          format: int64
+        expire_at:
+          type: integer
+          format: int64
+        created_by:
+          type: string
+        created_at:
+          type: integer
+          format: int64
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+      required:
+        - id
+        - agent_id
+        - expire_at
+        - created_by
+        - created_at
+        - permissions
+      example:
+        ID: token123
+        agent_id: 1
+        expire_at: 1672531200
+        created_by: admin@example.com
+        created_at: 1640995200
+        Permissions:
+          - config:read
+          - invocation:read
+    ApiTokenCreate:
+      type: object
+      properties:
+        agent_id:
+          type: integer
+          format: int64
+        expire_at:
+          type: integer
+          format: int64
+        created_by:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+      required:
+        - agent_id
+        - expire_at
+        - created_by
+        - permissions
+      example:
+        agent_id: 2
+        expire_at: 1704067200
+        created_by: admin@bluextrade.com
+        Permissions:
+          - config:read
+          - invocation:read
+    Agent:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        enabled:
+          type: boolean
+        deployable:
+          type: boolean
+        configurable:
+          type: boolean
+        token_count:
+          type: integer
+          format: int64
+        renameable:
+          type: boolean
+        created_at:
+          type: integer
+          format: int64
+      required:
+        - id
+        - name
+        - enabled
+        - deployable
+        - configurable
+        - renameable
+        - created_at
+        - token_count
+      example:
+        id: 16888
+        name: agent-16888
+        created_at: 1640995200
+        token_count: 1
+    AgentCreate:
+      type: object
+      properties:
+        name:
+          type: string
+        enabled:
+          type: boolean
+        deployable:
+          type: boolean
+        configurable:
+          type: boolean
+      required:
+        - name
+      example:
+        name: agent-16888
+        enabled: true
+    Deployment:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        status:
+          type: string
+          enum:
+            - draft
+            - reviewing
+            - approved
+            - rejected
+            - deployed
+            - retired
+            - cancelled
+        reviewers:
+          type: array
+          items:
+            type: string
+        notes:
+          type: object
+        config_suite_id:
+          type: integer
+          format: int64
+        created_at:
+          type: integer
+          format: int64
+        created_by:
+          type: string
+        approved_at:
+          type: integer
+          format: int64
+        approved_by:
+          type: string
+        finished_at:
+          type: integer
+          format: int64
+        finished_by:
+          type: string
+      required:
+        - id
+        - name
+        - status
+        - reviewers
+        - created_at
+        - created_by
+    Config:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        agent_id:
+          type: integer
+          format: int64
+        agent_name:
+          type: string
+        min_agent_version:
+          type: string
+        content:
+          type: object
+          additionalProperties:
+            type: string
+        created_at:
+          type: integer
+          format: int64
+        created_by:
+          type: string
+        updated_at:
+          type: integer
+          format: int64
+        updated_by:
+          type: string
+      required:
+        - id
+        - agent_id
+        - agent_name
+        - content
+        - created_at
+        - created_by
+    DeploymentDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        status:
+          type: string
+          enum:
+            - draft
+            - reviewing
+            - approved
+            - rejected
+            - deployed
+            - retired
+            - cancelled
+        reviewers:
+          type: array
+          items:
+            type: string
+        notes:
+          type: object
+        created_at:
+          type: integer
+          format: int64
+        created_by:
+          type: string
+        approved_at:
+          type: integer
+          format: int64
+        approved_by:
+          type: string
+        finished_at:
+          type: integer
+          format: int64
+        finished_by:
+          type: string
+        configs:
+          type: array
+          items:
+            $ref: '#/components/schemas/Config'
+      required:
+        - id
+        - name
+        - status
+        - reviewers
+        - created_at
+        - created_by
+    Setting:
+      type: object
+      properties:
+        deployment_approve_required:
+          type: boolean
+        display_name:
+          type: string
+      required:
+        - deployment_approve_required
+        - display_name
+    ReferenceConfigSuite:
+      type: object
+      properties:
+        agent_name:
+          type: string
+        config_suites:
+          type: array
+          items:
+            type: object
+            properties:
+              suite_name:
+                type: string
+              configs:
+                type: object
+                additionalProperties:
+                  type: string
+            required:
+              - suite_name
+              - configs
+      required:
+        - agent_name
+        - config_suites
+  responses:
+    '400':
+      description: Bad Request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    '500':
+      description: Internal Server Error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+tags:
+  - name: Configuration
+    description: Operations related to caller configuration
+  - name: Invocation
+    description: Operations related to invocation jobs
+  - name: Completion
+    description: Operations involving LLM completion models
+  - name: Embedding
+    description: Operations involving embedding models and texts
+  - name: VectorStore
+    description: Operations involving vector store
+  - name: Rerank
+    description: Operations involving rerank models and texts
+  - name: Admin
+    description: Operations involving admin tasks
+  - name: Health
+    description: Operations related to system health
+x-namespaces:
+  - Maos

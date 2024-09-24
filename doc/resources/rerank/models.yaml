@@ -1,0 +1,37 @@
+get:
+  summary: List models.
+  operationId: listRerankModels
+  tags:
+    - Rerank
+  responses:
+    200:
+      description: OK
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    provider:
+                      type: string
+                    name:
+                      type: string
+          examples:
+            model_list:
+              value:
+                - id: 9fadfda1-dcdf-4e4d-a42a-e158e54b4c4b
+                  provider: "voyage"
+                  name: "voyage-large-2"
+                  dimension: 1536
+                - id: bd4f6262-a3b7-4dd1-9582-3ac182605cfb
+                  provider: "openai"
+                  name: "text-embedding-ada-002"
+                  dimension: 1536
+    401:
+      description: Unauthorized

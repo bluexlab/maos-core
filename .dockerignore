@@ -1,0 +1,9 @@
+.env*
+
+vendor/
+bin/
+
+go.work
+.vscode
+coverage.html
+coverage.out

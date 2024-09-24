@@ -1,0 +1,17 @@
+type: string
+enum:
+  - "INT64"
+  - "VARCHAR"
+  - "BOOL"
+  - "INT8"
+  - "INT16"
+  - "INT32"
+  - "INT64"
+  - "FLOAT"
+  - "JSON"
+  - "ARRAY"
+  - "BINARY_VECTOR"
+  - "FLOAT_VECTOR"
+  - "FLOAT16_VECTOR"
+  - "BFLOAT16_VECTOR"
+  - "SPARSE_FLOAT_VECTOR"

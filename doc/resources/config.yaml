@@ -1,0 +1,33 @@
+get:
+  summary: Get configuration of the caller
+  operationId: getCallerConfig
+  tags:
+    - Configuration
+  parameters:
+    - in: header
+      name: X-Agent-Version
+      required: false
+      schema:
+        type: string
+        pattern: '^\d+\.\d+\.\d+(\.\d+)?$'
+      description: "Specifies the version of the agent in the format x.y.z where x, y, and z are non-negative integers."
+  responses:
+    "200":
+      description: Successful response
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: "../schemas/Configuration.yaml"
+            required:
+              - data
+    "401":
+      description: Unauthorized
+    "404":
+      description: Config not found
+    "400":
+      $ref: "../responses/400.yaml"
+    "500":
+      $ref: "../responses/500.yaml"

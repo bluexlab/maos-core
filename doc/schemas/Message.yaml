@@ -1,0 +1,16 @@
+type: object
+properties:
+  role:
+    type: string
+    enum:
+      - system
+      - assistant
+      - user
+      - tool
+  content:
+    type: array
+    items:
+      $ref: "./MessageContent.yaml"
+required:
+  - role
+  - content

@@ -5,12 +5,12 @@ get:
     - Configuration
   parameters:
     - in: header
-      name: X-Agent-Version
+      name: X-Actor-Version
       required: false
       schema:
         type: string
         pattern: '^\d+\.\d+\.\d+(\.\d+)?$'
-      description: "Specifies the version of the agent in the format x.y.z where x, y, and z are non-negative integers."
+      description: "Specifies the version of the actor in the format x.y.z where x, y, and z are non-negative integers."
   responses:
     "200":
       description: Successful response

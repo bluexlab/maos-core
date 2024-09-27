@@ -13,36 +13,36 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/util"
 )
 
-func GetAgentConfig(
+func GetActorConfig(
 	ctx context.Context,
 	logger *slog.Logger,
 	accessor dbaccess.Accessor,
 	request api.GetCallerConfigRequestObject,
 ) (api.GetCallerConfigResponseObject, error) {
-	logger.Info("GetAgentConfig", "AgentVersion", request.Params.XAgentVersion)
+	logger.Info("GetActorConfig", "ActorVersion", request.Params.XActorVersion)
 
 	token := GetContextToken(ctx)
 	if token == nil {
 		return api.GetCallerConfig401Response{}, nil
 	}
 
-	// parse agent version to []int32
-	agentVersion := util.DeserializeAgentVersion(request.Params.XAgentVersion)
-	if agentVersion == nil && request.Params.XAgentVersion != nil {
+	// parse actor version to []int32
+	actorVersion := util.DeserializeActorVersion(request.Params.XActorVersion)
+	if actorVersion == nil && request.Params.XActorVersion != nil {
 		return api.GetCallerConfig400JSONResponse{
 			N400JSONResponse: api.N400JSONResponse{
-				Error: fmt.Sprintf("Cannot parse agent version: %s", *request.Params.XAgentVersion),
+				Error: fmt.Sprintf("Cannot parse actor version: %s", *request.Params.XActorVersion),
 			},
 		}, nil
 	}
 
 	// get active version compatible config
-	config, err := accessor.Querier().ConfigAgentActiveConfig(
+	config, err := accessor.Querier().ConfigActorActiveConfig(
 		ctx,
 		accessor.Source(),
-		&dbsqlc.ConfigAgentActiveConfigParams{
-			AgentId:      token.AgentId,
-			AgentVersion: agentVersion,
+		&dbsqlc.ConfigActorActiveConfigParams{
+			ActorId:      token.ActorId,
+			ActorVersion: actorVersion,
 		},
 	)
 
@@ -54,19 +54,19 @@ func GetAgentConfig(
 		if err != pgx.ErrNoRows {
 			return api.GetCallerConfig500JSONResponse{
 				N500JSONResponse: api.N500JSONResponse{
-					Error: fmt.Sprintf("Cannot get agent config: %v", err),
+					Error: fmt.Sprintf("Cannot get actor config: %v", err),
 				},
 			}, nil
 		}
 	}
 
 	// active config not found, get latest version compatible retired config
-	config, err = accessor.Querier().ConfigAgentRetiredAndVersionCompatibleConfig(
+	config, err = accessor.Querier().ConfigActorRetiredAndVersionCompatibleConfig(
 		ctx,
 		accessor.Source(),
-		&dbsqlc.ConfigAgentRetiredAndVersionCompatibleConfigParams{
-			AgentId:      token.AgentId,
-			AgentVersion: agentVersion,
+		&dbsqlc.ConfigActorRetiredAndVersionCompatibleConfigParams{
+			ActorId:      token.ActorId,
+			ActorVersion: actorVersion,
 		})
 
 	if err != nil {
@@ -75,7 +75,7 @@ func GetAgentConfig(
 		}
 		return api.GetCallerConfig500JSONResponse{
 			N500JSONResponse: api.N500JSONResponse{
-				Error: fmt.Sprintf("Cannot get agent config: %v", err),
+				Error: fmt.Sprintf("Cannot get actor config: %v", err),
 			},
 		}, nil
 	}
@@ -93,7 +93,7 @@ func parseConfigsAndReturn(
 	if err != nil {
 		return api.GetCallerConfig500JSONResponse{
 			N500JSONResponse: api.N500JSONResponse{
-				Error: fmt.Sprintf("Cannot unmarshal agent config: %v", err),
+				Error: fmt.Sprintf("Cannot unmarshal actor config: %v", err),
 			},
 		}, nil
 	}

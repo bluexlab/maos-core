@@ -1,12 +1,12 @@
 post:
   summary: Create a new asynchronous invocation job.
   description: |
-    This endpoint allows an agent user to create a new asynchronous invocation job.
-    The job is added to a queue and will be processed by the next available agent.
+    This endpoint allows an actor user to create a new asynchronous invocation job.
+    The job is added to a queue and will be processed by the next available actor.
 
     Key features:
     - Asynchronous execution: The endpoint returns immediately with an invocation ID.
-    - Job queuing: The invocation is queued for processing by available agents.
+    - Job queuing: The invocation is queued for processing by available actors.
     - Status tracking: The returned invocation ID can be used to query the job's status and results.
 
     Usage flow:
@@ -30,9 +30,9 @@ post:
         schema:
           type: object
           properties:
-            agent:
+            actor:
               type: string
-              description: The name of the agent to process the invocation job
+              description: The name of the actor to process the invocation job
             meta:
               type: object
               description: The metadata of the invocation job
@@ -40,11 +40,11 @@ post:
               type: object
               description: The payload for the invocation job
           required:
-            - agent
+            - actor
             - meta
             - payload
   responses:
-    '201':
+    "201":
       description: Async invocation created
       content:
         application/json:
@@ -57,10 +57,10 @@ post:
             required:
               - id
           example:
-            id: 'inv-16888'
-    '400':
-      $ref : "../../responses/400.yaml"
-    '401':
+            id: "inv-16888"
+    "400":
+      $ref: "../../responses/400.yaml"
+    "401":
       description: Unauthorized
-    '500':
-      $ref : "../../responses/500.yaml"
+    "500":
+      $ref: "../../responses/500.yaml"

@@ -108,7 +108,7 @@ func GetDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.A
 		}, nil
 	}
 
-	configs, err := accessor.Querier().ConfigListBySuiteIdGroupByAgent(ctx, accessor.Source(), *deployment.ConfigSuiteID)
+	configs, err := accessor.Querier().ConfigListBySuiteIdGroupByActor(ctx, accessor.Source(), *deployment.ConfigSuiteID)
 	if err != nil {
 		logger.Error("Cannot get configs", "error", err)
 		return api.AdminGetDeployment500JSONResponse{
@@ -116,11 +116,11 @@ func GetDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.A
 		}, nil
 	}
 
-	filteredConfigs := lo.Filter(configs, func(row *dbsqlc.ConfigListBySuiteIdGroupByAgentRow, _ int) bool {
-		return row.AgentConfigurable
+	filteredConfigs := lo.Filter(configs, func(row *dbsqlc.ConfigListBySuiteIdGroupByActorRow, _ int) bool {
+		return row.ActorConfigurable
 	})
 
-	resultConfigs := lo.Map(filteredConfigs, func(row *dbsqlc.ConfigListBySuiteIdGroupByAgentRow, _ int) api.Config {
+	resultConfigs := lo.Map(filteredConfigs, func(row *dbsqlc.ConfigListBySuiteIdGroupByActorRow, _ int) api.Config {
 		var content map[string]string
 		err := json.Unmarshal(row.Content, &content)
 		if err != nil {
@@ -128,15 +128,15 @@ func GetDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.A
 		}
 
 		// insert kubernetes config
-		if row.AgentDeployable {
+		if row.ActorDeployable {
 			InsertMissingKubeConfigsWithDefault(content)
 		}
 
 		return api.Config{
 			Id:              row.ID,
-			AgentId:         row.AgentId,
-			AgentName:       row.AgentName,
-			MinAgentVersion: util.SerializeAgentVersion(row.MinAgentVersion),
+			ActorId:         row.ActorId,
+			ActorName:       row.ActorName,
+			MinActorVersion: util.SerializeActorVersion(row.MinActorVersion),
 			CreatedAt:       row.CreatedAt,
 			CreatedBy:       row.CreatedBy,
 			Content:         content,
@@ -408,8 +408,8 @@ func PublishDeployment(
 		}, nil
 	}
 
-	// update kubernetes agent deployments
-	configs, err := accessor.Querier().ConfigListBySuiteIdGroupByAgent(ctx, tx, *deployment.ConfigSuiteID)
+	// update kubernetes actor deployments
+	configs, err := accessor.Querier().ConfigListBySuiteIdGroupByActor(ctx, tx, *deployment.ConfigSuiteID)
 	if err != nil {
 		logger.Error("Cannot get configs", "error", err)
 		return api.AdminPublishDeployment500JSONResponse{
@@ -417,14 +417,14 @@ func PublishDeployment(
 		}, nil
 	}
 
-	// rotate agent api keys
-	// it generates new api keys for each agent
+	// rotate actor api keys
+	// it generates new api keys for each actor
 	// and set the old ones to expire after 15 minutes
-	apiTokens, err := rotateAgentApiKeys(ctx, accessor, tx, configs, request.Body.User)
+	apiTokens, err := rotateActorApiKeys(ctx, accessor, tx, configs, request.Body.User)
 	if err != nil {
-		logger.Error("Cannot rotate agent api keys", "error", err)
+		logger.Error("Cannot rotate actor api keys", "error", err)
 		return api.AdminPublishDeployment500JSONResponse{
-			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot rotate agent api keys: %v", err)},
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot rotate actor api keys: %v", err)},
 		}, nil
 	}
 
@@ -469,12 +469,12 @@ func deserializeNotes(content []byte) *map[string]interface{} {
 }
 
 func publishConfigSuiteToS3(ctx context.Context, configSuiteId int64, tx pgx.Tx, accessor dbaccess.Accessor, suiteStore suitestore.SuiteStore) error {
-	configs, err := accessor.Querier().ConfigListBySuiteIdGroupByAgent(ctx, tx, configSuiteId)
+	configs, err := accessor.Querier().ConfigListBySuiteIdGroupByActor(ctx, tx, configSuiteId)
 	if err != nil {
 		return err
 	}
 
-	publishingConfigs := make([]suitestore.AgentConfig, 0, len(configs))
+	publishingConfigs := make([]suitestore.ActorConfig, 0, len(configs))
 	for _, config := range configs {
 		var configContent map[string]string
 		err := json.Unmarshal(config.Content, &configContent)
@@ -482,8 +482,8 @@ func publishConfigSuiteToS3(ctx context.Context, configSuiteId int64, tx pgx.Tx,
 			return err
 		}
 
-		publishingConfigs = append(publishingConfigs, suitestore.AgentConfig{
-			AgentName: config.AgentName,
+		publishingConfigs = append(publishingConfigs, suitestore.ActorConfig{
+			ActorName: config.ActorName,
 			Configs:   configContent,
 		})
 	}
@@ -495,7 +495,7 @@ func updateKubernetesDeployments(
 	ctx context.Context,
 	controller k8s.Controller,
 	deployment *dbsqlc.Deployment,
-	configs []*dbsqlc.ConfigListBySuiteIdGroupByAgentRow,
+	configs []*dbsqlc.ConfigListBySuiteIdGroupByActorRow,
 	apiTokens map[int64]string,
 ) error {
 	deploymentSet := make([]k8s.DeploymentParams, 0, len(configs))
@@ -507,18 +507,18 @@ func updateKubernetesDeployments(
 			return fmt.Errorf("failed to unmarshal config content: %v", err)
 		}
 
-		if !config.AgentDeployable || content["KUBE_DOCKER_IMAGE"] == "" {
+		if !config.ActorDeployable || content["KUBE_DOCKER_IMAGE"] == "" {
 			continue
 		}
 
 		// Prepare deployment params
 		params := k8s.DeploymentParams{
-			Name:          "maos-" + config.AgentName,
+			Name:          "maos-" + config.ActorName,
 			Replicas:      getReplicasFromContent(content),
-			Labels:        map[string]string{"app": config.AgentName},
+			Labels:        map[string]string{"app": config.ActorName},
 			Image:         content["KUBE_DOCKER_IMAGE"],
 			EnvVars:       filterNonKubeConfigs(content),
-			APIKey:        apiTokens[config.AgentId],
+			APIKey:        apiTokens[config.ActorId],
 			MemoryRequest: content["KUBE_MEMORY_REQUEST"],
 			MemoryLimit:   content["KUBE_MEMORY_LIMIT"],
 		}
@@ -560,11 +560,11 @@ func getReplicasFromContent(content map[string]string) int32 {
 	return int32(replicas)
 }
 
-func rotateAgentApiKeys(
+func rotateActorApiKeys(
 	ctx context.Context,
 	accessor dbaccess.Accessor,
 	tx pgx.Tx,
-	configs []*dbsqlc.ConfigListBySuiteIdGroupByAgentRow,
+	configs []*dbsqlc.ConfigListBySuiteIdGroupByActorRow,
 	createdBy string,
 ) (map[int64]string, error) {
 	apiTokens := make(map[int64]string)
@@ -575,16 +575,16 @@ func rotateAgentApiKeys(
 		expirationTime := time.Now().Add(60 * 24 * time.Hour)
 		_, err := accessor.Querier().ApiTokenRotate(ctx, tx, &dbsqlc.ApiTokenRotateParams{
 			ID:          newApiToken,
-			AgentId:     config.AgentId,
+			ActorId:     config.ActorId,
 			NewExpireAt: int64(expirationTime.Unix()),
 			CreatedBy:   createdBy,
-			Permissions: []string{"read:invocation"}, // TODO: read permissions from agent config
+			Permissions: []string{"read:invocation"}, // TODO: read permissions from actor config
 		})
 		if err != nil {
-			return nil, fmt.Errorf("failed to rorate API key of agent %s: %v", config.AgentName, err)
+			return nil, fmt.Errorf("failed to rorate API key of actor %s: %v", config.ActorName, err)
 		}
 
-		apiTokens[config.AgentId] = newApiToken
+		apiTokens[config.ActorId] = newApiToken
 	}
 
 	return apiTokens, nil

@@ -13,7 +13,7 @@ var (
 // NewDatabaseApiTokenFetch creates a TokenFetcher that retrieves tokens from the database.
 // It uses the provided accessor to perform database queries.
 //
-// The bootstrapApiToken is used during system initialization to create the first agent and API token.
+// The bootstrapApiToken is used during system initialization to create the first actor and API token.
 // This bootstrap token is disregarded once the first API token has been created in the system.
 //
 // Parameters:
@@ -32,7 +32,7 @@ func NewDatabaseApiTokenFetch(accessor dbaccess.Accessor, bootstrapApiToken stri
 			if count == 0 && bootstrapApiToken != "" && apiToken == bootstrapApiToken {
 				return &Token{
 					Id:          "bootstraping",
-					AgentId:     0,
+					ActorId:     0,
 					QueueId:     0,
 					ExpireAt:    0,
 					Permissions: []string{"admin"},
@@ -47,7 +47,7 @@ func NewDatabaseApiTokenFetch(accessor dbaccess.Accessor, bootstrapApiToken stri
 		}
 		return &Token{
 			Id:          token.ID,
-			AgentId:     token.AgentId,
+			ActorId:     token.ActorId,
 			QueueId:     token.QueueID,
 			ExpireAt:    token.ExpireAt,
 			Permissions: token.Permissions,

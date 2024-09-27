@@ -7,13 +7,13 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess/dbsqlc"
 )
 
-func InsertAgent(t *testing.T, ctx context.Context, ds DataSource, name string) *dbsqlc.Agent {
+func InsertActor(t *testing.T, ctx context.Context, ds DataSource, name string) *dbsqlc.Actor {
 	query := dbsqlc.New()
 	queue, err := query.QueueInsert(ctx, ds, &dbsqlc.QueueInsertParams{Name: name})
 	if err != nil {
 		t.Fatalf("Failed to insert queue: %v", err)
 	}
-	agent, err := query.AgentInsert(ctx, ds, &dbsqlc.AgentInsertParams{
+	actor, err := query.ActorInsert(ctx, ds, &dbsqlc.ActorInsertParams{
 		Name:         name,
 		QueueID:      queue.ID,
 		Enabled:      true,
@@ -21,18 +21,18 @@ func InsertAgent(t *testing.T, ctx context.Context, ds DataSource, name string) 
 		Configurable: false,
 	})
 	if err != nil {
-		t.Fatalf("Failed to insert agent: %v", err)
+		t.Fatalf("Failed to insert actor: %v", err)
 	}
-	return agent
+	return actor
 }
 
-func InsertAgent2(t *testing.T, ctx context.Context, ds DataSource, name string, enabled bool, deployable bool, configurable bool) *dbsqlc.Agent {
+func InsertActor2(t *testing.T, ctx context.Context, ds DataSource, name string, enabled bool, deployable bool, configurable bool) *dbsqlc.Actor {
 	query := dbsqlc.New()
 	queue, err := query.QueueInsert(ctx, ds, &dbsqlc.QueueInsertParams{Name: name})
 	if err != nil {
 		t.Fatalf("Failed to insert queue: %v", err)
 	}
-	agent, err := query.AgentInsert(ctx, ds, &dbsqlc.AgentInsertParams{
+	actor, err := query.ActorInsert(ctx, ds, &dbsqlc.ActorInsertParams{
 		Name:         name,
 		QueueID:      queue.ID,
 		Enabled:      enabled,
@@ -40,7 +40,7 @@ func InsertAgent2(t *testing.T, ctx context.Context, ds DataSource, name string,
 		Configurable: configurable,
 	})
 	if err != nil {
-		t.Fatalf("Failed to insert agent: %v", err)
+		t.Fatalf("Failed to insert actor: %v", err)
 	}
-	return agent
+	return actor
 }

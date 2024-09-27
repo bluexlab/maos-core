@@ -26,8 +26,8 @@ func TestListReferenceConfigSuites(t *testing.T) {
 			name    string
 			content []byte
 		}{
-			{"suite1", []byte(`[{"agent_name": "agent1", "configs": {"key1": "value1"}}, {"agent_name": "agent2", "configs": {"key2": "value2"}}]`)},
-			{"suite2", []byte(`[{"agent_name": "agent1", "configs": {"key3": "value3"}}, {"agent_name": "agent2", "configs": {"key4": "value4"}}]`)},
+			{"suite1", []byte(`[{"actor_name": "actor1", "configs": {"key1": "value1"}}, {"actor_name": "actor2", "configs": {"key2": "value2"}}]`)},
+			{"suite2", []byte(`[{"actor_name": "actor1", "configs": {"key3": "value3"}}, {"actor_name": "actor2", "configs": {"key4": "value4"}}]`)},
 		}
 
 		for _, suite := range testSuites {
@@ -45,9 +45,9 @@ func TestListReferenceConfigSuites(t *testing.T) {
 		require.NotNil(t, jsonResponse.Data)
 		require.Len(t, jsonResponse.Data, 2)
 
-		expectedAgentSuites := map[string]api.ReferenceConfigSuite{
-			"agent1": {
-				AgentName: "agent1",
+		expectedActorSuites := map[string]api.ReferenceConfigSuite{
+			"actor1": {
+				ActorName: "actor1",
 				ConfigSuites: []struct {
 					Configs   map[string]string `json:"configs"`
 					SuiteName string            `json:"suite_name"`
@@ -56,8 +56,8 @@ func TestListReferenceConfigSuites(t *testing.T) {
 					{SuiteName: "suite2", Configs: map[string]string{"key3": "value3"}},
 				},
 			},
-			"agent2": {
-				AgentName: "agent2",
+			"actor2": {
+				ActorName: "actor2",
 				ConfigSuites: []struct {
 					Configs   map[string]string `json:"configs"`
 					SuiteName string            `json:"suite_name"`
@@ -69,9 +69,9 @@ func TestListReferenceConfigSuites(t *testing.T) {
 		}
 
 		for _, suite := range jsonResponse.Data {
-			expectedSuite, exists := expectedAgentSuites[suite.AgentName]
+			expectedSuite, exists := expectedActorSuites[suite.ActorName]
 			require.True(t, exists)
-			require.Equal(t, expectedSuite.AgentName, suite.AgentName)
+			require.Equal(t, expectedSuite.ActorName, suite.ActorName)
 			require.ElementsMatch(t, expectedSuite.ConfigSuites, suite.ConfigSuites)
 		}
 	})

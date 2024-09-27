@@ -8,7 +8,7 @@ properties:
   attempted_at:
     type: integer
     format: int64
-    description: The timestamp when the job was retrieved and attempted by agent
+    description: The timestamp when the job was retrieved and attempted by actor
   finalized_at:
     type: integer
     format: int64

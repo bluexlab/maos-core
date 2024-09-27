@@ -45,7 +45,7 @@ func (s *APIHandler) Close(ctx context.Context) error {
 
 // GetCallerConfig implements the GET /v1/config endpoint
 func (s *APIHandler) GetCallerConfig(ctx context.Context, request api.GetCallerConfigRequestObject) (api.GetCallerConfigResponseObject, error) {
-	return GetAgentConfig(ctx, s.logger, s.accessor, request)
+	return GetActorConfig(ctx, s.logger, s.accessor, request)
 }
 
 // CreateInvocation implements POST /v1/invocations endpoint
@@ -54,7 +54,7 @@ func (s *APIHandler) CreateInvocationAsync(ctx context.Context, request api.Crea
 	if token == nil {
 		return api.CreateInvocationAsync401Response{}, nil
 	}
-	return s.invocationManager.InsertInvocation(ctx, token.AgentId, request)
+	return s.invocationManager.InsertInvocation(ctx, token.ActorId, request)
 }
 
 func (s *APIHandler) CreateInvocationSync(ctx context.Context, request api.CreateInvocationSyncRequestObject) (api.CreateInvocationSyncResponseObject, error) {
@@ -62,7 +62,7 @@ func (s *APIHandler) CreateInvocationSync(ctx context.Context, request api.Creat
 	if token == nil {
 		return api.CreateInvocationSync401Response{}, nil
 	}
-	return s.invocationManager.ExecuteInvocationSync(ctx, token.AgentId, request)
+	return s.invocationManager.ExecuteInvocationSync(ctx, token.ActorId, request)
 }
 
 func (s *APIHandler) GetInvocationById(ctx context.Context, request api.GetInvocationByIdRequestObject) (api.GetInvocationByIdResponseObject, error) {
@@ -70,7 +70,7 @@ func (s *APIHandler) GetInvocationById(ctx context.Context, request api.GetInvoc
 	if token == nil {
 		return api.GetInvocationById401Response{}, nil
 	}
-	return s.invocationManager.GetInvocationById(ctx, token.AgentId, request)
+	return s.invocationManager.GetInvocationById(ctx, token.ActorId, request)
 }
 
 // GetNextInvocation implements the GET /v1/invocation/next endpoint
@@ -79,7 +79,7 @@ func (s *APIHandler) GetNextInvocation(ctx context.Context, request api.GetNextI
 	if token == nil {
 		return api.GetNextInvocation401Response{}, nil
 	}
-	return s.invocationManager.GetNextInvocation(ctx, token.AgentId, token.QueueId, request)
+	return s.invocationManager.GetNextInvocation(ctx, token.ActorId, token.QueueId, request)
 }
 
 // ReturnInvocationResponse implements the POST /v1/invocation/{invoke_id}/response endpoint
@@ -89,7 +89,7 @@ func (s *APIHandler) ReturnInvocationResponse(ctx context.Context, request api.R
 		return api.ReturnInvocationResponse401Response{}, nil
 	}
 
-	return s.invocationManager.ReturnInvocationResponse(ctx, token.AgentId, request)
+	return s.invocationManager.ReturnInvocationResponse(ctx, token.ActorId, request)
 }
 
 // ReturnInvocationError implements the POST /v1/invocation/{invoke_id}/error endpoint
@@ -99,7 +99,7 @@ func (s *APIHandler) ReturnInvocationError(ctx context.Context, request api.Retu
 		return api.ReturnInvocationError401Response{}, nil
 	}
 
-	return s.invocationManager.ReturnInvocationError(ctx, token.AgentId, request)
+	return s.invocationManager.ReturnInvocationError(ctx, token.ActorId, request)
 }
 
 func (s *APIHandler) ListEmbeddingModels(ctx context.Context, request api.ListEmbeddingModelsRequestObject) (api.ListEmbeddingModelsResponseObject, error) {
@@ -238,44 +238,44 @@ func (s *APIHandler) ListVectoreStores(ctx context.Context, request api.ListVect
 	panic("not implemented")
 }
 
-func (s *APIHandler) AdminListAgents(ctx context.Context, request api.AdminListAgentsRequestObject) (api.AdminListAgentsResponseObject, error) {
-	token := ValidatePermissions(ctx, "AdminListAgents")
+func (s *APIHandler) AdminListActors(ctx context.Context, request api.AdminListActorsRequestObject) (api.AdminListActorsResponseObject, error) {
+	token := ValidatePermissions(ctx, "AdminListActors")
 	if token == nil {
-		return api.AdminListAgents401Response{}, nil
+		return api.AdminListActors401Response{}, nil
 	}
-	return admin.ListAgents(ctx, s.logger, s.accessor, request)
+	return admin.ListActors(ctx, s.logger, s.accessor, request)
 }
 
-func (s *APIHandler) AdminCreateAgent(ctx context.Context, request api.AdminCreateAgentRequestObject) (api.AdminCreateAgentResponseObject, error) {
-	token := ValidatePermissions(ctx, "AdminCreateAgent")
+func (s *APIHandler) AdminCreateActor(ctx context.Context, request api.AdminCreateActorRequestObject) (api.AdminCreateActorResponseObject, error) {
+	token := ValidatePermissions(ctx, "AdminCreateActor")
 	if token == nil {
-		return api.AdminCreateAgent401Response{}, nil
+		return api.AdminCreateActor401Response{}, nil
 	}
-	return admin.CreateAgent(ctx, s.logger, s.accessor, request)
+	return admin.CreateActor(ctx, s.logger, s.accessor, request)
 }
 
-func (s *APIHandler) AdminGetAgent(ctx context.Context, request api.AdminGetAgentRequestObject) (api.AdminGetAgentResponseObject, error) {
-	token := ValidatePermissions(ctx, "AdminGetAgents")
+func (s *APIHandler) AdminGetActor(ctx context.Context, request api.AdminGetActorRequestObject) (api.AdminGetActorResponseObject, error) {
+	token := ValidatePermissions(ctx, "AdminGetActors")
 	if token == nil {
-		return api.AdminGetAgent401Response{}, nil
+		return api.AdminGetActor401Response{}, nil
 	}
-	return admin.GetAgent(ctx, s.logger, s.accessor, request)
+	return admin.GetActor(ctx, s.logger, s.accessor, request)
 }
 
-func (s *APIHandler) AdminUpdateAgent(ctx context.Context, request api.AdminUpdateAgentRequestObject) (api.AdminUpdateAgentResponseObject, error) {
-	token := ValidatePermissions(ctx, "AdminUpdateAgent")
+func (s *APIHandler) AdminUpdateActor(ctx context.Context, request api.AdminUpdateActorRequestObject) (api.AdminUpdateActorResponseObject, error) {
+	token := ValidatePermissions(ctx, "AdminUpdateActor")
 	if token == nil {
-		return api.AdminUpdateAgent401Response{}, nil
+		return api.AdminUpdateActor401Response{}, nil
 	}
-	return admin.UpdateAgent(ctx, s.logger, s.accessor, request)
+	return admin.UpdateActor(ctx, s.logger, s.accessor, request)
 }
 
-func (s *APIHandler) AdminDeleteAgent(ctx context.Context, request api.AdminDeleteAgentRequestObject) (api.AdminDeleteAgentResponseObject, error) {
-	token := ValidatePermissions(ctx, "AdminDeleteAgent")
+func (s *APIHandler) AdminDeleteActor(ctx context.Context, request api.AdminDeleteActorRequestObject) (api.AdminDeleteActorResponseObject, error) {
+	token := ValidatePermissions(ctx, "AdminDeleteActor")
 	if token == nil {
-		return api.AdminDeleteAgent401Response{}, nil
+		return api.AdminDeleteActor401Response{}, nil
 	}
-	return admin.DeleteAgent(ctx, s.logger, s.accessor, request)
+	return admin.DeleteActor(ctx, s.logger, s.accessor, request)
 }
 
 func (s *APIHandler) AdminListApiTokens(ctx context.Context, request api.AdminListApiTokensRequestObject) (api.AdminListApiTokensResponseObject, error) {

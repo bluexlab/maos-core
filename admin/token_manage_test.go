@@ -31,10 +31,10 @@ func TestListApiTokensWithDB(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
 		accessor := dbaccess.New(dbPool)
-		agent1 := fixture.InsertAgent(t, ctx, dbPool, "agent1")
-		agent2 := fixture.InsertAgent(t, ctx, dbPool, "agent2")
-		fixture.InsertToken(t, ctx, dbPool, "token001", agent1.ID, expireAt, []string{"invocation:read", "invocation:create"})
-		fixture.InsertToken(t, ctx, dbPool, "token002", agent2.ID, expireAt, []string{"admin"})
+		actor1 := fixture.InsertActor(t, ctx, dbPool, "actor1")
+		actor2 := fixture.InsertActor(t, ctx, dbPool, "actor2")
+		fixture.InsertToken(t, ctx, dbPool, "token001", actor1.ID, expireAt, []string{"invocation:read", "invocation:create"})
+		fixture.InsertToken(t, ctx, dbPool, "token002", actor2.ID, expireAt, []string{"admin"})
 
 		request := api.AdminListApiTokensRequestObject{
 			Params: api.AdminListApiTokensParams{
@@ -56,14 +56,14 @@ func TestListApiTokensWithDB(t *testing.T) {
 		expectedResponse := []api.ApiToken{
 			{
 				Id:          "token001",
-				AgentId:     agent1.ID,
+				ActorId:     actor1.ID,
 				ExpireAt:    expireAt,
 				CreatedBy:   "test",
 				Permissions: []api.Permission{api.InvocationRead, api.InvocationCreate},
 			},
 			{
 				Id:          "token002",
-				AgentId:     agent2.ID,
+				ActorId:     actor2.ID,
 				ExpireAt:    expireAt,
 				CreatedBy:   "test",
 				Permissions: []api.Permission{api.Admin},
@@ -91,7 +91,7 @@ func TestListApiTokensWithDB(t *testing.T) {
 		createdAt := time.Now().Unix() - 100000
 
 		lo.RepeatBy(21, func(i int) *dbsqlc.ApiToken {
-			_, token := fixture.InsertAgentToken(t, ctx, dbPool, fmt.Sprintf("token-%03d", i), expireAt, []string{"read"}, createdAt+int64(i))
+			_, token := fixture.InsertActorToken(t, ctx, dbPool, fmt.Sprintf("token-%03d", i), expireAt, []string{"read"}, createdAt+int64(i))
 			return token
 		})
 
@@ -146,11 +146,11 @@ func TestCreateApiTokenWithDB(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
 		accessor := dbaccess.New(dbPool)
-		agent1 := fixture.InsertAgent(t, ctx, dbPool, "agent1")
+		actor1 := fixture.InsertActor(t, ctx, dbPool, "actor1")
 
 		request := api.AdminCreateApiTokenRequestObject{
 			Body: &api.AdminCreateApiTokenJSONRequestBody{
-				AgentId:     agent1.ID,
+				ActorId:     actor1.ID,
 				CreatedBy:   "admin",
 				Permissions: []string{"read", "write"},
 				ExpireAt:    expireAt,
@@ -158,7 +158,7 @@ func TestCreateApiTokenWithDB(t *testing.T) {
 		}
 
 		expectedApiToken := dbsqlc.ApiToken{
-			AgentId:     request.Body.AgentId,
+			ActorId:     request.Body.ActorId,
 			CreatedBy:   request.Body.CreatedBy,
 			Permissions: request.Body.Permissions,
 			ExpireAt:    request.Body.ExpireAt,
@@ -171,7 +171,7 @@ func TestCreateApiTokenWithDB(t *testing.T) {
 		jsonResponse := response.(api.AdminCreateApiToken201JSONResponse)
 		assert.Equal(t, tokenLength+3, len(jsonResponse.Id))
 		assert.True(t, strings.HasPrefix(jsonResponse.Id, "ma-"))
-		assert.Equal(t, expectedApiToken.AgentId, jsonResponse.AgentId)
+		assert.Equal(t, expectedApiToken.ActorId, jsonResponse.ActorId)
 		assert.Equal(t, expectedApiToken.CreatedBy, jsonResponse.CreatedBy)
 		assert.Equal(t,
 			util.MapSlice(expectedApiToken.Permissions, func(p string) api.Permission { return api.Permission(p) }),
@@ -181,7 +181,7 @@ func TestCreateApiTokenWithDB(t *testing.T) {
 
 		apiToken, err := accessor.Querier().ApiTokenFindByID(ctx, accessor.Source(), jsonResponse.Id)
 		assert.NoError(t, err)
-		assert.Equal(t, expectedApiToken.AgentId, apiToken.AgentId)
+		assert.Equal(t, expectedApiToken.ActorId, apiToken.ActorId)
 		assert.Equal(t, expectedApiToken.CreatedBy, apiToken.CreatedBy)
 		assert.Equal(t, expectedApiToken.Permissions, apiToken.Permissions)
 		assert.Equal(t, expectedApiToken.ExpireAt, apiToken.ExpireAt)
@@ -192,10 +192,10 @@ func TestCreateApiTokenWithDB(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
 		accessor := dbaccess.New(dbPool)
-		agent1 := fixture.InsertAgent(t, ctx, dbPool, "agent1")
+		actor1 := fixture.InsertActor(t, ctx, dbPool, "actor1")
 		request := api.AdminCreateApiTokenRequestObject{
 			Body: &api.AdminCreateApiTokenJSONRequestBody{
-				AgentId:     agent1.ID,
+				ActorId:     actor1.ID,
 				CreatedBy:   "admin",
 				Permissions: []string{"read"},
 				ExpireAt:    expireAt,
@@ -224,8 +224,8 @@ func TestDeleteApiToken(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
 		accessor := dbaccess.New(dbPool)
-		agent := fixture.InsertAgent(t, ctx, dbPool, "agent1")
-		token := fixture.InsertToken(t, ctx, dbPool, "token001", agent.ID, time.Now().Add(24*time.Hour).Unix(), []string{"read"})
+		actor := fixture.InsertActor(t, ctx, dbPool, "actor1")
+		token := fixture.InsertToken(t, ctx, dbPool, "token001", actor.ID, time.Now().Add(24*time.Hour).Unix(), []string{"read"})
 
 		request := api.AdminDeleteApiTokenRequestObject{
 			Id: token.ID,
@@ -262,8 +262,8 @@ func TestDeleteApiToken(t *testing.T) {
 	t.Run("Database error", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		accessor := dbaccess.New(dbPool)
-		agent := fixture.InsertAgent(t, ctx, dbPool, "agent1")
-		token := fixture.InsertToken(t, ctx, dbPool, "token001", agent.ID, time.Now().Add(24*time.Hour).Unix(), []string{"read"})
+		actor := fixture.InsertActor(t, ctx, dbPool, "actor1")
+		token := fixture.InsertToken(t, ctx, dbPool, "token001", actor.ID, time.Now().Add(24*time.Hour).Unix(), []string{"read"})
 
 		request := api.AdminDeleteApiTokenRequestObject{
 			Id: token.ID,

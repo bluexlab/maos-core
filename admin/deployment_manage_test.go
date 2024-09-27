@@ -347,9 +347,9 @@ func TestGetDeployment(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		accessor := dbaccess.New(dbPool)
 
-		// Create two agents
-		agent1 := fixture.InsertAgent2(t, ctx, dbPool, "agent1", true, true, true)
-		agent2 := fixture.InsertAgent2(t, ctx, dbPool, "agent2", true, false, true)
+		// Create two actors
+		actor1 := fixture.InsertActor2(t, ctx, dbPool, "actor1", true, true, true)
+		actor2 := fixture.InsertActor2(t, ctx, dbPool, "actor2", true, false, true)
 
 		// Create a config suite
 		createResponse, err := admin.CreateDeployment(ctx, logger, accessor, api.AdminCreateDeploymentRequestObject{
@@ -362,11 +362,11 @@ func TestGetDeployment(t *testing.T) {
 		require.NoError(t, err)
 		createdDeployment := createResponse.(api.AdminCreateDeployment201JSONResponse).Data
 
-		// Create configs for each agent
+		// Create configs for each actor
 		config1Content := map[string]string{"key1": "value1", "key2": "value2"}
 		config2Content := map[string]string{"key3": "value3", "key4": "value4"}
-		fixture.InsertConfig2(t, ctx, dbPool, agent1.ID, createdDeployment.ConfigSuiteId, "testuser", config1Content)
-		fixture.InsertConfig2(t, ctx, dbPool, agent2.ID, createdDeployment.ConfigSuiteId, "testuser", config2Content)
+		fixture.InsertConfig2(t, ctx, dbPool, actor1.ID, createdDeployment.ConfigSuiteId, "testuser", config1Content)
+		fixture.InsertConfig2(t, ctx, dbPool, actor2.ID, createdDeployment.ConfigSuiteId, "testuser", config2Content)
 
 		request := api.AdminGetDeploymentRequestObject{Id: createdDeployment.Id}
 		response, err := admin.GetDeployment(ctx, logger, accessor, request)
@@ -392,14 +392,14 @@ func TestGetDeployment(t *testing.T) {
 
 		configMap := make(map[int64]api.Config)
 		for _, config := range *retrievedDeployment.Configs {
-			configMap[config.AgentId] = config
+			configMap[config.ActorId] = config
 		}
 
-		// Check config for agent1
-		config1 := configMap[agent1.ID]
+		// Check config for actor1
+		config1 := configMap[actor1.ID]
 		require.NotZero(t, config1.Id)
-		require.Equal(t, agent1.ID, config1.AgentId)
-		require.Equal(t, agent1.Name, config1.AgentName)
+		require.Equal(t, actor1.ID, config1.ActorId)
+		require.Equal(t, actor1.Name, config1.ActorName)
 		for key, value := range config1Content {
 			require.Equal(t, value, config1.Content[key])
 		}
@@ -410,11 +410,11 @@ func TestGetDeployment(t *testing.T) {
 		require.NotZero(t, config1.CreatedAt)
 		require.NotEmpty(t, config1.CreatedBy)
 
-		// Check config for agent2
-		config2 := configMap[agent2.ID]
+		// Check config for actor2
+		config2 := configMap[actor2.ID]
 		require.NotZero(t, config2.Id)
-		require.Equal(t, agent2.ID, config2.AgentId)
-		require.Equal(t, agent2.Name, config2.AgentName)
+		require.Equal(t, actor2.ID, config2.ActorId)
+		require.Equal(t, actor2.Name, config2.ActorName)
 		for key, value := range config2Content {
 			require.Equal(t, value, config2.Content[key])
 		}
@@ -431,7 +431,7 @@ func TestGetDeployment(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		accessor := dbaccess.New(dbPool)
 
-		agent := fixture.InsertAgent2(t, ctx, dbPool, "agent-kube", true, true, true)
+		actor := fixture.InsertActor2(t, ctx, dbPool, "actor-kube", true, true, true)
 
 		// Create a config suite
 		createResponse, err := admin.CreateDeployment(ctx, logger, accessor, api.AdminCreateDeploymentRequestObject{
@@ -452,7 +452,7 @@ func TestGetDeployment(t *testing.T) {
 			"KUBE_CPU_LIMIT":      "500m",
 			"KUBE_MEMORY_LIMIT":   "1Gi",
 		}
-		fixture.InsertConfig2(t, ctx, dbPool, agent.ID, createdDeployment.ConfigSuiteId, "testuser", customKubeConfig)
+		fixture.InsertConfig2(t, ctx, dbPool, actor.ID, createdDeployment.ConfigSuiteId, "testuser", customKubeConfig)
 
 		request := api.AdminGetDeploymentRequestObject{Id: createdDeployment.Id}
 		response, err := admin.GetDeployment(ctx, logger, accessor, request)
@@ -572,14 +572,14 @@ func TestCreateDeployment(t *testing.T) {
 		require.NotNil(t, configSuite)
 		require.Equal(t, createdDeployment.Data.CreatedBy, configSuite.CreatedBy)
 
-		// Get all agents
-		agents, err := accessor.Querier().AgentListPagenated(ctx, accessor.Source(), &dbsqlc.AgentListPagenatedParams{Page: 1, PageSize: 1000})
+		// Get all actors
+		actors, err := accessor.Querier().ActorListPagenated(ctx, accessor.Source(), &dbsqlc.ActorListPagenatedParams{Page: 1, PageSize: 1000})
 		require.NoError(t, err)
 
-		// Check if configs were created for all agents
-		for _, agent := range agents {
-			config, err := accessor.Querier().ConfigFindByAgentIdAndSuiteId(ctx, accessor.Source(), &dbsqlc.ConfigFindByAgentIdAndSuiteIdParams{
-				AgentId:       agent.ID,
+		// Check if configs were created for all actors
+		for _, actor := range actors {
+			config, err := accessor.Querier().ConfigFindByActorIdAndSuiteId(ctx, accessor.Source(), &dbsqlc.ConfigFindByActorIdAndSuiteIdParams{
+				ActorId:       actor.ID,
 				ConfigSuiteID: *createdDeployment.Data.ConfigSuiteId,
 			})
 			require.NoError(t, err)
@@ -595,23 +595,23 @@ func TestCreateDeployment(t *testing.T) {
 		accessor := dbaccess.New(dbPool)
 		logger := testhelper.Logger(t)
 
-		// Create 3 agents
-		agent1 := fixture.InsertAgent(t, ctx, dbPool, "agent1")
-		agent2 := fixture.InsertAgent(t, ctx, dbPool, "agent2")
-		agent3 := fixture.InsertAgent(t, ctx, dbPool, "agent3")
+		// Create 3 actors
+		actor1 := fixture.InsertActor(t, ctx, dbPool, "actor1")
+		actor2 := fixture.InsertActor(t, ctx, dbPool, "actor2")
+		actor3 := fixture.InsertActor(t, ctx, dbPool, "actor3")
 
-		// Create existing configs for agent1 and agent2
+		// Create existing configs for actor1 and actor2
 		existingContent1 := []byte(`{"key": "value1"}`)
 		existingContent2 := []byte(`{"key": "value2"}`)
 		_, err := accessor.Querier().ConfigInsert(ctx, accessor.Source(), &dbsqlc.ConfigInsertParams{
-			AgentId:         agent1.ID,
+			ActorId:         actor1.ID,
 			Content:         existingContent1,
-			MinAgentVersion: []int32{1, 0, 0},
+			MinActorVersion: []int32{1, 0, 0},
 			CreatedBy:       "test-user",
 		})
 		require.NoError(t, err)
 		_, err = accessor.Querier().ConfigInsert(ctx, accessor.Source(), &dbsqlc.ConfigInsertParams{
-			AgentId:   agent2.ID,
+			ActorId:   actor2.ID,
 			Content:   existingContent2,
 			CreatedBy: "test-user",
 		})
@@ -633,31 +633,31 @@ func TestCreateDeployment(t *testing.T) {
 		require.NotEmpty(t, createdDeployment.Data.Id)
 		require.NotEmpty(t, createdDeployment.Data.ConfigSuiteId)
 
-		// Check if configs were created for all agents
-		config1, err := accessor.Querier().ConfigFindByAgentIdAndSuiteId(ctx, accessor.Source(), &dbsqlc.ConfigFindByAgentIdAndSuiteIdParams{
-			AgentId:       agent1.ID,
+		// Check if configs were created for all actors
+		config1, err := accessor.Querier().ConfigFindByActorIdAndSuiteId(ctx, accessor.Source(), &dbsqlc.ConfigFindByActorIdAndSuiteIdParams{
+			ActorId:       actor1.ID,
 			ConfigSuiteID: *createdDeployment.Data.ConfigSuiteId,
 		})
 		require.NoError(t, err)
 		require.Equal(t, existingContent1, config1.Content)
-		require.Equal(t, []int32{1, 0, 0}, config1.MinAgentVersion)
+		require.Equal(t, []int32{1, 0, 0}, config1.MinActorVersion)
 
-		config2, err := accessor.Querier().ConfigFindByAgentIdAndSuiteId(ctx, accessor.Source(), &dbsqlc.ConfigFindByAgentIdAndSuiteIdParams{
-			AgentId:       agent2.ID,
+		config2, err := accessor.Querier().ConfigFindByActorIdAndSuiteId(ctx, accessor.Source(), &dbsqlc.ConfigFindByActorIdAndSuiteIdParams{
+			ActorId:       actor2.ID,
 			ConfigSuiteID: *createdDeployment.Data.ConfigSuiteId,
 		})
 		require.NoError(t, err)
 		require.Equal(t, existingContent2, config2.Content)
-		require.Nil(t, config2.MinAgentVersion)
+		require.Nil(t, config2.MinActorVersion)
 
-		config3, err := accessor.Querier().ConfigFindByAgentIdAndSuiteId(ctx, accessor.Source(), &dbsqlc.ConfigFindByAgentIdAndSuiteIdParams{
-			AgentId:       agent3.ID,
+		config3, err := accessor.Querier().ConfigFindByActorIdAndSuiteId(ctx, accessor.Source(), &dbsqlc.ConfigFindByActorIdAndSuiteIdParams{
+			ActorId:       actor3.ID,
 			ConfigSuiteID: *createdDeployment.Data.ConfigSuiteId,
 		})
 		require.NoError(t, err)
 		require.NotNil(t, config3)
 		require.Equal(t, []byte("{}"), config3.Content) // New config should have empty JSON object
-		require.Nil(t, config3.MinAgentVersion)
+		require.Nil(t, config3.MinActorVersion)
 	})
 
 	t.Run("Database error", func(t *testing.T) {
@@ -1129,15 +1129,15 @@ func TestPublishDeployment(t *testing.T) {
 	ctx := context.Background()
 	logger := testhelper.Logger(t)
 
-	setupDeploymentTest := func(t *testing.T, status string) (*pgxpool.Pool, dbaccess.Accessor, *dbsqlc.Deployment, *dbsqlc.Agent, *dbsqlc.Agent, *testhelper.MockSuiteStore) {
+	setupDeploymentTest := func(t *testing.T, status string) (*pgxpool.Pool, dbaccess.Accessor, *dbsqlc.Deployment, *dbsqlc.Actor, *dbsqlc.Actor, *testhelper.MockSuiteStore) {
 		t.Helper()
 		dbPool := testhelper.TestDB(ctx, t)
 		accessor := dbaccess.New(dbPool)
 		suiteStore := testhelper.NewMockSuiteStore()
 
-		// Create two agents
-		agent1 := fixture.InsertAgent2(t, ctx, dbPool, "agent1", true, true, true)
-		agent2 := fixture.InsertAgent2(t, ctx, dbPool, "agent2", true, false, true)
+		// Create two actors
+		actor1 := fixture.InsertActor2(t, ctx, dbPool, "actor1", true, true, true)
+		actor2 := fixture.InsertActor2(t, ctx, dbPool, "actor2", true, false, true)
 
 		// Create a deployment and a config suite
 		createdDeployment, err := accessor.Querier().DeploymentInsertWithConfigSuite(ctx, accessor.Source(), &dbsqlc.DeploymentInsertWithConfigSuiteParams{
@@ -1152,17 +1152,17 @@ func TestPublishDeployment(t *testing.T) {
 		_, err = dbPool.Exec(ctx, "UPDATE deployments SET status = $1 WHERE id = $2", status, createdDeployment.ID)
 		require.NoError(t, err)
 
-		// Create configs for each agent
-		config1 := fixture.InsertConfig2(t, ctx, dbPool, agent1.ID, createdDeployment.ConfigSuiteID, "test-user", map[string]string{
+		// Create configs for each actor
+		config1 := fixture.InsertConfig2(t, ctx, dbPool, actor1.ID, createdDeployment.ConfigSuiteID, "test-user", map[string]string{
 			"key":                 "value1",
-			"KUBE_DOCKER_IMAGE":   "agent1-image:latest",
+			"KUBE_DOCKER_IMAGE":   "actor1-image:latest",
 			"KUBE_REPLICAS":       "2",
 			"KUBE_MEMORY_REQUEST": "256Mi",
 			"KUBE_MEMORY_LIMIT":   "512Mi",
 		})
-		config2 := fixture.InsertConfig2(t, ctx, dbPool, agent2.ID, createdDeployment.ConfigSuiteID, "test-user", map[string]string{
+		config2 := fixture.InsertConfig2(t, ctx, dbPool, actor2.ID, createdDeployment.ConfigSuiteID, "test-user", map[string]string{
 			"key":                 "value2",
-			"KUBE_DOCKER_IMAGE":   "agent2-image:latest",
+			"KUBE_DOCKER_IMAGE":   "actor2-image:latest",
 			"KUBE_REPLICAS":       "3",
 			"KUBE_MEMORY_REQUEST": "256Mi",
 			"KUBE_MEMORY_LIMIT":   "512Mi",
@@ -1179,7 +1179,7 @@ func TestPublishDeployment(t *testing.T) {
 			CreatedBy:     createdDeployment.CreatedBy,
 			CreatedAt:     createdDeployment.CreatedAt,
 		}
-		return dbPool, accessor, deployment, agent1, agent2, suiteStore
+		return dbPool, accessor, deployment, actor1, actor2, suiteStore
 	}
 
 	t.Run("Successfully publish reviewing deployment", func(t *testing.T) {
@@ -1212,30 +1212,30 @@ func TestPublishDeployment(t *testing.T) {
 		publishedSuites, err := suiteStore.ReadSuites(ctx)
 		require.NoError(t, err)
 		require.NotNil(t, publishedSuites)
-		require.Len(t, publishedSuites, 1) // We expect 2 agent configs
+		require.Len(t, publishedSuites, 1) // We expect 2 actor configs
 
 		// Verify the content of the published suite
 		publishedSuite := publishedSuites[0]
-		for _, agentConfig := range publishedSuite.ConfigSuites {
-			switch agentConfig.AgentName {
-			case "agent1":
+		for _, actorConfig := range publishedSuite.ConfigSuites {
+			switch actorConfig.ActorName {
+			case "actor1":
 				require.Equal(t, map[string]string{
 					"key":                 "value1",
-					"KUBE_DOCKER_IMAGE":   "agent1-image:latest",
+					"KUBE_DOCKER_IMAGE":   "actor1-image:latest",
 					"KUBE_REPLICAS":       "2",
 					"KUBE_MEMORY_REQUEST": "256Mi",
 					"KUBE_MEMORY_LIMIT":   "512Mi",
-				}, agentConfig.Configs)
-			case "agent2":
+				}, actorConfig.Configs)
+			case "actor2":
 				require.Equal(t, map[string]string{
 					"key":                 "value2",
-					"KUBE_DOCKER_IMAGE":   "agent2-image:latest",
+					"KUBE_DOCKER_IMAGE":   "actor2-image:latest",
 					"KUBE_REPLICAS":       "3",
 					"KUBE_MEMORY_REQUEST": "256Mi",
 					"KUBE_MEMORY_LIMIT":   "512Mi",
-				}, agentConfig.Configs)
+				}, actorConfig.Configs)
 			default:
-				t.Fatalf("Unexpected agent name: %s", agentConfig.AgentName)
+				t.Fatalf("Unexpected actor name: %s", actorConfig.ActorName)
 			}
 		}
 	})
@@ -1323,14 +1323,14 @@ func TestPublishDeployment(t *testing.T) {
 		// Verify that UpdateDeploymentSet was called
 		require.Len(t, mockController.updatedDeploymentSets, 1)
 		updatedSet := mockController.updatedDeploymentSets[0]
-		require.Len(t, updatedSet, 1) // We expect 1 agent config
+		require.Len(t, updatedSet, 1) // We expect 1 actor config
 
 		// Verify the content of the updated deployment set
 		deployment := updatedSet[0]
-		require.Equal(t, "maos-agent1", deployment.Name)
+		require.Equal(t, "maos-actor1", deployment.Name)
 		require.Equal(t, map[string]string{"key": "value1"}, deployment.EnvVars)
 		require.NotEmpty(t, deployment.APIKey)
-		require.Equal(t, "agent1-image:latest", deployment.Image)
+		require.Equal(t, "actor1-image:latest", deployment.Image)
 		require.Equal(t, int32(2), deployment.Replicas)
 		require.Equal(t, "256Mi", deployment.MemoryRequest)
 		require.Equal(t, "512Mi", deployment.MemoryLimit)

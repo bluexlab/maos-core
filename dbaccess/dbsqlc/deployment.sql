@@ -44,9 +44,9 @@ RETURNING *;
 
 -- name: DeploymentInsertWithConfigSuite :one
 -- Create a new deployment with an associated config suite.
--- For each agent:
---   1. If the agent has an existing config, duplicate its latest config.
---   2. If the agent has no existing config, create a new config with default values.
+-- For each actor:
+--   1. If the actor has an existing config, duplicate its latest config.
+--   2. If the actor has no existing config, create a new config with default values.
 -- Associate all these new configs with the newly created deployment and config suite.
 WITH inserted_config_suite AS (
   INSERT INTO config_suites (created_by)
@@ -70,21 +70,21 @@ inserted_deployment AS (
   )
   RETURNING *
 ),
-agent_configs AS (
-  INSERT INTO configs (agent_id, config_suite_id, created_by, min_agent_version, content)
+actor_configs AS (
+  INSERT INTO configs (actor_id, config_suite_id, created_by, min_actor_version, content)
   SELECT
-    agents.id,
+    actors.id,
     (SELECT id FROM inserted_config_suite),
     @created_by::text,
     COALESCE(
-      (SELECT min_agent_version FROM configs WHERE agent_id = agents.id ORDER BY created_at DESC LIMIT 1),
+      (SELECT min_actor_version FROM configs WHERE actor_id = actors.id ORDER BY created_at DESC LIMIT 1),
       NULL
     ),
     COALESCE(
-      (SELECT content FROM configs WHERE agent_id = agents.id ORDER BY created_at DESC LIMIT 1),
+      (SELECT content FROM configs WHERE actor_id = actors.id ORDER BY created_at DESC LIMIT 1),
       '{}'::jsonb
     )
-  FROM agents
+  FROM actors
 )
 SELECT * FROM inserted_deployment;
 

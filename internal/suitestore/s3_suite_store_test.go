@@ -111,8 +111,8 @@ func TestS3SuiteStore_StartBackgroundScanner(t *testing.T) {
 	// Mock GetObject for both objects
 	suite1 := suitestore.ReferenceConfigSuite{
 		SuiteName: "suite1",
-		ConfigSuites: []suitestore.AgentConfig{
-			{AgentName: "agent1", Configs: map[string]string{"key": "value1"}},
+		ConfigSuites: []suitestore.ActorConfig{
+			{ActorName: "actor1", Configs: map[string]string{"key": "value1"}},
 		},
 	}
 	suite1Bytes, _ := json.Marshal(suite1)
@@ -125,8 +125,8 @@ func TestS3SuiteStore_StartBackgroundScanner(t *testing.T) {
 
 	suite2 := suitestore.ReferenceConfigSuite{
 		SuiteName: "suite2",
-		ConfigSuites: []suitestore.AgentConfig{
-			{AgentName: "agent2", Configs: map[string]string{"key": "value2"}},
+		ConfigSuites: []suitestore.ActorConfig{
+			{ActorName: "actor2", Configs: map[string]string{"key": "value2"}},
 		},
 	}
 	suite2Bytes, _ := json.Marshal(suite2)
@@ -168,8 +168,8 @@ func TestS3SuiteStore_WriteSuite(t *testing.T) {
 		1*time.Second,
 	)
 
-	suite := []suitestore.AgentConfig{
-		{AgentName: "test-agent", Configs: map[string]string{"key": "value"}},
+	suite := []suitestore.ActorConfig{
+		{ActorName: "test-actor", Configs: map[string]string{"key": "value"}},
 	}
 
 	expectedContent := suitestore.ReferenceConfigSuite{
@@ -207,8 +207,8 @@ func TestS3SuiteStore_WriteSuite_Error(t *testing.T) {
 		1*time.Second,
 	)
 
-	suite := []suitestore.AgentConfig{
-		{AgentName: "test-agent", Configs: map[string]string{"key": "value"}},
+	suite := []suitestore.ActorConfig{
+		{ActorName: "test-actor", Configs: map[string]string{"key": "value"}},
 	}
 
 	err := store.WriteSuite(context.Background(), suite)

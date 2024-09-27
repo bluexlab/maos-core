@@ -177,7 +177,7 @@ func (s *S3SuiteStore) readSingleSuite(ctx context.Context, key string) (Referen
 }
 
 // WriteSuite writes the given config suite to S3
-func (s *S3SuiteStore) WriteSuite(ctx context.Context, suite []AgentConfig) error {
+func (s *S3SuiteStore) WriteSuite(ctx context.Context, suite []ActorConfig) error {
 	s.logger.Info("Writing suite to S3", "bucketName", s.bucketName, "keyPrefix", s.keyPrefix, "displayName", s.displayName, "suite", suite)
 
 	output := ReferenceConfigSuite{

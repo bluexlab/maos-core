@@ -25,25 +25,25 @@ func TestUpdateConfig(t *testing.T) {
 		defer dbPool.Close()
 
 		user := "testuser"
-		agent := fixture.InsertAgent(t, ctx, dbPool, "TestAgent")
+		actor := fixture.InsertActor(t, ctx, dbPool, "TestActor")
 		configSuite := fixture.InsertConfigSuite(t, ctx, dbPool)
 		initialContent := map[string]string{
 			"key1": "value1",
 			"key2": "42",
 		}
-		config := fixture.InsertConfig2(t, ctx, dbPool, agent.ID, &configSuite.ID, user, initialContent)
+		config := fixture.InsertConfig2(t, ctx, dbPool, actor.ID, &configSuite.ID, user, initialContent)
 
 		updatedContent := map[string]string{
 			"key1": "newValue1",
 			"key3": "newValue3",
 		}
-		minAgentVersion := "2.0.0"
+		minActorVersion := "2.0.0"
 
 		request := api.AdminUpdateConfigRequestObject{
 			Id: config.ID,
 			Body: &api.AdminUpdateConfigJSONRequestBody{
 				Content:         &updatedContent,
-				MinAgentVersion: &minAgentVersion,
+				MinActorVersion: &minActorVersion,
 				User:            user,
 			},
 		}
@@ -55,11 +55,11 @@ func TestUpdateConfig(t *testing.T) {
 
 		jsonResponse := response.(api.AdminUpdateConfig200JSONResponse)
 		require.Equal(t, config.ID, jsonResponse.Data.Id)
-		require.Equal(t, config.AgentId, jsonResponse.Data.AgentId)
+		require.Equal(t, config.ActorId, jsonResponse.Data.ActorId)
 		require.Equal(t, updatedContent, jsonResponse.Data.Content)
-		require.Equal(t, minAgentVersion, *jsonResponse.Data.MinAgentVersion)
+		require.Equal(t, minActorVersion, *jsonResponse.Data.MinActorVersion)
 		require.Equal(t, user, jsonResponse.Data.CreatedBy)
-		require.Equal(t, agent.Name, jsonResponse.Data.AgentName)
+		require.Equal(t, actor.Name, jsonResponse.Data.ActorName)
 		require.NotZero(t, jsonResponse.Data.CreatedAt)
 	})
 
@@ -69,7 +69,7 @@ func TestUpdateConfig(t *testing.T) {
 		defer dbPool.Close()
 
 		user := "testuser"
-		agent := fixture.InsertAgent(t, ctx, dbPool, "TestAgent3")
+		actor := fixture.InsertActor(t, ctx, dbPool, "TestActor3")
 		configSuite := fixture.InsertConfigSuite(t, ctx, dbPool)
 
 		// Set the config suite as deployed
@@ -79,7 +79,7 @@ func TestUpdateConfig(t *testing.T) {
 		initialContent := map[string]string{
 			"key1": "value1",
 		}
-		config := fixture.InsertConfig2(t, ctx, dbPool, agent.ID, &configSuite.ID, user, initialContent)
+		config := fixture.InsertConfig2(t, ctx, dbPool, actor.ID, &configSuite.ID, user, initialContent)
 
 		updatedContent := map[string]string{
 			"key1": "newValue1",
@@ -123,9 +123,9 @@ func TestUpdateConfig(t *testing.T) {
 		accessor := dbaccess.New(dbPool)
 		defer dbPool.Close()
 
-		agent := fixture.InsertAgent(t, ctx, dbPool, "TestAgent2")
+		actor := fixture.InsertActor(t, ctx, dbPool, "TestActor2")
 		configSuite := fixture.InsertConfigSuite(t, ctx, dbPool)
-		config := fixture.InsertConfig2(t, ctx, dbPool, agent.ID, &configSuite.ID, "testuser", map[string]string{"key": "value"})
+		config := fixture.InsertConfig2(t, ctx, dbPool, actor.ID, &configSuite.ID, "testuser", map[string]string{"key": "value"})
 
 		request := api.AdminUpdateConfigRequestObject{
 			Id: config.ID,
@@ -148,7 +148,7 @@ func TestUpdateConfig(t *testing.T) {
 		accessor := dbaccess.New(dbPool)
 		defer dbPool.Close()
 
-		agent := fixture.InsertAgent(t, ctx, dbPool, "TestAgent3")
+		actor := fixture.InsertActor(t, ctx, dbPool, "TestActor3")
 
 		// Insert a deployment with reviewers
 		deployment, err := accessor.Querier().DeploymentInsertWithConfigSuite(ctx, accessor.Source(), &dbsqlc.DeploymentInsertWithConfigSuiteParams{
@@ -158,7 +158,7 @@ func TestUpdateConfig(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		config := fixture.InsertConfig2(t, ctx, dbPool, agent.ID, deployment.ConfigSuiteID, "creator", map[string]string{"key": "value"})
+		config := fixture.InsertConfig2(t, ctx, dbPool, actor.ID, deployment.ConfigSuiteID, "creator", map[string]string{"key": "value"})
 
 		updatedContent := map[string]string{"key": "newValue"}
 		unauthorizedUser := "unauthorized_user"
@@ -177,7 +177,7 @@ func TestUpdateConfig(t *testing.T) {
 		require.IsType(t, api.AdminUpdateConfig404Response{}, response)
 
 		// Verify that the config was not updated
-		updatedConfig, err := accessor.Querier().ConfigFindByAgentId(ctx, accessor.Source(), agent.ID)
+		updatedConfig, err := accessor.Querier().ConfigFindByActorId(ctx, accessor.Source(), actor.ID)
 		require.NoError(t, err)
 		require.Equal(t, `{"key": "value"}`, string(updatedConfig.Content))
 	})
@@ -187,7 +187,7 @@ func TestUpdateConfig(t *testing.T) {
 		accessor := dbaccess.New(dbPool)
 		defer dbPool.Close()
 
-		agent := fixture.InsertAgent(t, ctx, dbPool, "TestAgent3")
+		actor := fixture.InsertActor(t, ctx, dbPool, "TestActor3")
 
 		// Insert a deployment with reviewers
 		deployment, err := accessor.Querier().DeploymentInsertWithConfigSuite(ctx, accessor.Source(), &dbsqlc.DeploymentInsertWithConfigSuiteParams{
@@ -197,17 +197,17 @@ func TestUpdateConfig(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		config := fixture.InsertConfig2(t, ctx, dbPool, agent.ID, deployment.ConfigSuiteID, "creator", map[string]string{"key": "value"})
+		config := fixture.InsertConfig2(t, ctx, dbPool, actor.ID, deployment.ConfigSuiteID, "creator", map[string]string{"key": "value"})
 
 		updatedContent := map[string]string{"key": "newValue"}
 		user := "reviewer1"
-		minAgentVersion := "2.0.0"
+		minActorVersion := "2.0.0"
 
 		request := api.AdminUpdateConfigRequestObject{
 			Id: config.ID,
 			Body: &api.AdminUpdateConfigJSONRequestBody{
 				Content:         &updatedContent,
-				MinAgentVersion: &minAgentVersion,
+				MinActorVersion: &minActorVersion,
 				User:            user,
 			},
 		}
@@ -219,9 +219,9 @@ func TestUpdateConfig(t *testing.T) {
 
 		jsonResponse := response.(api.AdminUpdateConfig200JSONResponse)
 		require.Equal(t, config.ID, jsonResponse.Data.Id)
-		require.Equal(t, config.AgentId, jsonResponse.Data.AgentId)
+		require.Equal(t, config.ActorId, jsonResponse.Data.ActorId)
 		require.Equal(t, updatedContent, jsonResponse.Data.Content)
-		require.Equal(t, minAgentVersion, *jsonResponse.Data.MinAgentVersion)
+		require.Equal(t, minActorVersion, *jsonResponse.Data.MinActorVersion)
 		require.NotNil(t, jsonResponse.Data.UpdatedBy)
 		require.Equal(t, user, *jsonResponse.Data.UpdatedBy)
 		require.NotZero(t, jsonResponse.Data.UpdatedAt)
@@ -233,12 +233,12 @@ func TestUpdateConfig(t *testing.T) {
 		defer dbPool.Close()
 
 		user := "testuser"
-		agent := fixture.InsertAgent(t, ctx, dbPool, "TestAgent")
+		actor := fixture.InsertActor(t, ctx, dbPool, "TestActor")
 		configSuite := fixture.InsertConfigSuite(t, ctx, dbPool)
 		initialContent := map[string]string{
 			"KUBE_REPLICAS": "1",
 		}
-		config := fixture.InsertConfig2(t, ctx, dbPool, agent.ID, &configSuite.ID, user, initialContent)
+		config := fixture.InsertConfig2(t, ctx, dbPool, actor.ID, &configSuite.ID, user, initialContent)
 
 		invalidKubeConfig := map[string]string{
 			"KUBE_REPLICAS": "invalid",
@@ -266,12 +266,12 @@ func TestUpdateConfig(t *testing.T) {
 		defer dbPool.Close()
 
 		user := "testuser"
-		agent := fixture.InsertAgent(t, ctx, dbPool, "TestAgent")
+		actor := fixture.InsertActor(t, ctx, dbPool, "TestActor")
 		configSuite := fixture.InsertConfigSuite(t, ctx, dbPool)
 		initialContent := map[string]string{
 			"KUBE_REPLICAS": "1",
 		}
-		config := fixture.InsertConfig2(t, ctx, dbPool, agent.ID, &configSuite.ID, user, initialContent)
+		config := fixture.InsertConfig2(t, ctx, dbPool, actor.ID, &configSuite.ID, user, initialContent)
 
 		validKubeConfig := map[string]string{
 			"KUBE_REPLICAS":       "2",

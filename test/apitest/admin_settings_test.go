@@ -17,8 +17,8 @@ func TestAdminGetSettingsEndpoint(t *testing.T) {
 	ctx := context.Background()
 	server, accessor, _ := SetupHttpTestWithDb(t, ctx)
 
-	agent1 := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
-	fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent1.ID, 0, []string{"admin"})
+	actor1 := fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
+	fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", actor1.ID, 0, []string{"admin"})
 
 	t.Run("Valid admin token", func(t *testing.T) {
 		_, err := accessor.Querier().SettingUpdateSystem(ctx, accessor.Source(), json.RawMessage(`{"display_name":"test-maos", "deployment_approve_required":true}`))
@@ -39,7 +39,7 @@ func TestAdminGetSettingsEndpoint(t *testing.T) {
 	})
 
 	t.Run("Non-admin token", func(t *testing.T) {
-		resp, _ := GetHttp(t, server.URL+"/v1/admin/setting", "agent-token")
+		resp, _ := GetHttp(t, server.URL+"/v1/admin/setting", "actor-token")
 		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	})
 
@@ -54,8 +54,8 @@ func TestAdminUpdateSettingsEndpoint(t *testing.T) {
 
 	ctx := context.Background()
 	server, accessor, _ := SetupHttpTestWithDb(t, ctx)
-	agent1 := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
-	fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent1.ID, 0, []string{"admin"})
+	actor1 := fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
+	fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", actor1.ID, 0, []string{"admin"})
 
 	t.Run("Valid admin token", func(t *testing.T) {
 		updateBody := `{"display_name":"updated-maos", "deployment_approve_required":false}`
@@ -84,7 +84,7 @@ func TestAdminUpdateSettingsEndpoint(t *testing.T) {
 
 	t.Run("Non-admin token", func(t *testing.T) {
 		updateBody := `{"display_name":"unauthorized-update", "deployment_approve_required":true}`
-		resp, _ := PatchHttp(t, server.URL+"/v1/admin/setting", updateBody, "agent-token")
+		resp, _ := PatchHttp(t, server.URL+"/v1/admin/setting", updateBody, "actor-token")
 		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	})
 

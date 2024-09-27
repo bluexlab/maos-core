@@ -29,3 +29,4 @@ go.work
 .vscode
 coverage.html
 coverage.out
+.mise.toml

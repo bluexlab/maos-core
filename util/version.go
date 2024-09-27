@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func SerializeAgentVersion(version []int32) *string {
+func SerializeActorVersion(version []int32) *string {
 	if len(version) == 0 {
 		return nil
 	}
@@ -21,7 +21,7 @@ func SerializeAgentVersion(version []int32) *string {
 	return &result
 }
 
-func DeserializeAgentVersion(version *string) []int32 {
+func DeserializeActorVersion(version *string) []int32 {
 	if version == nil {
 		return nil
 	}

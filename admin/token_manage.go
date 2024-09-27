@@ -17,7 +17,7 @@ func ListApiTokens(ctx context.Context, accessor dbaccess.Accessor, request api.
 	page, _ := lo.Coalesce[*int](request.Params.Page, &defaultPage)
 	pageSize, _ := lo.Coalesce[*int](request.Params.PageSize, &defaultPageSize)
 	res, err := accessor.Querier().ApiTokenListByPage(ctx, accessor.Source(), &dbsqlc.ApiTokenListByPageParams{
-		AgentId:  request.Params.AgentId,
+		ActorId:  request.Params.ActorId,
 		Page:     max(int64(*page), 1),
 		PageSize: min(max(int64(*pageSize), 1), 100),
 	})
@@ -32,7 +32,7 @@ func ListApiTokens(ctx context.Context, accessor dbaccess.Accessor, request api.
 		func(row *dbsqlc.ApiTokenListByPageRow) api.ApiToken {
 			return api.ApiToken{
 				Id:          row.ID,
-				AgentId:     row.AgentId,
+				ActorId:     row.ActorId,
 				CreatedAt:   row.CreatedAt,
 				CreatedBy:   row.CreatedBy,
 				ExpireAt:    row.ExpireAt,
@@ -46,7 +46,7 @@ func ListApiTokens(ctx context.Context, accessor dbaccess.Accessor, request api.
 }
 
 func CreateApiToken(ctx context.Context, accessor dbaccess.Accessor, request api.AdminCreateApiTokenRequestObject) (api.AdminCreateApiTokenResponseObject, error) {
-	if request.Body.AgentId == 0 ||
+	if request.Body.ActorId == 0 ||
 		request.Body.CreatedBy == "" ||
 		request.Body.ExpireAt == 0 {
 		return api.AdminCreateApiToken400JSONResponse{
@@ -56,7 +56,7 @@ func CreateApiToken(ctx context.Context, accessor dbaccess.Accessor, request api
 
 	params := dbsqlc.ApiTokenInsertParams{
 		ID:          GenerateAPIToken(),
-		AgentId:     request.Body.AgentId,
+		ActorId:     request.Body.ActorId,
 		CreatedBy:   request.Body.CreatedBy,
 		Permissions: request.Body.Permissions,
 		ExpireAt:    request.Body.ExpireAt,
@@ -71,7 +71,7 @@ func CreateApiToken(ctx context.Context, accessor dbaccess.Accessor, request api
 
 	return api.AdminCreateApiToken201JSONResponse{
 		Id:          apiToken.ID,
-		AgentId:     apiToken.AgentId,
+		ActorId:     apiToken.ActorId,
 		CreatedAt:   apiToken.CreatedAt,
 		CreatedBy:   apiToken.CreatedBy,
 		ExpireAt:    apiToken.ExpireAt,

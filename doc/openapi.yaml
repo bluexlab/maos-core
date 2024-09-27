@@ -69,11 +69,11 @@ paths:
   /v1/admin/api_tokens/{id}:
     $ref: "./resources/admin/api_token.yaml"
 
-  /v1/admin/agents:
-    $ref: "./resources/admin/agents.yaml"
+  /v1/admin/actors:
+    $ref: "./resources/admin/actors.yaml"
 
-  /v1/admin/agents/{id}:
-    $ref: "./resources/admin/agent.yaml"
+  /v1/admin/actors/{id}:
+    $ref: "./resources/admin/actor.yaml"
 
   /v1/admin/deployments:
     $ref: "./resources/admin/deployments.yaml"

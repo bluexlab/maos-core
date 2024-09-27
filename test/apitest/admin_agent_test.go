@@ -15,7 +15,7 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/internal/testhelper"
 )
 
-func TestAdminListAgentEndpoint(t *testing.T) {
+func TestAdminListActorEndpoint(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -31,18 +31,18 @@ func TestAdminListAgentEndpoint(t *testing.T) {
 			token:          "admin-token",
 			queryParams:    "",
 			expectedStatus: http.StatusOK,
-			expectedBody:   `{"data":[{"id":1,"name":"agent1"},{"id":2,"name":"agent2"}],"meta":{"total_pages":1}}`,
+			expectedBody:   `{"data":[{"id":1,"name":"actor1"},{"id":2,"name":"actor2"}],"meta":{"total_pages":1}}`,
 		},
 		{
 			name:           "Valid admin token with pagination",
 			token:          "admin-token",
 			queryParams:    "?page=1&page_size=1",
 			expectedStatus: http.StatusOK,
-			expectedBody:   `{"data":[{"id":1,"name":"agent1"}],"meta":{"total_pages":2}}`,
+			expectedBody:   `{"data":[{"id":1,"name":"actor1"}],"meta":{"total_pages":2}}`,
 		},
 		{
 			name:           "Non-admin token",
-			token:          "agent-token",
+			token:          "actor-token",
 			queryParams:    "",
 			expectedStatus: http.StatusUnauthorized,
 			expectedBody:   "",
@@ -60,28 +60,28 @@ func TestAdminListAgentEndpoint(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server, accessor, _ := SetupHttpTestWithDb(t, ctx)
 
-			agent1 := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
-			agent2 := fixture.InsertAgent(t, ctx, accessor.Source(), "agent2")
-			fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent1.ID, 0, []string{"admin"})
-			fixture.InsertToken(t, ctx, accessor.Source(), "agent-token", agent2.ID, 0, []string{"user"})
+			actor1 := fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
+			actor2 := fixture.InsertActor(t, ctx, accessor.Source(), "actor2")
+			fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", actor1.ID, 0, []string{"admin"})
+			fixture.InsertToken(t, ctx, accessor.Source(), "actor-token", actor2.ID, 0, []string{"user"})
 
-			resp, resBody := GetHttp(t, server.URL+"/v1/admin/agents"+tt.queryParams, tt.token)
+			resp, resBody := GetHttp(t, server.URL+"/v1/admin/actors"+tt.queryParams, tt.token)
 			require.Equal(t, tt.expectedStatus, resp.StatusCode)
 
 			if tt.expectedStatus == http.StatusOK {
-				var response api.AdminListAgents200JSONResponse
+				var response api.AdminListActors200JSONResponse
 				err := json.Unmarshal([]byte(resBody), &response)
 				require.NoError(t, err)
 
-				expectedResponse := api.AdminListAgents200JSONResponse{}
+				expectedResponse := api.AdminListActors200JSONResponse{}
 				err = json.Unmarshal([]byte(tt.expectedBody), &expectedResponse)
 				require.NoError(t, err)
 
 				require.Equal(t, len(expectedResponse.Data), len(response.Data))
 				require.Equal(t, expectedResponse.Meta.TotalPages, response.Meta.TotalPages)
 
-				for i, expectedAgent := range expectedResponse.Data {
-					require.Equal(t, expectedAgent.Name, response.Data[i].Name)
+				for i, expectedActor := range expectedResponse.Data {
+					require.Equal(t, expectedActor.Name, response.Data[i].Name)
 					require.NotZero(t, response.Data[i].Id)
 					require.NotZero(t, response.Data[i].CreatedAt)
 				}
@@ -96,7 +96,7 @@ func TestAdminListAgentEndpoint(t *testing.T) {
 	}
 }
 
-func TestAdminCreateAgentEndpoint(t *testing.T) {
+func TestAdminCreateActorEndpoint(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -109,10 +109,10 @@ func TestAdminCreateAgentEndpoint(t *testing.T) {
 	}{
 		{
 			name:           "Valid admin token",
-			body:           `{"name":"new_agent"}`,
+			body:           `{"name":"new_actor"}`,
 			token:          "admin-token",
 			expectedStatus: http.StatusCreated,
-			expectedBody:   `{"id":3,"name":"new_agent"}`,
+			expectedBody:   `{"id":3,"name":"new_actor"}`,
 		},
 		{
 			name:           "Invalid body",
@@ -130,14 +130,14 @@ func TestAdminCreateAgentEndpoint(t *testing.T) {
 		},
 		{
 			name:           "Non-admin token",
-			body:           `{"name":"new_agent"}`,
-			token:          "agent-token",
+			body:           `{"name":"new_actor"}`,
+			token:          "actor-token",
 			expectedStatus: http.StatusUnauthorized,
 			expectedBody:   "",
 		},
 		{
 			name:           "Invalid token",
-			body:           `{"name":"new_agent"}`,
+			body:           `{"name":"new_actor"}`,
 			token:          "invalid_token",
 			expectedStatus: http.StatusUnauthorized,
 			expectedBody:   "",
@@ -148,35 +148,35 @@ func TestAdminCreateAgentEndpoint(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server, accessor, _ := SetupHttpTestWithDb(t, ctx)
 
-			agent1 := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
-			agent2 := fixture.InsertAgent(t, ctx, accessor.Source(), "agent2")
-			fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent1.ID, 0, []string{"admin"})
-			fixture.InsertToken(t, ctx, accessor.Source(), "agent-token", agent2.ID, 0, []string{"user"})
+			actor1 := fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
+			actor2 := fixture.InsertActor(t, ctx, accessor.Source(), "actor2")
+			fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", actor1.ID, 0, []string{"admin"})
+			fixture.InsertToken(t, ctx, accessor.Source(), "actor-token", actor2.ID, 0, []string{"user"})
 
-			resp, resBody := PostHttp(t, server.URL+"/v1/admin/agents", tt.body, tt.token)
+			resp, resBody := PostHttp(t, server.URL+"/v1/admin/actors", tt.body, tt.token)
 			require.Equal(t, tt.expectedStatus, resp.StatusCode)
 
 			if tt.expectedStatus == http.StatusCreated {
-				var response api.AdminCreateAgent201JSONResponse
+				var response api.AdminCreateActor201JSONResponse
 				err := json.Unmarshal([]byte(resBody), &response)
 				require.NoError(t, err)
 
 				require.NotZero(t, response.Id)
-				require.Equal(t, "new_agent", response.Name)
+				require.Equal(t, "new_actor", response.Name)
 				require.NotZero(t, response.CreatedAt)
 
-				// Verify the agent was actually created in the database
-				createdAgent, err := accessor.Querier().AgentFindById(ctx, accessor.Source(), response.Id)
+				// Verify the actor was actually created in the database
+				createdActor, err := accessor.Querier().ActorFindById(ctx, accessor.Source(), response.Id)
 				require.NoError(t, err)
-				require.NotNil(t, createdAgent)
-				require.Equal(t, "new_agent", createdAgent.Name)
+				require.NotNil(t, createdActor)
+				require.Equal(t, "new_actor", createdActor.Name)
 
 				// Verify the associated queue was created
-				queue, err := accessor.Querier().QueueFindById(ctx, accessor.Source(), createdAgent.QueueID)
+				queue, err := accessor.Querier().QueueFindById(ctx, accessor.Source(), createdActor.QueueID)
 				require.NoError(t, err)
 				require.NotNil(t, queue)
-				require.Equal(t, "new_agent", queue.Name)
-				require.Equal(t, []byte(`{"type": "agent"}`), queue.Metadata)
+				require.Equal(t, "new_actor", queue.Name)
+				require.Equal(t, []byte(`{"type": "actor"}`), queue.Metadata)
 			} else {
 				if tt.expectedBody != "" {
 					resJson := testhelper.JsonToMap(t, resBody)
@@ -188,41 +188,41 @@ func TestAdminCreateAgentEndpoint(t *testing.T) {
 	}
 }
 
-func TestAdminGetAgentEndpoint(t *testing.T) {
+func TestAdminGetActorEndpoint(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	tests := []struct {
 		name           string
-		agentID        int64
+		actorID        int64
 		token          string
 		expectedStatus int
 		expectedBody   string
 	}{
 		{
-			name:           "Valid admin token and existing agent",
-			agentID:        1,
+			name:           "Valid admin token and existing actor",
+			actorID:        1,
 			token:          "admin-token",
 			expectedStatus: http.StatusOK,
-			expectedBody:   `{"data":{"id":1,"name":"agent1"}}`,
+			expectedBody:   `{"data":{"id":1,"name":"actor1"}}`,
 		},
 		{
-			name:           "Valid admin token but non-existent agent",
-			agentID:        999,
+			name:           "Valid admin token but non-existent actor",
+			actorID:        999,
 			token:          "admin-token",
 			expectedStatus: http.StatusNotFound,
 			expectedBody:   "",
 		},
 		{
 			name:           "Non-admin token",
-			agentID:        1,
-			token:          "agent-token",
+			actorID:        1,
+			token:          "actor-token",
 			expectedStatus: http.StatusUnauthorized,
 			expectedBody:   "",
 		},
 		{
 			name:           "Invalid token",
-			agentID:        1,
+			actorID:        1,
 			token:          "invalid_token",
 			expectedStatus: http.StatusUnauthorized,
 			expectedBody:   "",
@@ -233,22 +233,22 @@ func TestAdminGetAgentEndpoint(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server, accessor, _ := SetupHttpTestWithDb(t, ctx)
 
-			agent1 := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
-			agent2 := fixture.InsertAgent(t, ctx, accessor.Source(), "agent2")
-			fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent1.ID, 0, []string{"admin"})
-			fixture.InsertToken(t, ctx, accessor.Source(), "agent-token", agent2.ID, 0, []string{"user"})
+			actor1 := fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
+			actor2 := fixture.InsertActor(t, ctx, accessor.Source(), "actor2")
+			fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", actor1.ID, 0, []string{"admin"})
+			fixture.InsertToken(t, ctx, accessor.Source(), "actor-token", actor2.ID, 0, []string{"user"})
 
-			resp, resBody := GetHttp(t, fmt.Sprintf("%s/v1/admin/agents/%d", server.URL, tt.agentID), tt.token)
+			resp, resBody := GetHttp(t, fmt.Sprintf("%s/v1/admin/actors/%d", server.URL, tt.actorID), tt.token)
 			require.Equal(t, tt.expectedStatus, resp.StatusCode)
 
 			switch tt.expectedStatus {
 			case http.StatusOK:
-				var response api.AdminGetAgent200JSONResponse
+				var response api.AdminGetActor200JSONResponse
 				err := json.Unmarshal([]byte(resBody), &response)
 				require.NoError(t, err)
 
-				require.Equal(t, tt.agentID, response.Data.Id)
-				require.Equal(t, "agent1", response.Data.Name)
+				require.Equal(t, tt.actorID, response.Data.Id)
+				require.Equal(t, "actor1", response.Data.Name)
 				require.NotZero(t, response.Data.CreatedAt)
 
 			case http.StatusNotFound:
@@ -268,35 +268,35 @@ func TestAdminGetAgentEndpoint(t *testing.T) {
 	}
 }
 
-func TestAdminUpdateAgentEndpoint(t *testing.T) {
+func TestAdminUpdateActorEndpoint(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	tests := []struct {
 		name           string
-		agentID        int64
+		actorID        int64
 		body           string
 		token          string
 		expectedStatus int
 		expectedBody   string
 	}{
 		{
-			name:           "Valid admin token and existing agent",
-			agentID:        1,
-			body:           `{"name":"updated_agent"}`,
+			name:           "Valid admin token and existing actor",
+			actorID:        1,
+			body:           `{"name":"updated_actor"}`,
 			token:          "admin-token",
 			expectedStatus: http.StatusOK,
-			expectedBody:   `{"data":{"id":1,"name":"updated_agent"}}`,
+			expectedBody:   `{"data":{"id":1,"name":"updated_actor"}}`,
 		},
 		{
-			name:           "Valid admin token but non-existent agent",
-			agentID:        999,
-			body:           `{"name":"updated_agent"}`,
+			name:           "Valid admin token but non-existent actor",
+			actorID:        999,
+			body:           `{"name":"updated_actor"}`,
 			token:          "admin-token",
 			expectedStatus: http.StatusNotFound,
 		},
 		{
 			name:           "Invalid body",
-			agentID:        1,
+			actorID:        1,
 			body:           `{"invalid_json"}`,
 			token:          "admin-token",
 			expectedStatus: http.StatusBadRequest,
@@ -304,16 +304,16 @@ func TestAdminUpdateAgentEndpoint(t *testing.T) {
 		},
 		{
 			name:           "Non-admin token",
-			agentID:        1,
-			body:           `{"name":"updated_agent"}`,
-			token:          "agent-token",
+			actorID:        1,
+			body:           `{"name":"updated_actor"}`,
+			token:          "actor-token",
 			expectedStatus: http.StatusUnauthorized,
 			expectedBody:   "",
 		},
 		{
 			name:           "Invalid token",
-			agentID:        1,
-			body:           `{"name":"updated_agent"}`,
+			actorID:        1,
+			body:           `{"name":"updated_actor"}`,
 			token:          "invalid_token",
 			expectedStatus: http.StatusUnauthorized,
 			expectedBody:   "",
@@ -324,29 +324,29 @@ func TestAdminUpdateAgentEndpoint(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server, accessor, _ := SetupHttpTestWithDb(t, ctx)
 
-			agent1 := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
-			agent2 := fixture.InsertAgent(t, ctx, accessor.Source(), "agent2")
-			fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent1.ID, 0, []string{"admin"})
-			fixture.InsertToken(t, ctx, accessor.Source(), "agent-token", agent2.ID, 0, []string{"user"})
+			actor1 := fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
+			actor2 := fixture.InsertActor(t, ctx, accessor.Source(), "actor2")
+			fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", actor1.ID, 0, []string{"admin"})
+			fixture.InsertToken(t, ctx, accessor.Source(), "actor-token", actor2.ID, 0, []string{"user"})
 
-			resp, resBody := PatchHttp(t, fmt.Sprintf("%s/v1/admin/agents/%d", server.URL, tt.agentID), tt.body, tt.token)
+			resp, resBody := PatchHttp(t, fmt.Sprintf("%s/v1/admin/actors/%d", server.URL, tt.actorID), tt.body, tt.token)
 			require.Equal(t, tt.expectedStatus, resp.StatusCode)
 
 			switch tt.expectedStatus {
 			case http.StatusOK:
-				var response api.AdminUpdateAgent200JSONResponse
+				var response api.AdminUpdateActor200JSONResponse
 				err := json.Unmarshal([]byte(resBody), &response)
 				require.NoError(t, err)
 
-				require.Equal(t, tt.agentID, response.Data.Id)
-				require.Equal(t, "updated_agent", response.Data.Name)
+				require.Equal(t, tt.actorID, response.Data.Id)
+				require.Equal(t, "updated_actor", response.Data.Name)
 				require.NotZero(t, response.Data.CreatedAt)
 
-				// Verify the agent was actually updated in the database
-				updatedAgent, err := accessor.Querier().AgentFindById(ctx, accessor.Source(), tt.agentID)
+				// Verify the actor was actually updated in the database
+				updatedActor, err := accessor.Querier().ActorFindById(ctx, accessor.Source(), tt.actorID)
 				require.NoError(t, err)
-				require.NotNil(t, updatedAgent)
-				require.Equal(t, "updated_agent", updatedAgent.Name)
+				require.NotNil(t, updatedActor)
+				require.Equal(t, "updated_actor", updatedActor.Name)
 
 			case http.StatusNotFound, http.StatusBadRequest, http.StatusUnauthorized:
 				if tt.expectedBody != "" {
@@ -362,55 +362,55 @@ func TestAdminUpdateAgentEndpoint(t *testing.T) {
 	}
 }
 
-func TestAdminDeleteAgentEndpoint(t *testing.T) {
+func TestAdminDeleteActorEndpoint(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	tests := []struct {
 		name           string
-		agentID        int64
+		actorID        int64
 		token          string
 		setupFunc      func(context.Context, *testing.T, dbaccess.Accessor, int64)
 		expectedStatus int
 		expectedBody   string
 	}{
 		{
-			name:           "Valid admin token and existing agent",
-			agentID:        1,
+			name:           "Valid admin token and existing actor",
+			actorID:        1,
 			token:          "admin-token",
 			expectedStatus: http.StatusOK,
 			expectedBody:   `{"data":{}}`,
 		},
 		{
-			name:           "Valid admin token but non-existent agent",
-			agentID:        999,
+			name:           "Valid admin token but non-existent actor",
+			actorID:        999,
 			token:          "admin-token",
 			expectedStatus: http.StatusNotFound,
 			expectedBody:   "",
 		},
 		{
 			name:           "Non-admin token",
-			agentID:        1,
-			token:          "agent-token",
+			actorID:        1,
+			token:          "actor-token",
 			expectedStatus: http.StatusUnauthorized,
 			expectedBody:   "",
 		},
 		{
 			name:           "Invalid token",
-			agentID:        1,
+			actorID:        1,
 			token:          "invalid_token",
 			expectedStatus: http.StatusUnauthorized,
 			expectedBody:   "",
 		},
 		{
-			name:    "Agent with associated configs",
-			agentID: 1,
+			name:    "Actor with associated configs",
+			actorID: 1,
 			token:   "admin-token",
-			setupFunc: func(ctx context.Context, t *testing.T, accessor dbaccess.Accessor, agentID int64) {
-				fixture.InsertConfig(t, ctx, accessor.Source(), agentID, map[string]string{"key": "value"})
+			setupFunc: func(ctx context.Context, t *testing.T, accessor dbaccess.Accessor, actorID int64) {
+				fixture.InsertConfig(t, ctx, accessor.Source(), actorID, map[string]string{"key": "value"})
 			},
 			expectedStatus: http.StatusConflict,
-			expectedBody:   "Agent has associated configs",
+			expectedBody:   "Actor has associated configs",
 		},
 	}
 
@@ -418,21 +418,21 @@ func TestAdminDeleteAgentEndpoint(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server, accessor, _ := SetupHttpTestWithDb(t, ctx)
 
-			fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
-			adminAgent := fixture.InsertAgent(t, ctx, accessor.Source(), "agent2")
-			fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", adminAgent.ID, 0, []string{"admin"})
+			fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
+			adminActor := fixture.InsertActor(t, ctx, accessor.Source(), "actor2")
+			fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", adminActor.ID, 0, []string{"admin"})
 
 			if tt.setupFunc != nil {
-				tt.setupFunc(ctx, t, accessor, tt.agentID)
+				tt.setupFunc(ctx, t, accessor, tt.actorID)
 			}
 
-			resp, resBody := DeleteHttp(t, fmt.Sprintf("%s/v1/admin/agents/%d", server.URL, tt.agentID), tt.token)
+			resp, resBody := DeleteHttp(t, fmt.Sprintf("%s/v1/admin/actors/%d", server.URL, tt.actorID), tt.token)
 			require.Equal(t, tt.expectedStatus, resp.StatusCode)
 
 			switch tt.expectedStatus {
 			case http.StatusOK:
-				// Verify the agent was actually deleted from the database
-				_, err := accessor.Querier().AgentFindById(ctx, accessor.Source(), tt.agentID)
+				// Verify the actor was actually deleted from the database
+				_, err := accessor.Querier().ActorFindById(ctx, accessor.Source(), tt.actorID)
 				require.Error(t, err)
 				require.IsType(t, err, sql.ErrNoRows)
 

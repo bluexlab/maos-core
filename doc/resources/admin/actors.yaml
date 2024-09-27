@@ -1,6 +1,6 @@
 get:
-  summary: List Agents
-  operationId: adminListAgents
+  summary: List Actors
+  operationId: adminListActors
   tags:
     - Admin
   parameters:
@@ -18,7 +18,7 @@ get:
       name: name
       schema:
         type: string
-      description: Filter by agent ID
+      description: Filter by actor ID
   responses:
     "200":
       description: Successful response
@@ -30,7 +30,7 @@ get:
               data:
                 type: array
                 items:
-                  $ref: "../../schemas/Agent.yaml"
+                  $ref: "../../schemas/Actor.yaml"
               meta:
                 type: object
                 properties:
@@ -47,8 +47,8 @@ get:
       $ref: "../../responses/500.yaml"
 
 post:
-  summary: Create a new Agent
-  operationId: adminCreateAgent
+  summary: Create a new Actor
+  operationId: adminCreateActor
   tags:
     - Admin
   requestBody:
@@ -56,19 +56,19 @@ post:
     content:
       application/json:
         schema:
-          $ref: "../../schemas/AgentCreate.yaml"
+          $ref: "../../schemas/ActorCreate.yaml"
         example:
-          name: "agent-16888"
+          name: "actor-16888"
   responses:
     "201":
       description: Successfully created
       content:
         application/json:
           schema:
-            $ref: "../../schemas/Agent.yaml"
+            $ref: "../../schemas/Actor.yaml"
           example:
             id: 16888
-            name: "agent-16888"
+            name: "actor-16888"
             created_at: 1640995200
     "401":
       description: Unauthorized

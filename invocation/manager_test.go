@@ -30,19 +30,19 @@ func TestInsertInvocation(t *testing.T) {
 		accessor := dbaccess.New(dbPool)
 		manager := invocation.NewManager(testhelper.Logger(t), accessor)
 
-		agent := fixture.InsertAgent(t, ctx, dbPool, "agent1")
+		actor := fixture.InsertActor(t, ctx, dbPool, "actor1")
 
 		metadata := map[string]interface{}{"kind": "test"}
 		payload := map[string]interface{}{"key1": 16888, "key2": map[string]interface{}{"key3": "value3"}}
 
 		request := api.CreateInvocationAsyncRequestObject{
 			Body: &api.CreateInvocationAsyncJSONRequestBody{
-				Agent:   agent.Name,
+				Actor:   actor.Name,
 				Meta:    metadata,
 				Payload: payload,
 			},
 		}
-		response, err := manager.InsertInvocation(ctx, agent.ID, request)
+		response, err := manager.InsertInvocation(ctx, actor.ID, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.CreateInvocationAsync201JSONResponse{}, response)
@@ -82,7 +82,7 @@ func TestInsertInvocation(t *testing.T) {
 		accessor := dbaccess.New(dbPool)
 		manager := invocation.NewManager(testhelper.Logger(t), accessor)
 
-		callerAgentID := int64(1)
+		callerActorID := int64(1)
 
 		invalidPayload := map[string]interface{}{
 			"key": make(chan int), // channels are not JSON-serializable
@@ -95,30 +95,30 @@ func TestInsertInvocation(t *testing.T) {
 			},
 		}
 
-		response, err := manager.InsertInvocation(ctx, callerAgentID, request)
+		response, err := manager.InsertInvocation(ctx, callerActorID, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.CreateInvocationAsync500JSONResponse{}, response)
 		assert.Contains(t, response.(api.CreateInvocationAsync500JSONResponse).Error, "Failed to marshal payload")
 	})
 
-	// Test case 3: Invalid agent name
-	t.Run("Invalid agent name", func(t *testing.T) {
+	// Test case 3: Invalid actor name
+	t.Run("Invalid actor name", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
 		accessor := dbaccess.New(dbPool)
 		manager := invocation.NewManager(testhelper.Logger(t), accessor)
 
-		agent := fixture.InsertAgent(t, ctx, dbPool, "agent1")
+		actor := fixture.InsertActor(t, ctx, dbPool, "actor1")
 
 		request := api.CreateInvocationAsyncRequestObject{
 			Body: &api.CreateInvocationAsyncJSONRequestBody{
-				Agent:   "invalid-agent",
+				Actor:   "invalid-actor",
 				Meta:    map[string]interface{}{"kind": "test"},
 				Payload: map[string]interface{}{},
 			},
 		}
-		response, err := manager.InsertInvocation(ctx, agent.ID, request)
+		response, err := manager.InsertInvocation(ctx, actor.ID, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.CreateInvocationAsync400JSONResponse{}, response)
@@ -132,7 +132,7 @@ func TestInsertInvocation(t *testing.T) {
 		accessor := dbaccess.New(dbPool)
 		manager := invocation.NewManager(testhelper.Logger(t), accessor)
 
-		callerAgentID := int64(1)
+		callerActorID := int64(1)
 
 		request := api.CreateInvocationAsyncRequestObject{
 			Body: &api.CreateInvocationAsyncJSONRequestBody{
@@ -142,7 +142,7 @@ func TestInsertInvocation(t *testing.T) {
 		}
 
 		dbPool.Close() // Simulate a database error by closing the connection
-		_, err := manager.InsertInvocation(ctx, callerAgentID, request)
+		_, err := manager.InsertInvocation(ctx, callerActorID, request)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "closed pool")

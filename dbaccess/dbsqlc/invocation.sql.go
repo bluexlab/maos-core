@@ -39,15 +39,15 @@ func (q *Queries) InvocationFindById(ctx context.Context, db DBTX, id int64) (*I
 const invocationGetAvailable = `-- name: InvocationGetAvailable :many
 WITH locked_invocations AS (
 	SELECT
-		id, state, queue_id, attempted_at, created_at, finalized_at, priority, payload, errors, result, metadata, tags, attempted_by
+			id, state, queue_id, attempted_at, created_at, finalized_at, priority, payload, errors, result, metadata, tags, attempted_by
 	FROM
-		invocations
+			invocations
 	WHERE
-		state = 'available'::invocation_state
-		AND queue_id = $2::bigint
+			state = 'available'::invocation_state
+			AND queue_id = $2::bigint
 	ORDER BY
-		priority ASC,
-		id ASC
+			priority ASC,
+			id ASC
 	LIMIT $3::integer
 	FOR UPDATE
 	SKIP LOCKED
@@ -107,9 +107,9 @@ func (q *Queries) InvocationGetAvailable(ctx context.Context, db DBTX, arg *Invo
 }
 
 const invocationInsert = `-- name: InvocationInsert :one
-WITH agent_queue AS (
+WITH actor_queue AS (
 	SELECT queue_id
-	FROM agents
+	FROM actors
 	WHERE name = $8::text
 )
 INSERT INTO invocations(
@@ -124,14 +124,14 @@ INSERT INTO invocations(
 )
 SELECT
 	$1::invocation_state,
-	agent_queue.queue_id,
+	actor_queue.queue_id,
 	coalesce($2::bigint, EXTRACT(EPOCH FROM NOW())),
 	$3,
 	$4::smallint,
 	$5::jsonb,
 	coalesce($6::jsonb, '{}'),
 	coalesce($7::varchar(255)[], '{}')
-FROM agent_queue
+FROM actor_queue
 RETURNING id, queue_id
 `
 
@@ -143,7 +143,7 @@ type InvocationInsertParams struct {
 	Payload     []byte
 	Metadata    []byte
 	Tags        []string
-	AgentName   string
+	ActorName   string
 }
 
 type InvocationInsertRow struct {
@@ -160,7 +160,7 @@ func (q *Queries) InvocationInsert(ctx context.Context, db DBTX, arg *Invocation
 		arg.Payload,
 		arg.Metadata,
 		arg.Tags,
-		arg.AgentName,
+		arg.ActorName,
 	)
 	var i InvocationInsertRow
 	err := row.Scan(&i.ID, &i.QueueID)

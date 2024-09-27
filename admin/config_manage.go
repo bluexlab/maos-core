@@ -22,15 +22,15 @@ func UpdateConfig(
 	logger.Info("AdminUpdateConfig",
 		"id", request.Id,
 		"user", request.Body.User,
-		"min_agent_version", request.Body.MinAgentVersion,
+		"min_actor_version", request.Body.MinActorVersion,
 		"content", request.Body.Content,
 	)
 
 	contentJSON, err := json.Marshal(request.Body.Content)
 	if err != nil {
-		logger.Error("Cannot marshal agent config content", "error", err)
+		logger.Error("Cannot marshal actor config content", "error", err)
 		return api.AdminUpdateConfig500JSONResponse{
-			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot marshal agent config content: %v", err)},
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot marshal actor config content: %v", err)},
 		}, nil
 	}
 
@@ -42,11 +42,11 @@ func UpdateConfig(
 		}, nil
 	}
 
-	minAgentVersion := util.DeserializeAgentVersion(request.Body.MinAgentVersion)
-	if minAgentVersion == nil && request.Body.MinAgentVersion != nil {
-		logger.Error("Invalid agent version", "version", request.Body.MinAgentVersion)
+	minActorVersion := util.DeserializeActorVersion(request.Body.MinActorVersion)
+	if minActorVersion == nil && request.Body.MinActorVersion != nil {
+		logger.Error("Invalid actor version", "version", request.Body.MinActorVersion)
 		return api.AdminUpdateConfig400JSONResponse{
-			N400JSONResponse: api.N400JSONResponse{Error: "Invalid agent version"},
+			N400JSONResponse: api.N400JSONResponse{Error: "Invalid actor version"},
 		}, nil
 	}
 
@@ -57,7 +57,7 @@ func UpdateConfig(
 			ID:              request.Id,
 			Updater:         request.Body.User,
 			Content:         contentJSON,
-			MinAgentVersion: minAgentVersion,
+			MinActorVersion: minActorVersion,
 		})
 
 	if err != nil {
@@ -86,10 +86,10 @@ func UpdateConfig(
 	return api.AdminUpdateConfig200JSONResponse{
 		Data: api.Config{
 			Id:              updatedConfig.ID,
-			AgentId:         updatedConfig.AgentId,
-			AgentName:       updatedConfig.AgentName,
+			ActorId:         updatedConfig.ActorId,
+			ActorName:       updatedConfig.ActorName,
 			Content:         content,
-			MinAgentVersion: util.SerializeAgentVersion(updatedConfig.MinAgentVersion),
+			MinActorVersion: util.SerializeActorVersion(updatedConfig.MinActorVersion),
 			CreatedAt:       updatedConfig.CreatedAt,
 			CreatedBy:       updatedConfig.CreatedBy,
 			UpdatedAt:       updatedConfig.UpdatedAt,

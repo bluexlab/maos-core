@@ -1,6 +1,6 @@
 type: object
 properties:
-  agent_name:
+  actor_name:
     type: string
   config_suites:
     type: array
@@ -18,5 +18,5 @@ properties:
         - configs
 
 required:
-  - agent_name
+  - actor_name
   - config_suites

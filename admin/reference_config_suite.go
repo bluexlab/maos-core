@@ -20,10 +20,10 @@ func ListReferenceConfigSuites(ctx context.Context, logger *slog.Logger, accesso
 		}, nil
 	}
 
-	agentSuites := make(map[string]api.ReferenceConfigSuite)
+	actorSuites := make(map[string]api.ReferenceConfigSuite)
 	for _, suite := range suites {
 		var content []struct {
-			AgentName string            `json:"agent_name"`
+			ActorName string            `json:"actor_name"`
 			Configs   map[string]string `json:"configs"`
 		}
 
@@ -34,9 +34,9 @@ func ListReferenceConfigSuites(ctx context.Context, logger *slog.Logger, accesso
 		}
 
 		for _, cont := range content {
-			agentSuites[cont.AgentName] = api.ReferenceConfigSuite{
-				AgentName: cont.AgentName,
-				ConfigSuites: append(agentSuites[cont.AgentName].ConfigSuites, struct {
+			actorSuites[cont.ActorName] = api.ReferenceConfigSuite{
+				ActorName: cont.ActorName,
+				ConfigSuites: append(actorSuites[cont.ActorName].ConfigSuites, struct {
 					Configs   map[string]string `json:"configs"`
 					SuiteName string            `json:"suite_name"`
 				}{
@@ -47,10 +47,10 @@ func ListReferenceConfigSuites(ctx context.Context, logger *slog.Logger, accesso
 		}
 	}
 
-	jsonData, err := json.Marshal(agentSuites)
+	jsonData, err := json.Marshal(actorSuites)
 	logger.Info("ListReferenceConfigSuites", "data", string(jsonData), "error", err)
 	return api.AdminListReferenceConfigSuites200JSONResponse{
-		Data: lo.Values(agentSuites),
+		Data: lo.Values(actorSuites),
 	}, nil
 }
 

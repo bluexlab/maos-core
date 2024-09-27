@@ -102,8 +102,8 @@ func (m *Manager) Close(ctx context.Context) error {
 	return nil
 }
 
-func (m *Manager) InsertInvocation(ctx context.Context, callerAgentId int64, request api.CreateInvocationAsyncRequestObject) (api.CreateInvocationAsyncResponseObject, error) {
-	m.logger.Debug("InsertInvocation start", "callerAgentId", callerAgentId, "requestBody", request.Body)
+func (m *Manager) InsertInvocation(ctx context.Context, callerActorId int64, request api.CreateInvocationAsyncRequestObject) (api.CreateInvocationAsyncResponseObject, error) {
+	m.logger.Debug("InsertInvocation start", "callerActorId", callerActorId, "requestBody", request.Body)
 
 	if len(request.Body.Meta) == 0 {
 		return api.CreateInvocationAsync400JSONResponse{
@@ -128,7 +128,7 @@ func (m *Manager) InsertInvocation(ctx context.Context, callerAgentId int64, req
 	}
 
 	invocation, err := m.accessor.Querier().InvocationInsert(ctx, m.accessor.Source(), &dbsqlc.InvocationInsertParams{
-		AgentName: request.Body.Agent,
+		ActorName: request.Body.Actor,
 		State:     "available",
 		Metadata:  metadata,
 		Priority:  1,
@@ -137,7 +137,7 @@ func (m *Manager) InsertInvocation(ctx context.Context, callerAgentId int64, req
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return api.CreateInvocationAsync400JSONResponse{
-				N400JSONResponse: api.N400JSONResponse{Error: "agent not found"},
+				N400JSONResponse: api.N400JSONResponse{Error: "actor not found"},
 			}, nil
 		}
 		return nil, err
@@ -155,8 +155,8 @@ func (m *Manager) InsertInvocation(ctx context.Context, callerAgentId int64, req
 	}, nil
 }
 
-func (m *Manager) GetInvocationById(ctx context.Context, callerAgentId int64, request api.GetInvocationByIdRequestObject) (api.GetInvocationByIdResponseObject, error) {
-	m.logger.Debug("GetInvocationById start", "callerAgentId", callerAgentId, "id", request.Id, "wait", request.Params.Wait)
+func (m *Manager) GetInvocationById(ctx context.Context, callerActorId int64, request api.GetInvocationByIdRequestObject) (api.GetInvocationByIdResponseObject, error) {
+	m.logger.Debug("GetInvocationById start", "callerActorId", callerActorId, "id", request.Id, "wait", request.Params.Wait)
 
 	invocationId, err := strconv.ParseInt(request.Id, 10, 64)
 	if err != nil {
@@ -239,8 +239,8 @@ func (m *Manager) GetInvocationById(ctx context.Context, callerAgentId int64, re
 	}
 }
 
-func (m *Manager) ExecuteInvocationSync(ctx context.Context, callerAgentId int64, request api.CreateInvocationSyncRequestObject) (api.CreateInvocationSyncResponseObject, error) {
-	m.logger.Info("ExecuteInvocationSync start", "callerAgentId", callerAgentId, "requestBody", request.Body)
+func (m *Manager) ExecuteInvocationSync(ctx context.Context, callerActorId int64, request api.CreateInvocationSyncRequestObject) (api.CreateInvocationSyncResponseObject, error) {
+	m.logger.Info("ExecuteInvocationSync start", "callerActorId", callerActorId, "requestBody", request.Body)
 
 	if len(request.Body.Meta) == 0 {
 		return api.CreateInvocationSync400JSONResponse{
@@ -280,7 +280,7 @@ func (m *Manager) ExecuteInvocationSync(ctx context.Context, callerAgentId int64
 	defer responseSub.Unlisten(ctx)
 
 	invocation, err := m.accessor.Querier().InvocationInsert(ctx, m.accessor.Source(), &dbsqlc.InvocationInsertParams{
-		AgentName: request.Body.Agent,
+		ActorName: request.Body.Actor,
 		State:     "available",
 		Metadata:  metadata,
 		Priority:  1,
@@ -289,7 +289,7 @@ func (m *Manager) ExecuteInvocationSync(ctx context.Context, callerAgentId int64
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return api.CreateInvocationSync400JSONResponse{
-				N400JSONResponse: api.N400JSONResponse{Error: "agent not found"},
+				N400JSONResponse: api.N400JSONResponse{Error: "actor not found"},
 			}, nil
 		}
 		return nil, err
@@ -342,8 +342,8 @@ func (m *Manager) ExecuteInvocationSync(ctx context.Context, callerAgentId int64
 	}
 }
 
-func (m *Manager) ReturnInvocationResponse(ctx context.Context, callerAgentId int64, request api.ReturnInvocationResponseRequestObject) (api.ReturnInvocationResponseResponseObject, error) {
-	m.logger.Info("ReturnInvocationResponse start", "callerAgentId", callerAgentId, "requestBody", request.Body.Result)
+func (m *Manager) ReturnInvocationResponse(ctx context.Context, callerActorId int64, request api.ReturnInvocationResponseRequestObject) (api.ReturnInvocationResponseResponseObject, error) {
+	m.logger.Info("ReturnInvocationResponse start", "callerActorId", callerActorId, "requestBody", request.Body.Result)
 
 	// Find the invocation
 	invocationId, err := strconv.ParseInt(request.InvokeId, 10, 64)
@@ -362,7 +362,7 @@ func (m *Manager) ReturnInvocationResponse(ctx context.Context, callerAgentId in
 	invocation, err := m.accessor.Querier().InvocationSetCompleteIfRunning(ctx, m.accessor.Source(), &dbsqlc.InvocationSetCompleteIfRunningParams{
 		ID:          invocationId,
 		FinalizedAt: time.Now().Unix(),
-		FinalizerID: callerAgentId,
+		FinalizerID: callerActorId,
 		Result:      result,
 	})
 
@@ -391,8 +391,8 @@ func (m *Manager) ReturnInvocationResponse(ctx context.Context, callerAgentId in
 	return api.ReturnInvocationResponse200Response{}, nil
 }
 
-func (m *Manager) ReturnInvocationError(ctx context.Context, callerAgentId int64, request api.ReturnInvocationErrorRequestObject) (api.ReturnInvocationErrorResponseObject, error) {
-	m.logger.Info("ReturnInvocationError start", "callerAgentId", callerAgentId, "requestBody", request.Body.Errors)
+func (m *Manager) ReturnInvocationError(ctx context.Context, callerActorId int64, request api.ReturnInvocationErrorRequestObject) (api.ReturnInvocationErrorResponseObject, error) {
+	m.logger.Info("ReturnInvocationError start", "callerActorId", callerActorId, "requestBody", request.Body.Errors)
 
 	// Find the invocation
 	invocationId, err := strconv.ParseInt(request.InvokeId, 10, 64)
@@ -411,7 +411,7 @@ func (m *Manager) ReturnInvocationError(ctx context.Context, callerAgentId int64
 	invocation, err := m.accessor.Querier().InvocationSetFailureIfRunning(ctx, m.accessor.Source(), &dbsqlc.InvocationSetFailureIfRunningParams{
 		ID:          invocationId,
 		FinalizedAt: time.Now().Unix(),
-		FinalizerID: callerAgentId,
+		FinalizerID: callerActorId,
 		Errors:      errors,
 	})
 
@@ -440,12 +440,12 @@ func (m *Manager) ReturnInvocationError(ctx context.Context, callerAgentId int64
 	return api.ReturnInvocationError200Response{}, nil
 }
 
-func (m *Manager) GetNextInvocation(ctx context.Context, callerAgentId int64, queueId int64, request api.GetNextInvocationRequestObject) (api.GetNextInvocationResponseObject, error) {
-	m.logger.Info("GetNextInvocation start", "callerAgentId", callerAgentId, "requestParams", request.Params)
+func (m *Manager) GetNextInvocation(ctx context.Context, callerActorId int64, queueId int64, request api.GetNextInvocationRequestObject) (api.GetNextInvocationResponseObject, error) {
+	m.logger.Info("GetNextInvocation start", "callerActorId", callerActorId, "requestParams", request.Params)
 
 	getAvailble := func() (*dbsqlc.Invocation, error) {
 		invocations, err := m.accessor.Querier().InvocationGetAvailable(ctx, m.accessor.Source(), &dbsqlc.InvocationGetAvailableParams{
-			AttemptedBy: callerAgentId,
+			AttemptedBy: callerActorId,
 			QueueID:     queueId,
 			Max:         1,
 		})

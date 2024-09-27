@@ -14,7 +14,4 @@ echo "INFO: Waiting for Postgres to start..."
 while ! nc -z ${DATABASE_HOST} ${DATABASE_PORT}; do sleep 0.1; done
 echo "INFO: Postgres is up"
 
-# sleep one more second to prevent from "pq: the database system is starting up" issue
-sleep 1
-
 exec "$@"

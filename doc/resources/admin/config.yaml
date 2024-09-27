@@ -20,7 +20,7 @@ patch:
           properties:
             user:
               type: string
-            min_agent_version:
+            min_actor_version:
               type: string
             content:
               type: object

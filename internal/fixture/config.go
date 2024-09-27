@@ -8,21 +8,21 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess/dbsqlc"
 )
 
-func InsertConfig(t *testing.T, ctx context.Context, ds DataSource, agentId int64, content map[string]string) *dbsqlc.Config {
+func InsertConfig(t *testing.T, ctx context.Context, ds DataSource, actorId int64, content map[string]string) *dbsqlc.Config {
 	query := dbsqlc.New()
 	contentBytes, err := json.Marshal(content)
 	if err != nil {
 		t.Fatalf("Failed to marshal content: %v", err)
 	}
-	config, err := query.ConfigInsert(ctx, ds, &dbsqlc.ConfigInsertParams{AgentId: agentId, Content: contentBytes, CreatedBy: "test"})
+	config, err := query.ConfigInsert(ctx, ds, &dbsqlc.ConfigInsertParams{ActorId: actorId, Content: contentBytes, CreatedBy: "test"})
 	if err != nil {
-		t.Fatalf("Failed to insert queue: %v", err)
+		t.Fatalf("Failed to insert config: %v", err)
 	}
 
 	return config
 }
 
-func InsertConfig2(t *testing.T, ctx context.Context, ds DataSource, agentId int64, configSuiteId *int64, createdBy string, content map[string]string) *dbsqlc.Config {
+func InsertConfig2(t *testing.T, ctx context.Context, ds DataSource, actorId int64, configSuiteId *int64, createdBy string, content map[string]string) *dbsqlc.Config {
 	query := dbsqlc.New()
 	contentBytes, err := json.Marshal(content)
 	if err != nil {
@@ -32,14 +32,14 @@ func InsertConfig2(t *testing.T, ctx context.Context, ds DataSource, agentId int
 		ctx,
 		ds,
 		&dbsqlc.ConfigInsertParams{
-			AgentId:       agentId,
+			ActorId:       actorId,
 			ConfigSuiteID: configSuiteId,
 			Content:       contentBytes,
 			CreatedBy:     createdBy,
 		},
 	)
 	if err != nil {
-		t.Fatalf("Failed to insert queue: %v", err)
+		t.Fatalf("Failed to insert config: %v", err)
 	}
 
 	return config

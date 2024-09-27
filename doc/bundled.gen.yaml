@@ -38,13 +38,13 @@ paths:
         - Configuration
       parameters:
         - in: header
-          name: X-Agent-Version
+          name: X-Actor-Version
           required: false
           schema:
             type: string
             pattern: ^\d+\.\d+\.\d+(\.\d+)?$
           description: >-
-            Specifies the version of the agent in the format x.y.z where x, y,
+            Specifies the version of the actor in the format x.y.z where x, y,
             and z are non-negative integers.
       responses:
         '200':
@@ -70,11 +70,11 @@ paths:
     post:
       summary: Create a new asynchronous invocation job.
       description: >
-        This endpoint allows an agent user to create a new asynchronous
+        This endpoint allows an actor user to create a new asynchronous
         invocation job.
 
         The job is added to a queue and will be processed by the next available
-        agent.
+        actor.
 
 
         Key features:
@@ -83,7 +83,7 @@ paths:
         invocation ID.
 
         - Job queuing: The invocation is queued for processing by available
-        agents.
+        actors.
 
         - Status tracking: The returned invocation ID can be used to query the
         job's status and results.
@@ -117,9 +117,9 @@ paths:
             schema:
               type: object
               properties:
-                agent:
+                actor:
                   type: string
-                  description: The name of the agent to process the invocation job
+                  description: The name of the actor to process the invocation job
                 meta:
                   type: object
                   description: The metadata of the invocation job
@@ -127,7 +127,7 @@ paths:
                   type: object
                   description: The payload for the invocation job
               required:
-                - agent
+                - actor
                 - meta
                 - payload
       responses:
@@ -155,7 +155,7 @@ paths:
     post:
       summary: Create a new synchronous invocation job
       description: >
-        This endpoint allows an agent user to create and execute a new
+        This endpoint allows an actor user to create and execute a new
         invocation job synchronously.
 
         The request will wait for the job to complete before returning the
@@ -178,7 +178,7 @@ paths:
 
         1. Submit the invocation job using this endpoint.
 
-        2. The agent retrieves and processes the job.
+        2. The actor retrieves and processes the job.
 
         3. Once the job is completed, the endpoint returns with the full result.
 
@@ -226,9 +226,9 @@ paths:
             schema:
               type: object
               properties:
-                agent:
+                actor:
                   type: string
-                  description: The name of the agent to process the invocation job
+                  description: The name of the actor to process the invocation job
                 meta:
                   type: object
                   description: The metadata of the invocation job
@@ -236,7 +236,7 @@ paths:
                   type: object
                   description: The payload for the invocation job
               required:
-                - agent
+                - actor
                 - meta
                 - payload
       responses:
@@ -265,10 +265,10 @@ paths:
     get:
       summary: Retrieve the next available invocation job for processing
       description: >
-        This endpoint is used by agents to fetch the next available invocation
+        This endpoint is used by actors to fetch the next available invocation
         job.
 
-        It allows agents to retrieve jobs for processing.
+        It allows actors to retrieve jobs for processing.
 
 
         Key features:
@@ -277,14 +277,14 @@ paths:
         from 'available' to 'running'.
 
         - Exclusive access: Once a job is retrieved, it's locked for the
-        assigned agent to prevent duplicate processing.
+        assigned actor to prevent duplicate processing.
 
 
         Note:
 
         - If no jobs are available, a 404 status is returned.
 
-        - Agents should implement appropriate error handling and retry
+        - Actors should implement appropriate error handling and retry
         mechanisms.
       operationId: getNextInvocation
       tags:
@@ -969,11 +969,11 @@ paths:
             type: integer
           description: Page number (default 10)
         - in: query
-          name: agent_id
+          name: actor_id
           schema:
             type: integer
             format: int64
-          description: Filter by agent ID
+          description: Filter by actor ID
         - in: query
           name: created_by
           schema:
@@ -1004,7 +1004,7 @@ paths:
               example:
                 data:
                   - id: token123
-                    agent_id: 1
+                    actor_id: 1
                     expire_at: 1672531200
                     created_by: admin@example.com
                     created_at: 1640995200
@@ -1012,7 +1012,7 @@ paths:
                       - config:read
                       - invocation:read
                   - id: token456
-                    agent_id: 2
+                    actor_id: 2
                     expire_at: 1704067200
                     created_by: manager@example.com
                     created_at: 1641081600
@@ -1034,7 +1034,7 @@ paths:
             schema:
               $ref: '#/components/schemas/ApiTokenCreate'
             example:
-              AgentID: 3
+              ActorID: 3
               ExpireAt: 1735689600
               Permissions:
                 - config:read
@@ -1048,7 +1048,7 @@ paths:
                 $ref: '#/components/schemas/ApiToken'
               example:
                 ID: token789
-                AgentID: 3
+                ActorID: 3
                 ExpireAt: 1735689600
                 CreatedBy: system
                 CreatedAt: 1641168000
@@ -1083,10 +1083,10 @@ paths:
           description: Unauthorized
         '500':
           $ref: '#/components/responses/500'
-  /v1/admin/agents:
+  /v1/admin/actors:
     get:
-      summary: List Agents
-      operationId: adminListAgents
+      summary: List Actors
+      operationId: adminListActors
       tags:
         - Admin
       parameters:
@@ -1104,7 +1104,7 @@ paths:
           name: name
           schema:
             type: string
-          description: Filter by agent ID
+          description: Filter by actor ID
       responses:
         '200':
           description: Successful response
@@ -1116,7 +1116,7 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Agent'
+                      $ref: '#/components/schemas/Actor'
                   meta:
                     type: object
                     properties:
@@ -1132,8 +1132,8 @@ paths:
         '500':
           $ref: '#/components/responses/500'
     post:
-      summary: Create a new Agent
-      operationId: adminCreateAgent
+      summary: Create a new Actor
+      operationId: adminCreateActor
       tags:
         - Admin
       requestBody:
@@ -1141,19 +1141,19 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AgentCreate'
+              $ref: '#/components/schemas/ActorCreate'
             example:
-              name: agent-16888
+              name: actor-16888
       responses:
         '201':
           description: Successfully created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Agent'
+                $ref: '#/components/schemas/Actor'
               example:
                 id: 16888
-                name: agent-16888
+                name: actor-16888
                 created_at: 1640995200
         '400':
           $ref: '#/components/responses/400'
@@ -1161,10 +1161,10 @@ paths:
           description: Unauthorized
         '500':
           $ref: '#/components/responses/500'
-  /v1/admin/agents/{id}:
+  /v1/admin/actors/{id}:
     get:
-      summary: Get one specific Agents
-      operationId: adminGetAgent
+      summary: Get one specific Actor
+      operationId: adminGetActor
       tags:
         - Admin
       parameters:
@@ -1174,7 +1174,7 @@ paths:
             type: integer
             format: int64
           required: true
-          description: Agent ID
+          description: Actor ID
       responses:
         '200':
           description: Successful response
@@ -1184,23 +1184,23 @@ paths:
                 type: object
                 properties:
                   data:
-                    $ref: '#/components/schemas/Agent'
+                    $ref: '#/components/schemas/Actor'
                 required:
                   - data
               example:
                 data:
                   id: 16888
-                  name: agent-16888
+                  name: actor-16888
                   created_at: 1640995200
         '401':
           description: Unauthorized
         '404':
-          description: Agent not found
+          description: Actor not found
         '500':
           $ref: '#/components/responses/500'
     patch:
-      summary: Update one specific Agent
-      operationId: adminUpdateAgent
+      summary: Update one specific Actor
+      operationId: adminUpdateActor
       tags:
         - Admin
       parameters:
@@ -1210,7 +1210,7 @@ paths:
             type: integer
             format: int64
           required: true
-          description: Agent ID
+          description: Actor ID
       requestBody:
         required: true
         content:
@@ -1235,7 +1235,7 @@ paths:
                 type: object
                 properties:
                   data:
-                    $ref: '#/components/schemas/Agent'
+                    $ref: '#/components/schemas/Actor'
                 required:
                   - data
         '400':
@@ -1243,12 +1243,12 @@ paths:
         '401':
           description: Unauthorized
         '404':
-          description: Agent not found
+          description: Actor not found
         '500':
           $ref: '#/components/responses/500'
     delete:
-      summary: Delete one specific Agent
-      operationId: adminDeleteAgent
+      summary: Delete one specific Actor
+      operationId: adminDeleteActor
       tags:
         - Admin
       parameters:
@@ -1258,16 +1258,16 @@ paths:
             type: integer
             format: int64
           required: true
-          description: Agent ID
+          description: Actor ID
       responses:
         '200':
           description: Successful response
         '401':
           description: Unauthorized
         '404':
-          description: Agent not found
+          description: Actor not found
         '409':
-          description: Agent is referenced by config
+          description: Actor is referenced by config
         '500':
           $ref: '#/components/responses/500'
   /v1/admin/deployments:
@@ -1624,7 +1624,7 @@ paths:
               properties:
                 user:
                   type: string
-                min_agent_version:
+                min_actor_version:
                   type: string
                 content:
                   type: object
@@ -1856,7 +1856,7 @@ components:
         attempted_at:
           type: integer
           format: int64
-          description: The timestamp when the job was retrieved and attempted by agent
+          description: The timestamp when the job was retrieved and attempted by actor
         finalized_at:
           type: integer
           format: int64
@@ -2104,7 +2104,7 @@ components:
       properties:
         id:
           type: string
-        agent_id:
+        actor_id:
           type: integer
           format: int64
         expire_at:
@@ -2121,14 +2121,14 @@ components:
             $ref: '#/components/schemas/Permission'
       required:
         - id
-        - agent_id
+        - actor_id
         - expire_at
         - created_by
         - created_at
         - permissions
       example:
         ID: token123
-        agent_id: 1
+        actor_id: 1
         expire_at: 1672531200
         created_by: admin@example.com
         created_at: 1640995200
@@ -2138,7 +2138,7 @@ components:
     ApiTokenCreate:
       type: object
       properties:
-        agent_id:
+        actor_id:
           type: integer
           format: int64
         expire_at:
@@ -2151,18 +2151,18 @@ components:
           items:
             type: string
       required:
-        - agent_id
+        - actor_id
         - expire_at
         - created_by
         - permissions
       example:
-        agent_id: 2
+        actor_id: 2
         expire_at: 1704067200
         created_by: admin@bluextrade.com
         Permissions:
           - config:read
           - invocation:read
-    Agent:
+    Actor:
       type: object
       properties:
         id:
@@ -2195,10 +2195,10 @@ components:
         - token_count
       example:
         id: 16888
-        name: agent-16888
+        name: actor-16888
         created_at: 1640995200
         token_count: 1
-    AgentCreate:
+    ActorCreate:
       type: object
       properties:
         name:
@@ -2212,7 +2212,7 @@ components:
       required:
         - name
       example:
-        name: agent-16888
+        name: actor-16888
         enabled: true
     Deployment:
       type: object
@@ -2269,12 +2269,12 @@ components:
         id:
           type: integer
           format: int64
-        agent_id:
+        actor_id:
           type: integer
           format: int64
-        agent_name:
+        actor_name:
           type: string
-        min_agent_version:
+        min_actor_version:
           type: string
         content:
           type: object
@@ -2292,8 +2292,8 @@ components:
           type: string
       required:
         - id
-        - agent_id
-        - agent_name
+        - actor_id
+        - actor_name
         - content
         - created_at
         - created_by
@@ -2360,7 +2360,7 @@ components:
     ReferenceConfigSuite:
       type: object
       properties:
-        agent_name:
+        actor_name:
           type: string
         config_suites:
           type: array
@@ -2377,7 +2377,7 @@ components:
               - suite_name
               - configs
       required:
-        - agent_name
+        - actor_name
         - config_suites
   responses:
     '400':

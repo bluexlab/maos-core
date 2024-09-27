@@ -14,7 +14,7 @@ const TokenContextKey = "ContextToken"
 
 type Token struct {
 	Id          string
-	AgentId     int64
+	ActorId     int64
 	QueueId     int64
 	ExpireAt    int64
 	Permissions []string

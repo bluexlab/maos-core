@@ -31,6 +31,6 @@ required:
   - token_count
 example:
   id: 16888
-  name: "agent-16888"
+  name: "actor-16888"
   created_at: 1640995200
   token_count: 1

@@ -133,21 +133,21 @@ inserted_deployment AS (
   )
   RETURNING id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at
 ),
-agent_configs AS (
-  INSERT INTO configs (agent_id, config_suite_id, created_by, min_agent_version, content)
+actor_configs AS (
+  INSERT INTO configs (actor_id, config_suite_id, created_by, min_actor_version, content)
   SELECT
-    agents.id,
+    actors.id,
     (SELECT id FROM inserted_config_suite),
     $1::text,
     COALESCE(
-      (SELECT min_agent_version FROM configs WHERE agent_id = agents.id ORDER BY created_at DESC LIMIT 1),
+      (SELECT min_actor_version FROM configs WHERE actor_id = actors.id ORDER BY created_at DESC LIMIT 1),
       NULL
     ),
     COALESCE(
-      (SELECT content FROM configs WHERE agent_id = agents.id ORDER BY created_at DESC LIMIT 1),
+      (SELECT content FROM configs WHERE actor_id = actors.id ORDER BY created_at DESC LIMIT 1),
       '{}'::jsonb
     )
-  FROM agents
+  FROM actors
 )
 SELECT id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at FROM inserted_deployment
 `
@@ -174,9 +174,9 @@ type DeploymentInsertWithConfigSuiteRow struct {
 }
 
 // Create a new deployment with an associated config suite.
-// For each agent:
-//  1. If the agent has an existing config, duplicate its latest config.
-//  2. If the agent has no existing config, create a new config with default values.
+// For each actor:
+//  1. If the actor has an existing config, duplicate its latest config.
+//  2. If the actor has no existing config, create a new config with default values.
 //
 // Associate all these new configs with the newly created deployment and config suite.
 func (q *Queries) DeploymentInsertWithConfigSuite(ctx context.Context, db DBTX, arg *DeploymentInsertWithConfigSuiteParams) (*DeploymentInsertWithConfigSuiteRow, error) {

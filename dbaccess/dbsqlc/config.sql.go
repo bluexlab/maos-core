@@ -9,34 +9,34 @@ import (
 	"context"
 )
 
-const configAgentActiveConfig = `-- name: ConfigAgentActiveConfig :one
-SELECT configs.id, configs.agent_id, configs.config_suite_id, configs.content, configs.min_agent_version, configs.created_by, configs.created_at, configs.updated_by, configs.updated_at
+const configActorActiveConfig = `-- name: ConfigActorActiveConfig :one
+SELECT configs.id, configs.actor_id, configs.config_suite_id, configs.content, configs.min_actor_version, configs.created_by, configs.created_at, configs.updated_by, configs.updated_at
 FROM configs
-JOIN agents ON configs.agent_id = agents.id
+JOIN actors ON configs.actor_id = actors.id
 JOIN config_suites ON configs.config_suite_id = config_suites.id
-WHERE configs.agent_id = $1
+WHERE configs.actor_id = $1
   AND config_suites.active IS TRUE
   AND config_suites.deployed_at IS NOT NULL
-  AND (configs.min_agent_version IS NULL OR $2::integer[] >= configs.min_agent_version::integer[])
+  AND (configs.min_actor_version IS NULL OR $2::integer[] >= configs.min_actor_version::integer[])
 ORDER BY configs.id DESC
 LIMIT 1
 `
 
-type ConfigAgentActiveConfigParams struct {
-	AgentId      int64
-	AgentVersion []int32
+type ConfigActorActiveConfigParams struct {
+	ActorId      int64
+	ActorVersion []int32
 }
 
-// Find the active config for the given agent that is compatible with the given agent version
-func (q *Queries) ConfigAgentActiveConfig(ctx context.Context, db DBTX, arg *ConfigAgentActiveConfigParams) (*Config, error) {
-	row := db.QueryRow(ctx, configAgentActiveConfig, arg.AgentId, arg.AgentVersion)
+// Find the active config for the given actor that is compatible with the given actor version
+func (q *Queries) ConfigActorActiveConfig(ctx context.Context, db DBTX, arg *ConfigActorActiveConfigParams) (*Config, error) {
+	row := db.QueryRow(ctx, configActorActiveConfig, arg.ActorId, arg.ActorVersion)
 	var i Config
 	err := row.Scan(
 		&i.ID,
-		&i.AgentId,
+		&i.ActorId,
 		&i.ConfigSuiteID,
 		&i.Content,
-		&i.MinAgentVersion,
+		&i.MinActorVersion,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedBy,
@@ -45,34 +45,34 @@ func (q *Queries) ConfigAgentActiveConfig(ctx context.Context, db DBTX, arg *Con
 	return &i, err
 }
 
-const configAgentRetiredAndVersionCompatibleConfig = `-- name: ConfigAgentRetiredAndVersionCompatibleConfig :one
-SELECT configs.id, configs.agent_id, configs.config_suite_id, configs.content, configs.min_agent_version, configs.created_by, configs.created_at, configs.updated_by, configs.updated_at
+const configActorRetiredAndVersionCompatibleConfig = `-- name: ConfigActorRetiredAndVersionCompatibleConfig :one
+SELECT configs.id, configs.actor_id, configs.config_suite_id, configs.content, configs.min_actor_version, configs.created_by, configs.created_at, configs.updated_by, configs.updated_at
 FROM configs
-JOIN agents ON configs.agent_id = agents.id
+JOIN actors ON configs.actor_id = actors.id
 JOIN config_suites ON configs.config_suite_id = config_suites.id
-WHERE configs.agent_id = $1
+WHERE configs.actor_id = $1
   AND config_suites.active IS FALSE
   AND config_suites.deployed_at IS NOT NULL
-  AND (configs.min_agent_version IS NULL OR $2::integer[] >= configs.min_agent_version::integer[])
+  AND (configs.min_actor_version IS NULL OR $2::integer[] >= configs.min_actor_version::integer[])
 ORDER BY configs.id DESC
 LIMIT 1
 `
 
-type ConfigAgentRetiredAndVersionCompatibleConfigParams struct {
-	AgentId      int64
-	AgentVersion []int32
+type ConfigActorRetiredAndVersionCompatibleConfigParams struct {
+	ActorId      int64
+	ActorVersion []int32
 }
 
-// Find the retired config for the given agent that is compatible with the given agent version
-func (q *Queries) ConfigAgentRetiredAndVersionCompatibleConfig(ctx context.Context, db DBTX, arg *ConfigAgentRetiredAndVersionCompatibleConfigParams) (*Config, error) {
-	row := db.QueryRow(ctx, configAgentRetiredAndVersionCompatibleConfig, arg.AgentId, arg.AgentVersion)
+// Find the retired config for the given actor that is compatible with the given actor version
+func (q *Queries) ConfigActorRetiredAndVersionCompatibleConfig(ctx context.Context, db DBTX, arg *ConfigActorRetiredAndVersionCompatibleConfigParams) (*Config, error) {
+	row := db.QueryRow(ctx, configActorRetiredAndVersionCompatibleConfig, arg.ActorId, arg.ActorVersion)
 	var i Config
 	err := row.Scan(
 		&i.ID,
-		&i.AgentId,
+		&i.ActorId,
 		&i.ConfigSuiteID,
 		&i.Content,
-		&i.MinAgentVersion,
+		&i.MinActorVersion,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedBy,
@@ -81,98 +81,98 @@ func (q *Queries) ConfigAgentRetiredAndVersionCompatibleConfig(ctx context.Conte
 	return &i, err
 }
 
-const configFindByAgentId = `-- name: ConfigFindByAgentId :one
-SELECT configs.id, configs.agent_id, configs.config_suite_id, configs.content, configs.min_agent_version, configs.created_by, configs.created_at, configs.updated_by, configs.updated_at, agents.name AS agent_name
+const configFindByActorId = `-- name: ConfigFindByActorId :one
+SELECT configs.id, configs.actor_id, configs.config_suite_id, configs.content, configs.min_actor_version, configs.created_by, configs.created_at, configs.updated_by, configs.updated_at, actors.name AS actor_name
 FROM configs
-JOIN agents ON configs.agent_id = agents.id
-WHERE configs.agent_id = $1
+JOIN actors ON configs.actor_id = actors.id
+WHERE configs.actor_id = $1
 ORDER BY configs.created_at DESC, configs.id DESC
 LIMIT 1
 `
 
-type ConfigFindByAgentIdRow struct {
+type ConfigFindByActorIdRow struct {
 	ID              int64
-	AgentId         int64
+	ActorId         int64
 	ConfigSuiteID   *int64
 	Content         []byte
-	MinAgentVersion []int32
+	MinActorVersion []int32
 	CreatedBy       string
 	CreatedAt       int64
 	UpdatedBy       *string
 	UpdatedAt       *int64
-	AgentName       string
+	ActorName       string
 }
 
-func (q *Queries) ConfigFindByAgentId(ctx context.Context, db DBTX, agentID int64) (*ConfigFindByAgentIdRow, error) {
-	row := db.QueryRow(ctx, configFindByAgentId, agentID)
-	var i ConfigFindByAgentIdRow
+func (q *Queries) ConfigFindByActorId(ctx context.Context, db DBTX, actorID int64) (*ConfigFindByActorIdRow, error) {
+	row := db.QueryRow(ctx, configFindByActorId, actorID)
+	var i ConfigFindByActorIdRow
 	err := row.Scan(
 		&i.ID,
-		&i.AgentId,
+		&i.ActorId,
 		&i.ConfigSuiteID,
 		&i.Content,
-		&i.MinAgentVersion,
+		&i.MinActorVersion,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedBy,
 		&i.UpdatedAt,
-		&i.AgentName,
+		&i.ActorName,
 	)
 	return &i, err
 }
 
-const configFindByAgentIdAndSuiteId = `-- name: ConfigFindByAgentIdAndSuiteId :one
-SELECT configs.id, configs.agent_id, configs.config_suite_id, configs.content, configs.min_agent_version, configs.created_by, configs.created_at, configs.updated_by, configs.updated_at, agents.name AS agent_name
+const configFindByActorIdAndSuiteId = `-- name: ConfigFindByActorIdAndSuiteId :one
+SELECT configs.id, configs.actor_id, configs.config_suite_id, configs.content, configs.min_actor_version, configs.created_by, configs.created_at, configs.updated_by, configs.updated_at, actors.name AS actor_name
 FROM configs
-JOIN agents ON configs.agent_id = agents.id
-WHERE configs.agent_id = $1::bigint
+JOIN actors ON configs.actor_id = actors.id
+WHERE configs.actor_id = $1::bigint
 AND configs.config_suite_id = $2::bigint
 ORDER BY configs.created_at DESC, configs.id DESC
 LIMIT 1
 `
 
-type ConfigFindByAgentIdAndSuiteIdParams struct {
-	AgentId       int64
+type ConfigFindByActorIdAndSuiteIdParams struct {
+	ActorId       int64
 	ConfigSuiteID int64
 }
 
-type ConfigFindByAgentIdAndSuiteIdRow struct {
+type ConfigFindByActorIdAndSuiteIdRow struct {
 	ID              int64
-	AgentId         int64
+	ActorId         int64
 	ConfigSuiteID   *int64
 	Content         []byte
-	MinAgentVersion []int32
+	MinActorVersion []int32
 	CreatedBy       string
 	CreatedAt       int64
 	UpdatedBy       *string
 	UpdatedAt       *int64
-	AgentName       string
+	ActorName       string
 }
 
-func (q *Queries) ConfigFindByAgentIdAndSuiteId(ctx context.Context, db DBTX, arg *ConfigFindByAgentIdAndSuiteIdParams) (*ConfigFindByAgentIdAndSuiteIdRow, error) {
-	row := db.QueryRow(ctx, configFindByAgentIdAndSuiteId, arg.AgentId, arg.ConfigSuiteID)
-	var i ConfigFindByAgentIdAndSuiteIdRow
+func (q *Queries) ConfigFindByActorIdAndSuiteId(ctx context.Context, db DBTX, arg *ConfigFindByActorIdAndSuiteIdParams) (*ConfigFindByActorIdAndSuiteIdRow, error) {
+	row := db.QueryRow(ctx, configFindByActorIdAndSuiteId, arg.ActorId, arg.ConfigSuiteID)
+	var i ConfigFindByActorIdAndSuiteIdRow
 	err := row.Scan(
 		&i.ID,
-		&i.AgentId,
+		&i.ActorId,
 		&i.ConfigSuiteID,
 		&i.Content,
-		&i.MinAgentVersion,
+		&i.MinActorVersion,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedBy,
 		&i.UpdatedAt,
-		&i.AgentName,
+		&i.ActorName,
 	)
 	return &i, err
 }
 
 const configInsert = `-- name: ConfigInsert :one
 INSERT INTO configs(
-    agent_id,
+    actor_id,
     content,
     created_by,
-    min_agent_version,
+    min_actor_version,
     config_suite_id
 ) VALUES (
     $1::bigint,
@@ -180,32 +180,32 @@ INSERT INTO configs(
     $3::text,
     $4::integer[],
     $5::bigint
-) RETURNING id, agent_id, config_suite_id, content, min_agent_version, created_by, created_at, updated_by, updated_at
+) RETURNING id, actor_id, config_suite_id, content, min_actor_version, created_by, created_at, updated_by, updated_at
 `
 
 type ConfigInsertParams struct {
-	AgentId         int64
+	ActorId         int64
 	Content         []byte
 	CreatedBy       string
-	MinAgentVersion []int32
+	MinActorVersion []int32
 	ConfigSuiteID   *int64
 }
 
 func (q *Queries) ConfigInsert(ctx context.Context, db DBTX, arg *ConfigInsertParams) (*Config, error) {
 	row := db.QueryRow(ctx, configInsert,
-		arg.AgentId,
+		arg.ActorId,
 		arg.Content,
 		arg.CreatedBy,
-		arg.MinAgentVersion,
+		arg.MinActorVersion,
 		arg.ConfigSuiteID,
 	)
 	var i Config
 	err := row.Scan(
 		&i.ID,
-		&i.AgentId,
+		&i.ActorId,
 		&i.ConfigSuiteID,
 		&i.Content,
-		&i.MinAgentVersion,
+		&i.MinActorVersion,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedBy,
@@ -214,63 +214,63 @@ func (q *Queries) ConfigInsert(ctx context.Context, db DBTX, arg *ConfigInsertPa
 	return &i, err
 }
 
-const configListBySuiteIdGroupByAgent = `-- name: ConfigListBySuiteIdGroupByAgent :many
-SELECT DISTINCT ON (configs.agent_id)
+const configListBySuiteIdGroupByActor = `-- name: ConfigListBySuiteIdGroupByActor :many
+SELECT DISTINCT ON (configs.actor_id)
     configs.id,
-    configs.agent_id,
+    configs.actor_id,
     configs.content,
     configs.created_at,
     configs.created_by,
-    configs.min_agent_version,
+    configs.min_actor_version,
     configs.config_suite_id,
-    agents.id AS agent_id,
-    agents.name AS agent_name,
-    agents.enabled AS agent_enabled,
-    agents.configurable AS agent_configurable,
-    agents.deployable AS agent_deployable
+    actors.id AS actor_id,
+    actors.name AS actor_name,
+    actors.enabled AS actor_enabled,
+    actors.configurable AS actor_configurable,
+    actors.deployable AS actor_deployable
 FROM configs
-JOIN agents ON configs.agent_id = agents.id
+JOIN actors ON configs.actor_id = actors.id
 WHERE configs.config_suite_id = $1::bigint
-ORDER BY configs.agent_id, configs.created_at DESC, configs.id DESC
+ORDER BY configs.actor_id, configs.created_at DESC, configs.id DESC
 `
 
-type ConfigListBySuiteIdGroupByAgentRow struct {
+type ConfigListBySuiteIdGroupByActorRow struct {
 	ID                int64
-	AgentId           int64
+	ActorId           int64
 	Content           []byte
 	CreatedAt         int64
 	CreatedBy         string
-	MinAgentVersion   []int32
+	MinActorVersion   []int32
 	ConfigSuiteID     *int64
-	AgentId_2         int64
-	AgentName         string
-	AgentEnabled      bool
-	AgentConfigurable bool
-	AgentDeployable   bool
+	ActorId_2         int64
+	ActorName         string
+	ActorEnabled      bool
+	ActorConfigurable bool
+	ActorDeployable   bool
 }
 
-func (q *Queries) ConfigListBySuiteIdGroupByAgent(ctx context.Context, db DBTX, configSuiteID int64) ([]*ConfigListBySuiteIdGroupByAgentRow, error) {
-	rows, err := db.Query(ctx, configListBySuiteIdGroupByAgent, configSuiteID)
+func (q *Queries) ConfigListBySuiteIdGroupByActor(ctx context.Context, db DBTX, configSuiteID int64) ([]*ConfigListBySuiteIdGroupByActorRow, error) {
+	rows, err := db.Query(ctx, configListBySuiteIdGroupByActor, configSuiteID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []*ConfigListBySuiteIdGroupByAgentRow
+	var items []*ConfigListBySuiteIdGroupByActorRow
 	for rows.Next() {
-		var i ConfigListBySuiteIdGroupByAgentRow
+		var i ConfigListBySuiteIdGroupByActorRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.AgentId,
+			&i.ActorId,
 			&i.Content,
 			&i.CreatedAt,
 			&i.CreatedBy,
-			&i.MinAgentVersion,
+			&i.MinActorVersion,
 			&i.ConfigSuiteID,
-			&i.AgentId_2,
-			&i.AgentName,
-			&i.AgentEnabled,
-			&i.AgentConfigurable,
-			&i.AgentDeployable,
+			&i.ActorId_2,
+			&i.ActorName,
+			&i.ActorEnabled,
+			&i.ActorConfigurable,
+			&i.ActorDeployable,
 		); err != nil {
 			return nil, err
 		}
@@ -292,12 +292,12 @@ WITH config_suite_check AS (
 )
 UPDATE configs SET
     content = COALESCE($1::jsonb, content),
-    min_agent_version = COALESCE($2::integer[], min_agent_version),
+    min_actor_version = COALESCE($2::integer[], min_actor_version),
     updated_at = EXTRACT(EPOCH FROM NOW()),
     updated_by = $3::text
-FROM agents
+FROM actors
 WHERE configs.id = $4::bigint
-AND configs.agent_id = agents.id
+AND configs.actor_id = actors.id
 AND (
     configs.created_by = $3::text
     OR EXISTS (
@@ -306,48 +306,48 @@ AND (
     )
 )
 AND EXISTS (SELECT 1 FROM config_suite_check)
-RETURNING configs.id, configs.agent_id, configs.config_suite_id, configs.content, configs.min_agent_version, configs.created_by, configs.created_at, configs.updated_by, configs.updated_at, agents.name AS agent_name
+RETURNING configs.id, configs.actor_id, configs.config_suite_id, configs.content, configs.min_actor_version, configs.created_by, configs.created_at, configs.updated_by, configs.updated_at, actors.name AS actor_name
 `
 
 type ConfigUpdateInactiveContentByCreatorParams struct {
 	Content         []byte
-	MinAgentVersion []int32
+	MinActorVersion []int32
 	Updater         string
 	ID              int64
 }
 
 type ConfigUpdateInactiveContentByCreatorRow struct {
 	ID              int64
-	AgentId         int64
+	ActorId         int64
 	ConfigSuiteID   *int64
 	Content         []byte
-	MinAgentVersion []int32
+	MinActorVersion []int32
 	CreatedBy       string
 	CreatedAt       int64
 	UpdatedBy       *string
 	UpdatedAt       *int64
-	AgentName       string
+	ActorName       string
 }
 
 func (q *Queries) ConfigUpdateInactiveContentByCreator(ctx context.Context, db DBTX, arg *ConfigUpdateInactiveContentByCreatorParams) (*ConfigUpdateInactiveContentByCreatorRow, error) {
 	row := db.QueryRow(ctx, configUpdateInactiveContentByCreator,
 		arg.Content,
-		arg.MinAgentVersion,
+		arg.MinActorVersion,
 		arg.Updater,
 		arg.ID,
 	)
 	var i ConfigUpdateInactiveContentByCreatorRow
 	err := row.Scan(
 		&i.ID,
-		&i.AgentId,
+		&i.ActorId,
 		&i.ConfigSuiteID,
 		&i.Content,
-		&i.MinAgentVersion,
+		&i.MinActorVersion,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedBy,
 		&i.UpdatedAt,
-		&i.AgentName,
+		&i.ActorName,
 	)
 	return &i, err
 }

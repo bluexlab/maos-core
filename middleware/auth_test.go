@@ -101,7 +101,7 @@ func TestNewBearerAuthMiddleware(t *testing.T) {
 
 		validToken := &Token{
 			Id:          "valid-id",
-			AgentId:     123,
+			ActorId:     123,
 			QueueId:     456,
 			ExpireAt:    time.Now().Add(1 * time.Hour).Unix(),
 			Permissions: []string{"read", "write"},

@@ -9,25 +9,25 @@ import (
 )
 
 type Querier interface {
-	AgentDelete(ctx context.Context, db DBTX, id int64) (string, error)
-	AgentFindById(ctx context.Context, db DBTX, id int64) (*AgentFindByIdRow, error)
-	AgentInsert(ctx context.Context, db DBTX, arg *AgentInsertParams) (*Agent, error)
-	AgentListPagenated(ctx context.Context, db DBTX, arg *AgentListPagenatedParams) ([]*AgentListPagenatedRow, error)
-	AgentUpdate(ctx context.Context, db DBTX, arg *AgentUpdateParams) (*Agent, error)
+	ActorDelete(ctx context.Context, db DBTX, id int64) (string, error)
+	ActorFindById(ctx context.Context, db DBTX, id int64) (*ActorFindByIdRow, error)
+	ActorInsert(ctx context.Context, db DBTX, arg *ActorInsertParams) (*Actor, error)
+	ActorListPagenated(ctx context.Context, db DBTX, arg *ActorListPagenatedParams) ([]*ActorListPagenatedRow, error)
+	ActorUpdate(ctx context.Context, db DBTX, arg *ActorUpdateParams) (*Actor, error)
 	ApiTokenCount(ctx context.Context, db DBTX) (int64, error)
 	ApiTokenDelete(ctx context.Context, db DBTX, id string) error
 	ApiTokenFindByID(ctx context.Context, db DBTX, id string) (*ApiTokenFindByIDRow, error)
 	ApiTokenInsert(ctx context.Context, db DBTX, arg *ApiTokenInsertParams) (*ApiToken, error)
 	ApiTokenListByPage(ctx context.Context, db DBTX, arg *ApiTokenListByPageParams) ([]*ApiTokenListByPageRow, error)
 	ApiTokenRotate(ctx context.Context, db DBTX, arg *ApiTokenRotateParams) (string, error)
-	// Find the active config for the given agent that is compatible with the given agent version
-	ConfigAgentActiveConfig(ctx context.Context, db DBTX, arg *ConfigAgentActiveConfigParams) (*Config, error)
-	// Find the retired config for the given agent that is compatible with the given agent version
-	ConfigAgentRetiredAndVersionCompatibleConfig(ctx context.Context, db DBTX, arg *ConfigAgentRetiredAndVersionCompatibleConfigParams) (*Config, error)
-	ConfigFindByAgentId(ctx context.Context, db DBTX, agentID int64) (*ConfigFindByAgentIdRow, error)
-	ConfigFindByAgentIdAndSuiteId(ctx context.Context, db DBTX, arg *ConfigFindByAgentIdAndSuiteIdParams) (*ConfigFindByAgentIdAndSuiteIdRow, error)
+	// Find the active config for the given actor that is compatible with the given actor version
+	ConfigActorActiveConfig(ctx context.Context, db DBTX, arg *ConfigActorActiveConfigParams) (*Config, error)
+	// Find the retired config for the given actor that is compatible with the given actor version
+	ConfigActorRetiredAndVersionCompatibleConfig(ctx context.Context, db DBTX, arg *ConfigActorRetiredAndVersionCompatibleConfigParams) (*Config, error)
+	ConfigFindByActorId(ctx context.Context, db DBTX, actorID int64) (*ConfigFindByActorIdRow, error)
+	ConfigFindByActorIdAndSuiteId(ctx context.Context, db DBTX, arg *ConfigFindByActorIdAndSuiteIdParams) (*ConfigFindByActorIdAndSuiteIdRow, error)
 	ConfigInsert(ctx context.Context, db DBTX, arg *ConfigInsertParams) (*Config, error)
-	ConfigListBySuiteIdGroupByAgent(ctx context.Context, db DBTX, configSuiteID int64) ([]*ConfigListBySuiteIdGroupByAgentRow, error)
+	ConfigListBySuiteIdGroupByActor(ctx context.Context, db DBTX, configSuiteID int64) ([]*ConfigListBySuiteIdGroupByActorRow, error)
 	// Deactivate all other config suites and then activate the given config suite
 	ConfigSuiteActivate(ctx context.Context, db DBTX, arg *ConfigSuiteActivateParams) (int64, error)
 	ConfigSuiteGetById(ctx context.Context, db DBTX, id int64) (*ConfigSuite, error)
@@ -36,9 +36,9 @@ type Querier interface {
 	DeploymentGetById(ctx context.Context, db DBTX, id int64) (*Deployment, error)
 	DeploymentInsert(ctx context.Context, db DBTX, arg *DeploymentInsertParams) (*Deployment, error)
 	// Create a new deployment with an associated config suite.
-	// For each agent:
-	//   1. If the agent has an existing config, duplicate its latest config.
-	//   2. If the agent has no existing config, create a new config with default values.
+	// For each actor:
+	//   1. If the actor has an existing config, duplicate its latest config.
+	//   2. If the actor has no existing config, create a new config with default values.
 	// Associate all these new configs with the newly created deployment and config suite.
 	DeploymentInsertWithConfigSuite(ctx context.Context, db DBTX, arg *DeploymentInsertWithConfigSuiteParams) (*DeploymentInsertWithConfigSuiteRow, error)
 	DeploymentListPaginated(ctx context.Context, db DBTX, arg *DeploymentListPaginatedParams) ([]*DeploymentListPaginatedRow, error)

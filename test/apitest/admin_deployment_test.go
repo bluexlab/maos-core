@@ -25,10 +25,10 @@ func TestAdminListDeploymentsEndpoint(t *testing.T) {
 	setupTestData := func(t *testing.T, ctx context.Context, accessor dbaccess.Accessor) {
 		fixture.InsertDeployment(t, ctx, accessor.Source(), "deployment1", []string{"user1"})
 		fixture.InsertDeployment(t, ctx, accessor.Source(), "deployment2", []string{"user2"})
-		agent1 := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
-		agent2 := fixture.InsertAgent(t, ctx, accessor.Source(), "agent2")
-		fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent1.ID, 0, []string{"admin"})
-		fixture.InsertToken(t, ctx, accessor.Source(), "user-token", agent2.ID, 0, []string{"user"})
+		actor1 := fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
+		actor2 := fixture.InsertActor(t, ctx, accessor.Source(), "actor2")
+		fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", actor1.ID, 0, []string{"admin"})
+		fixture.InsertToken(t, ctx, accessor.Source(), "user-token", actor2.ID, 0, []string{"user"})
 	}
 
 	assertResponseMatches := func(t *testing.T, expected, actual api.AdminListDeployments200JSONResponse) {
@@ -71,8 +71,8 @@ func TestAdminListDeploymentsEndpoint(t *testing.T) {
 		deployment2 := fixture.InsertDeployment(t, ctx, accessor.Source(), "deployment2", []string{"user2"})
 		fixture.InsertDeployment(t, ctx, accessor.Source(), "deployment3", []string{"user3"})
 
-		agent := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
-		fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent.ID, 0, []string{"admin"})
+		actor := fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
+		fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", actor.ID, 0, []string{"admin"})
 
 		// Construct URL with id list
 		url := fmt.Sprintf("%s/v1/admin/deployments?id=%d&id=%d", server.URL, deployment1.ID, deployment2.ID)
@@ -183,10 +183,10 @@ func TestAdminGetDeploymentEndpoint(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server, accessor, _ := SetupHttpTestWithDb(t, ctx)
 
-			agent1 := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
-			agent2 := fixture.InsertAgent(t, ctx, accessor.Source(), "agent2")
-			fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent1.ID, 0, []string{"admin"})
-			fixture.InsertToken(t, ctx, accessor.Source(), "user-token", agent2.ID, 0, []string{"user"})
+			actor1 := fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
+			actor2 := fixture.InsertActor(t, ctx, accessor.Source(), "actor2")
+			fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", actor1.ID, 0, []string{"admin"})
+			fixture.InsertToken(t, ctx, accessor.Source(), "user-token", actor2.ID, 0, []string{"user"})
 
 			if tt.setupFunc != nil {
 				tt.deploymentID = tt.setupFunc(ctx, t, accessor)
@@ -275,10 +275,10 @@ func TestAdminCreateDeploymentEndpoint(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server, accessor, _ := SetupHttpTestWithDb(t, ctx)
 
-			agent1 := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
-			agent2 := fixture.InsertAgent(t, ctx, accessor.Source(), "agent2")
-			fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent1.ID, 0, []string{"admin"})
-			fixture.InsertToken(t, ctx, accessor.Source(), "user-token", agent2.ID, 0, []string{"user"})
+			actor1 := fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
+			actor2 := fixture.InsertActor(t, ctx, accessor.Source(), "actor2")
+			fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", actor1.ID, 0, []string{"admin"})
+			fixture.InsertToken(t, ctx, accessor.Source(), "user-token", actor2.ID, 0, []string{"user"})
 
 			resp, resBody := PostHttp(t, server.URL+"/v1/admin/deployments", tt.body, tt.token)
 			require.Equal(t, tt.expectedStatus, resp.StatusCode)
@@ -361,8 +361,8 @@ func TestAdminUpdateDeployment(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server, accessor, _ := SetupHttpTestWithDb(t, ctx)
 
-			agent1 := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
-			fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent1.ID, 0, []string{"admin"})
+			actor1 := fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
+			fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", actor1.ID, 0, []string{"admin"})
 
 			// Create a deployment to update
 			deployment, err := accessor.Querier().DeploymentInsert(ctx, accessor.Source(), &dbsqlc.DeploymentInsertParams{
@@ -435,8 +435,8 @@ func TestSubmitDeployment(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server, accessor, _ := SetupHttpTestWithDb(t, ctx)
 
-			agent1 := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
-			fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent1.ID, 0, []string{"admin"})
+			actor1 := fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
+			fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", actor1.ID, 0, []string{"admin"})
 
 			// Create a draft deployment
 			draftDeployment, err := accessor.Querier().DeploymentInsertWithConfigSuite(ctx, accessor.Source(), &dbsqlc.DeploymentInsertWithConfigSuiteParams{
@@ -484,9 +484,9 @@ func TestAdminRejectDeploymentEndpoint(t *testing.T) {
 	setupTest := func(t *testing.T) (*httptest.Server, dbaccess.Accessor, int64) {
 		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
 
-		agent1 := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
-		fixture.InsertToken(t, ctx, accessor.Source(), "reviewer-token", agent1.ID, 0, []string{"admin"})
-		fixture.InsertToken(t, ctx, accessor.Source(), "non-reviewer-token", agent1.ID, 0, []string{"admin"})
+		actor1 := fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
+		fixture.InsertToken(t, ctx, accessor.Source(), "reviewer-token", actor1.ID, 0, []string{"admin"})
+		fixture.InsertToken(t, ctx, accessor.Source(), "non-reviewer-token", actor1.ID, 0, []string{"admin"})
 
 		deployment, err := accessor.Querier().DeploymentInsertWithConfigSuite(ctx, accessor.Source(), &dbsqlc.DeploymentInsertWithConfigSuiteParams{
 			CreatedBy: "test-user",
@@ -582,8 +582,8 @@ func TestAdminPublishDeploymentEndpoint(t *testing.T) {
 	t.Run("Valid admin token and draft deployment", func(t *testing.T) {
 		server, accessor, mockK8sController := SetupHttpTestWithDbAndK8s(t, ctx)
 
-		agent := fixture.InsertAgent(t, ctx, accessor.Source(), "admin")
-		fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent.ID, 0, []string{"admin"})
+		actor := fixture.InsertActor(t, ctx, accessor.Source(), "admin")
+		fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", actor.ID, 0, []string{"admin"})
 
 		mockK8sController.On("UpdateDeploymentSet", mock.Anything, []k8s.DeploymentParams{}).Return(nil)
 		deployment, err := accessor.Querier().DeploymentInsertWithConfigSuite(ctx, accessor.Source(), &dbsqlc.DeploymentInsertWithConfigSuiteParams{
@@ -611,8 +611,8 @@ func TestAdminPublishDeploymentEndpoint(t *testing.T) {
 	t.Run("Valid admin token but non-draft deployment", func(t *testing.T) {
 		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
 
-		agent := fixture.InsertAgent(t, ctx, accessor.Source(), "admin")
-		fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent.ID, 0, []string{"admin"})
+		actor := fixture.InsertActor(t, ctx, accessor.Source(), "admin")
+		fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", actor.ID, 0, []string{"admin"})
 
 		deployment, err := accessor.Querier().DeploymentInsertWithConfigSuite(ctx, accessor.Source(), &dbsqlc.DeploymentInsertWithConfigSuiteParams{
 			CreatedBy: "admin",
@@ -631,8 +631,8 @@ func TestAdminPublishDeploymentEndpoint(t *testing.T) {
 	t.Run("Valid admin token but non-existent deployment", func(t *testing.T) {
 		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
 
-		agent := fixture.InsertAgent(t, ctx, accessor.Source(), "admin")
-		fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent.ID, 0, []string{"admin"})
+		actor := fixture.InsertActor(t, ctx, accessor.Source(), "admin")
+		fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", actor.ID, 0, []string{"admin"})
 
 		resp, _ := PostHttp(t, fmt.Sprintf("%s/v1/admin/deployments/%d/publish", server.URL, 999), `{"user":"admin"}`, "admin-token")
 		require.Equal(t, http.StatusNotFound, resp.StatusCode)
@@ -641,8 +641,8 @@ func TestAdminPublishDeploymentEndpoint(t *testing.T) {
 	t.Run("Non-admin token", func(t *testing.T) {
 		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
 
-		agent := fixture.InsertAgent(t, ctx, accessor.Source(), "user")
-		fixture.InsertToken(t, ctx, accessor.Source(), "user-token", agent.ID, 0, []string{"user"})
+		actor := fixture.InsertActor(t, ctx, accessor.Source(), "user")
+		fixture.InsertToken(t, ctx, accessor.Source(), "user-token", actor.ID, 0, []string{"user"})
 
 		deployment, err := accessor.Querier().DeploymentInsertWithConfigSuite(ctx, accessor.Source(), &dbsqlc.DeploymentInsertWithConfigSuiteParams{
 			CreatedBy: "test-user",

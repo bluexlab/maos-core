@@ -1,6 +1,6 @@
 type: object
 properties:
-  agent_id:
+  actor_id:
     type: integer
     format: int64
   expire_at:
@@ -13,12 +13,12 @@ properties:
     items:
       type: string
 required:
-  - agent_id
+  - actor_id
   - expire_at
   - created_by
   - permissions
 example:
-  agent_id: 2
+  actor_id: 2
   expire_at: 1704067200
   created_by: admin@bluextrade.com
   Permissions: ["config:read", "invocation:read"]

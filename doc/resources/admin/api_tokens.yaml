@@ -15,11 +15,11 @@ get:
         type: integer
       description: Page number (default 10)
     - in: query
-      name: agent_id
+      name: actor_id
       schema:
         type: integer
         format: int64
-      description: Filter by agent ID
+      description: Filter by actor ID
     - in: query
       name: created_by
       schema:
@@ -50,13 +50,13 @@ get:
           example:
             data:
               - id: "token123"
-                agent_id: 1
+                actor_id: 1
                 expire_at: 1672531200
                 created_by: "admin@example.com"
                 created_at: 1640995200
                 permissions: ["config:read", "invocation:read"]
               - id: "token456"
-                agent_id: 2
+                actor_id: 2
                 expire_at: 1704067200
                 created_by: "manager@example.com"
                 created_at: 1641081600
@@ -78,7 +78,7 @@ post:
         schema:
           $ref: "../../schemas/ApiTokenCreate.yaml"
         example:
-          AgentID: 3
+          ActorID: 3
           ExpireAt: 1735689600
           Permissions: ["config:read", "invocation:read"]
   responses:
@@ -90,7 +90,7 @@ post:
             $ref: "../../schemas/ApiToken.yaml"
           example:
             ID: "token789"
-            AgentID: 3
+            ActorID: 3
             ExpireAt: 1735689600
             CreatedBy: "system"
             CreatedAt: 1641168000

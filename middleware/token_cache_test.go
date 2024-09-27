@@ -43,7 +43,7 @@ func TestApiTokenCache_GetToken(t *testing.T) {
 	t.Run("Fetches and caches token", func(t *testing.T) {
 		mockFetcher := new(MockTokenFetcher)
 		cache := NewApiTokenCache(mockFetcher.Fetch, 10*time.Second)
-		expectedToken := &Token{Id: "1", AgentId: 123}
+		expectedToken := &Token{Id: "1", ActorId: 123}
 		mockFetcher.On("Fetch", ctx, apiToken).Return(expectedToken, nil).Once()
 
 		// First call, should fetch from the mock
@@ -84,7 +84,7 @@ func TestApiTokenCache_GetToken(t *testing.T) {
 		mockFetcher := new(MockTokenFetcher)
 		cache := NewApiTokenCache(mockFetcher.Fetch, 10*time.Second)
 		expectedToken := &Token{
-			AgentId:     1,
+			ActorId:     1,
 			QueueId:     2,
 			ExpireAt:    time.Now().Unix() + 3600,
 			Permissions: []string{"read", "write"},
@@ -108,7 +108,7 @@ func TestApiTokenCache_GetToken_Singleflight(t *testing.T) {
 
 	// Set up the mock to return a token after a short delay
 	expectedToken := &Token{
-		AgentId:     5,
+		ActorId:     5,
 		QueueId:     6,
 		ExpireAt:    time.Now().Unix() + 3600,
 		Permissions: []string{"read"},

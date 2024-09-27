@@ -5,7 +5,7 @@ sql:
     queries:
       - migration.sql
       - queue.sql
-      - agent.sql
+      - actor.sql
       - config.sql
       - deployment.sql
       - config_suite.sql
@@ -27,14 +27,14 @@ sql:
 
         rename:
           ttl: "TTL"
-          agents: "Agent"
+          actors: "Actor"
           queues: "Queue"
           configs: "Config"
           config_suites: "ConfigSuite"
           deployments: "Deployment"
           api_tokens: "ApiToken"
           invocations: "Invocation"
-          agent_id: "AgentId"
+          actor_id: "ActorId"
 
         overrides:
           - db_type: "pg_catalog.interval"

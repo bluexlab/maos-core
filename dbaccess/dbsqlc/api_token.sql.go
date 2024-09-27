@@ -31,16 +31,16 @@ func (q *Queries) ApiTokenDelete(ctx context.Context, db DBTX, id string) error 
 }
 
 const apiTokenFindByID = `-- name: ApiTokenFindByID :one
-SELECT t.id, a.id as agent_id, a.queue_id, t.permissions, t.expire_at, t.created_by
+SELECT t.id, a.id as actor_id, a.queue_id, t.permissions, t.expire_at, t.created_by
 FROM api_tokens t
-JOIN agents a ON t.agent_id = a.id
+JOIN actors a ON t.actor_id = a.id
 WHERE t.id = $1
 LIMIT 1
 `
 
 type ApiTokenFindByIDRow struct {
 	ID          string
-	AgentId     int64
+	ActorId     int64
 	QueueID     int64
 	Permissions []string
 	ExpireAt    int64
@@ -52,7 +52,7 @@ func (q *Queries) ApiTokenFindByID(ctx context.Context, db DBTX, id string) (*Ap
 	var i ApiTokenFindByIDRow
 	err := row.Scan(
 		&i.ID,
-		&i.AgentId,
+		&i.ActorId,
 		&i.QueueID,
 		&i.Permissions,
 		&i.ExpireAt,
@@ -64,7 +64,7 @@ func (q *Queries) ApiTokenFindByID(ctx context.Context, db DBTX, id string) (*Ap
 const apiTokenInsert = `-- name: ApiTokenInsert :one
 INSERT INTO api_tokens(
     id,
-    agent_id,
+    actor_id,
     expire_at,
     created_by,
     permissions,
@@ -76,12 +76,12 @@ INSERT INTO api_tokens(
     $4::text,
     $5::varchar(255)[],
     EXTRACT(EPOCH FROM NOW())
-) RETURNING id, agent_id, expire_at, created_by, created_at, permissions
+) RETURNING id, actor_id, expire_at, created_by, created_at, permissions
 `
 
 type ApiTokenInsertParams struct {
 	ID          string
-	AgentId     int64
+	ActorId     int64
 	ExpireAt    int64
 	CreatedBy   string
 	Permissions []string
@@ -90,7 +90,7 @@ type ApiTokenInsertParams struct {
 func (q *Queries) ApiTokenInsert(ctx context.Context, db DBTX, arg *ApiTokenInsertParams) (*ApiToken, error) {
 	row := db.QueryRow(ctx, apiTokenInsert,
 		arg.ID,
-		arg.AgentId,
+		arg.ActorId,
 		arg.ExpireAt,
 		arg.CreatedBy,
 		arg.Permissions,
@@ -98,7 +98,7 @@ func (q *Queries) ApiTokenInsert(ctx context.Context, db DBTX, arg *ApiTokenInse
 	var i ApiToken
 	err := row.Scan(
 		&i.ID,
-		&i.AgentId,
+		&i.ActorId,
 		&i.ExpireAt,
 		&i.CreatedBy,
 		&i.CreatedAt,
@@ -110,8 +110,8 @@ func (q *Queries) ApiTokenInsert(ctx context.Context, db DBTX, arg *ApiTokenInse
 const apiTokenListByPage = `-- name: ApiTokenListByPage :many
 SELECT
   t.id,
-  a.id as agent_id,
-  a.name as agent_name,
+  a.id as actor_id,
+  a.name as actor_name,
   a.queue_id,
   t.permissions,
   t.created_at,
@@ -119,7 +119,7 @@ SELECT
   t.created_by,
   COUNT(*) OVER() AS total_count
 FROM api_tokens t
-JOIN agents a ON t.agent_id = a.id
+JOIN actors a ON t.actor_id = a.id
 WHERE ($1::bigint IS NULL OR a.id = $1::bigint)
 ORDER BY t.created_at DESC, t.id
 LIMIT $2::bigint
@@ -127,15 +127,15 @@ OFFSET $2 * ($3::bigint - 1)
 `
 
 type ApiTokenListByPageParams struct {
-	AgentId  *int64
+	ActorId  *int64
 	PageSize interface{}
 	Page     int64
 }
 
 type ApiTokenListByPageRow struct {
 	ID          string
-	AgentId     int64
-	AgentName   string
+	ActorId     int64
+	ActorName   string
 	QueueID     int64
 	Permissions []string
 	CreatedAt   int64
@@ -145,7 +145,7 @@ type ApiTokenListByPageRow struct {
 }
 
 func (q *Queries) ApiTokenListByPage(ctx context.Context, db DBTX, arg *ApiTokenListByPageParams) ([]*ApiTokenListByPageRow, error) {
-	rows, err := db.Query(ctx, apiTokenListByPage, arg.AgentId, arg.PageSize, arg.Page)
+	rows, err := db.Query(ctx, apiTokenListByPage, arg.ActorId, arg.PageSize, arg.Page)
 	if err != nil {
 		return nil, err
 	}
@@ -155,8 +155,8 @@ func (q *Queries) ApiTokenListByPage(ctx context.Context, db DBTX, arg *ApiToken
 		var i ApiTokenListByPageRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.AgentId,
-			&i.AgentName,
+			&i.ActorId,
+			&i.ActorName,
 			&i.QueueID,
 			&i.Permissions,
 			&i.CreatedAt,
@@ -178,7 +178,7 @@ const apiTokenRotate = `-- name: ApiTokenRotate :one
 WITH new_token AS (
   INSERT INTO api_tokens (
     id,
-    agent_id,
+    actor_id,
     expire_at,
     created_by,
     permissions,
@@ -195,7 +195,7 @@ WITH new_token AS (
 ), update_existing AS (
   UPDATE api_tokens
   SET expire_at = EXTRACT(EPOCH FROM NOW() + INTERVAL '15 minutes')
-  WHERE agent_id = $2
+  WHERE actor_id = $2
     AND id != (SELECT id FROM new_token)
 )
 SELECT id FROM new_token
@@ -203,7 +203,7 @@ SELECT id FROM new_token
 
 type ApiTokenRotateParams struct {
 	ID          string
-	AgentId     int64
+	ActorId     int64
 	NewExpireAt int64
 	CreatedBy   string
 	Permissions []string
@@ -212,7 +212,7 @@ type ApiTokenRotateParams struct {
 func (q *Queries) ApiTokenRotate(ctx context.Context, db DBTX, arg *ApiTokenRotateParams) (string, error) {
 	row := db.QueryRow(ctx, apiTokenRotate,
 		arg.ID,
-		arg.AgentId,
+		arg.ActorId,
 		arg.NewExpireAt,
 		arg.CreatedBy,
 		arg.Permissions,

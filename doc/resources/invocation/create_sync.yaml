@@ -1,7 +1,7 @@
 post:
   summary: Create a new synchronous invocation job
   description: |
-    This endpoint allows an agent user to create and execute a new invocation job synchronously.
+    This endpoint allows an actor user to create and execute a new invocation job synchronously.
     The request will wait for the job to complete before returning the result.
 
     Key features:
@@ -11,7 +11,7 @@ post:
 
     Usage flow:
     1. Submit the invocation job using this endpoint.
-    2. The agent retrieves and processes the job.
+    2. The actor retrieves and processes the job.
     3. Once the job is completed, the endpoint returns with the full result.
 
     Response includes:
@@ -45,9 +45,9 @@ post:
         schema:
           type: object
           properties:
-            agent:
+            actor:
               type: string
-              description: The name of the agent to process the invocation job
+              description: The name of the actor to process the invocation job
             meta:
               type: object
               description: The metadata of the invocation job
@@ -55,27 +55,27 @@ post:
               type: object
               description: The payload for the invocation job
           required:
-            - agent
+            - actor
             - meta
             - payload
   responses:
-    '201':
+    "201":
       description: Async invocation created
       content:
         application/json:
           schema:
-            $ref: '../../schemas/InvocationResult.yaml'
+            $ref: "../../schemas/InvocationResult.yaml"
           example:
             id: "inv_123456789"
             state: "completed"
             attempted_at: 1737456000
             finalized_at: 1737466000
             result: { "key": "value" }
-    '400':
-      $ref : "../../responses/400.yaml"
-    '401':
+    "400":
+      $ref: "../../responses/400.yaml"
+    "401":
       description: Unauthorized
-    '408':
+    "408":
       description: Request timeout
-    '500':
-      $ref : "../../responses/500.yaml"
+    "500":
+      $ref: "../../responses/500.yaml"

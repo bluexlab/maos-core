@@ -101,7 +101,7 @@ func (ns NullInvocationState) Value() (driver.Value, error) {
 	return string(ns.InvocationState), nil
 }
 
-type Agent struct {
+type Actor struct {
 	ID           int64
 	Name         string
 	QueueID      int64
@@ -115,7 +115,7 @@ type Agent struct {
 
 type ApiToken struct {
 	ID          string
-	AgentId     int64
+	ActorId     int64
 	ExpireAt    int64
 	CreatedBy   string
 	CreatedAt   int64
@@ -124,10 +124,10 @@ type ApiToken struct {
 
 type Config struct {
 	ID              int64
-	AgentId         int64
+	ActorId         int64
 	ConfigSuiteID   *int64
 	Content         []byte
-	MinAgentVersion []int32
+	MinActorVersion []int32
 	CreatedBy       string
 	CreatedAt       int64
 	UpdatedBy       *string

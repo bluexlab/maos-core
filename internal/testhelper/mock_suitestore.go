@@ -28,7 +28,7 @@ func (m *MockSuiteStore) ReadSuites(ctx context.Context) ([]suitestore.Reference
 }
 
 // WriteSuite implements the SuiteStore interface
-func (m *MockSuiteStore) WriteSuite(ctx context.Context, suite []suitestore.AgentConfig) error {
+func (m *MockSuiteStore) WriteSuite(ctx context.Context, suite []suitestore.ActorConfig) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.suites = append(m.suites, suitestore.ReferenceConfigSuite{

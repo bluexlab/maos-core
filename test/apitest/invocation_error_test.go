@@ -17,21 +17,21 @@ func TestInvocationReturnErrorEndpoint(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	setup := func(t *testing.T, ctx context.Context) (*httptest.Server, dbaccess.Accessor, *dbsqlc.Agent, *dbsqlc.ApiToken) {
+	setup := func(t *testing.T, ctx context.Context) (*httptest.Server, dbaccess.Accessor, *dbsqlc.Actor, *dbsqlc.ApiToken) {
 		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
-		agent := fixture.InsertAgent(t, ctx, accessor.Source(), "test-agent")
-		token := fixture.InsertToken(t, ctx, accessor.Source(), "agent-token", agent.ID, 0, []string{"read:invocation"})
-		return server, accessor, agent, token
+		actor := fixture.InsertActor(t, ctx, accessor.Source(), "test-actor")
+		token := fixture.InsertToken(t, ctx, accessor.Source(), "actor-token", actor.ID, 0, []string{"read:invocation"})
+		return server, accessor, actor, token
 	}
 
 	t.Run("running invocations exist", func(t *testing.T) {
-		server, accessor, agent, token := setup(t, ctx)
+		server, accessor, actor, token := setup(t, ctx)
 
 		// insert and change state to running
-		invocation := fixture.InsertInvocation(t, ctx, accessor.Source(), "available", `{"seq": 1}`, agent.Name)
+		invocation := fixture.InsertInvocation(t, ctx, accessor.Source(), "available", `{"seq": 1}`, actor.Name)
 		_, err := accessor.Querier().InvocationGetAvailable(ctx, accessor.Source(), &dbsqlc.InvocationGetAvailableParams{
-			AttemptedBy: agent.ID,
-			QueueID:     agent.QueueID,
+			AttemptedBy: actor.ID,
+			QueueID:     actor.QueueID,
 			Max:         1,
 		})
 		require.NoError(t, err)
@@ -55,8 +55,8 @@ func TestInvocationReturnErrorEndpoint(t *testing.T) {
 	})
 
 	t.Run("invalid permission", func(t *testing.T) {
-		server, accessor, agent, _ := setup(t, ctx)
-		token := fixture.InsertToken(t, ctx, accessor.Source(), "agent-token2", agent.ID, 0, []string{"create:invocation"})
+		server, accessor, actor, _ := setup(t, ctx)
+		token := fixture.InsertToken(t, ctx, accessor.Source(), "actor-token2", actor.ID, 0, []string{"create:invocation"})
 
 		body := `{"errors":{"err": 16888}}`
 		resp, _ := PostHttp(t, fmt.Sprintf("%s/v1/invocations/%d/error", server.URL, 1998), body, token.ID+"n")
@@ -72,15 +72,15 @@ func TestInvocationReturnErrorEndpoint(t *testing.T) {
 	})
 
 	t.Run("attempted_by mismatch", func(t *testing.T) {
-		server, accessor, agent, _ := setup(t, ctx)
-		agent2 := fixture.InsertAgent(t, ctx, accessor.Source(), "test-agent2")
-		token2 := fixture.InsertToken(t, ctx, accessor.Source(), "agent2-token", agent2.ID, 0, []string{"read:invocation"})
+		server, accessor, actor, _ := setup(t, ctx)
+		actor2 := fixture.InsertActor(t, ctx, accessor.Source(), "test-actor2")
+		token2 := fixture.InsertToken(t, ctx, accessor.Source(), "actor2-token", actor2.ID, 0, []string{"read:invocation"})
 
 		// insert and change state to running
-		invocation := fixture.InsertInvocation(t, ctx, accessor.Source(), "available", `{"seq": 1}`, agent.Name)
+		invocation := fixture.InsertInvocation(t, ctx, accessor.Source(), "available", `{"seq": 1}`, actor.Name)
 		_, err := accessor.Querier().InvocationGetAvailable(ctx, accessor.Source(), &dbsqlc.InvocationGetAvailableParams{
-			AttemptedBy: agent.ID,
-			QueueID:     agent.QueueID,
+			AttemptedBy: actor.ID,
+			QueueID:     actor.QueueID,
 			Max:         1,
 		})
 		require.NoError(t, err)

@@ -33,8 +33,8 @@ func TestCreateCompletion(t *testing.T) {
 
 	// Setup
 	server, accessor, _ := SetupHttpTestWithDb(t, ctx)
-	agent := fixture.InsertAgent(t, ctx, accessor.Source(), "test-agent")
-	fixture.InsertToken(t, ctx, accessor.Source(), "test-token", agent.ID, 0, []string{"create:completion"})
+	actor := fixture.InsertActor(t, ctx, accessor.Source(), "test-actor")
+	fixture.InsertToken(t, ctx, accessor.Source(), "test-token", actor.ID, 0, []string{"create:completion"})
 
 	// Create a mock adapter
 	mockAdapter := new(MockAdapter)
@@ -202,8 +202,8 @@ func TestCreateCompletion(t *testing.T) {
 func TestListCompletionModels(t *testing.T) {
 	ctx := context.Background()
 	server, accessor, _ := SetupHttpTestWithDb(t, ctx)
-	agent := fixture.InsertAgent(t, ctx, accessor.Source(), "test-agent")
-	fixture.InsertToken(t, ctx, accessor.Source(), "test-token", agent.ID, 0, []string{"read:completion"})
+	actor := fixture.InsertActor(t, ctx, accessor.Source(), "test-actor")
+	fixture.InsertToken(t, ctx, accessor.Source(), "test-token", actor.ID, 0, []string{"read:completion"})
 
 	t.Run("Successful listing of completion models", func(t *testing.T) {
 		// Send the request

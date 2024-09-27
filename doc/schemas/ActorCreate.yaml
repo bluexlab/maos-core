@@ -11,5 +11,5 @@ properties:
 required:
   - name
 example:
-  name: "agent-16888"
+  name: "actor-16888"
   enabled: true

@@ -3,12 +3,12 @@ properties:
   id:
     type: integer
     format: int64
-  agent_id:
+  actor_id:
     type: integer
     format: int64
-  agent_name:
+  actor_name:
     type: string
-  min_agent_version:
+  min_actor_version:
     type: string
   content:
     type: object
@@ -27,8 +27,8 @@ properties:
 
 required:
   - id
-  - agent_id
-  - agent_name
+  - actor_id
+  - actor_name
   - content
   - created_at
   - created_by

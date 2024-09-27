@@ -29,15 +29,15 @@ func TestUpdateConfigEndpoint(t *testing.T) {
 		{
 			name: "Valid update",
 			setupFunc: func(ctx context.Context, t *testing.T, accessor dbaccess.Accessor) int64 {
-				agent := fixture.InsertAgent(t, ctx, accessor.Source(), "TestAgent")
+				actor := fixture.InsertActor(t, ctx, accessor.Source(), "TestActor")
 				configSuite := fixture.InsertConfigSuite(t, ctx, accessor.Source())
-				config := fixture.InsertConfig2(t, ctx, accessor.Source(), agent.ID, &configSuite.ID, "testuser", map[string]string{"key": "value"})
+				config := fixture.InsertConfig2(t, ctx, accessor.Source(), actor.ID, &configSuite.ID, "testuser", map[string]string{"key": "value"})
 				return config.ID
 			},
-			body:           `{"content":{"key":"newValue"},"min_agent_version":"2.0.0","user":"testuser"}`,
+			body:           `{"content":{"key":"newValue"},"min_actor_version":"2.0.0","user":"testuser"}`,
 			token:          "admin-token",
 			expectedStatus: http.StatusOK,
-			expectedBody:   `{"data":{"id":%d,"agent_id":%d,"content":{"key":"newValue"},"min_agent_version":"2.0.0","created_by":"testuser"}}`,
+			expectedBody:   `{"data":{"id":%d,"actor_id":%d,"content":{"key":"newValue"},"min_actor_version":"2.0.0","created_by":"testuser"}}`,
 		},
 		{
 			name:           "Config not found",
@@ -49,11 +49,11 @@ func TestUpdateConfigEndpoint(t *testing.T) {
 		{
 			name: "Config suite deployed",
 			setupFunc: func(ctx context.Context, t *testing.T, accessor dbaccess.Accessor) int64 {
-				agent := fixture.InsertAgent(t, ctx, accessor.Source(), "TestAgent")
+				actor := fixture.InsertActor(t, ctx, accessor.Source(), "TestActor")
 				configSuite := fixture.InsertConfigSuite(t, ctx, accessor.Source())
 				_, err := accessor.Source().Exec(ctx, "UPDATE config_suites SET deployed_at = 16888 WHERE id = $1", configSuite.ID)
 				require.NoError(t, err)
-				config := fixture.InsertConfig2(t, ctx, accessor.Source(), agent.ID, &configSuite.ID, "testuser", map[string]string{"key": "value"})
+				config := fixture.InsertConfig2(t, ctx, accessor.Source(), actor.ID, &configSuite.ID, "testuser", map[string]string{"key": "value"})
 				return config.ID
 			},
 			body:           `{"content":{"key":"newValue"},"user":"testuser"}`,
@@ -73,8 +73,8 @@ func TestUpdateConfigEndpoint(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server, accessor, _ := SetupHttpTestWithDb(t, ctx)
 
-			agent := fixture.InsertAgent(t, ctx, accessor.Source(), "agent1")
-			fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", agent.ID, 0, []string{"admin"})
+			actor := fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
+			fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", actor.ID, 0, []string{"admin"})
 
 			if tt.setupFunc != nil {
 				tt.configID = tt.setupFunc(ctx, t, accessor)
@@ -89,15 +89,15 @@ func TestUpdateConfigEndpoint(t *testing.T) {
 				err := json.Unmarshal([]byte(resBody), &response)
 				require.NoError(t, err)
 
-				expectedBody := fmt.Sprintf(tt.expectedBody, tt.configID, response.Data.AgentId)
+				expectedBody := fmt.Sprintf(tt.expectedBody, tt.configID, response.Data.ActorId)
 				var expectedResponse api.AdminUpdateConfig200JSONResponse
 				err = json.Unmarshal([]byte(expectedBody), &expectedResponse)
 				require.NoError(t, err)
 
 				require.Equal(t, expectedResponse.Data.Id, response.Data.Id)
-				require.Equal(t, expectedResponse.Data.AgentId, response.Data.AgentId)
+				require.Equal(t, expectedResponse.Data.ActorId, response.Data.ActorId)
 				require.Equal(t, expectedResponse.Data.Content, response.Data.Content)
-				require.Equal(t, expectedResponse.Data.MinAgentVersion, response.Data.MinAgentVersion)
+				require.Equal(t, expectedResponse.Data.MinActorVersion, response.Data.MinActorVersion)
 				require.Equal(t, expectedResponse.Data.CreatedBy, response.Data.CreatedBy)
 				require.NotZero(t, response.Data.CreatedAt)
 

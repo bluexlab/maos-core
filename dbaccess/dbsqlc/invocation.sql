@@ -4,10 +4,10 @@ FROM invocations
 WHERE id = @id::bigint;
 
 -- name: InvocationInsert :one
-WITH agent_queue AS (
+WITH actor_queue AS (
 	SELECT queue_id
-	FROM agents
-	WHERE name = @agent_name::text
+	FROM actors
+	WHERE name = @actor_name::text
 )
 INSERT INTO invocations(
 	state,
@@ -21,28 +21,28 @@ INSERT INTO invocations(
 )
 SELECT
 	@state::invocation_state,
-	agent_queue.queue_id,
+	actor_queue.queue_id,
 	coalesce(@created_at::bigint, EXTRACT(EPOCH FROM NOW())),
 	@finalized_at,
 	@priority::smallint,
 	@payload::jsonb,
 	coalesce(@metadata::jsonb, '{}'),
 	coalesce(@tags::varchar(255)[], '{}')
-FROM agent_queue
+FROM actor_queue
 RETURNING id, queue_id;
 
 -- name: InvocationGetAvailable :many
 WITH locked_invocations AS (
 	SELECT
-		*
+			*
 	FROM
-		invocations
+			invocations
 	WHERE
-		state = 'available'::invocation_state
-		AND queue_id = @queue_id::bigint
+			state = 'available'::invocation_state
+			AND queue_id = @queue_id::bigint
 	ORDER BY
-		priority ASC,
-		id ASC
+			priority ASC,
+			id ASC
 	LIMIT @max::integer
 	FOR UPDATE
 	SKIP LOCKED

@@ -11,9 +11,11 @@ import (
 	"github.com/samber/lo"
 	apps "k8s.io/api/apps/v1"
 	core "k8s.io/api/core/v1"
+	networking "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -29,6 +31,11 @@ type DeploymentParams struct {
 	APIKey        string
 	MemoryRequest string
 	MemoryLimit   string
+	HasService    bool
+	ServicePort   int32
+	HasIngress    bool
+	IngressHost   string
+	BodyLimit     string
 }
 
 type Secret struct {
@@ -82,6 +89,16 @@ func (c *K8sController) UpdateDeploymentSet(ctx context.Context, deploymentSet [
 		return err
 	}
 
+	existingServices, err := c.listExistingServices(ctx)
+	if err != nil {
+		return err
+	}
+
+	existingIngresses, err := c.listExistingIngress(ctx)
+	if err != nil {
+		return err
+	}
+
 	for _, params := range deploymentSet {
 		if existingDeployment, exists := existingDeployments[params.Name]; exists {
 			err := c.updateDeployment(ctx, existingDeployment, params)
@@ -95,9 +112,49 @@ func (c *K8sController) UpdateDeploymentSet(ctx context.Context, deploymentSet [
 				return fmt.Errorf("failed to create deployment %s: %v", params.Name, err)
 			}
 		}
+
+		if params.HasService {
+			if existingService, exists := existingServices[params.Name]; exists {
+				err := c.updateService(ctx, existingService, params)
+				if err != nil {
+					return fmt.Errorf("failed to update service %s: %v", params.Name, err)
+				}
+				delete(existingServices, params.Name)
+			} else {
+				err := c.createService(ctx, params)
+				if err != nil {
+					return fmt.Errorf("failed to create service %s: %v", params.Name, err)
+				}
+			}
+		}
+
+		if params.HasIngress {
+			if existingIngress, exists := existingIngresses[params.Name]; exists {
+				err := c.updateIngress(ctx, existingIngress, params)
+				if err != nil {
+					return fmt.Errorf("failed to update ingress %s: %v", params.Name, err)
+				}
+				delete(existingIngresses, params.Name)
+			} else {
+				err := c.createIngress(ctx, params)
+				if err != nil {
+					return fmt.Errorf("failed to create ingress %s: %v", params.Name, err)
+				}
+			}
+		}
 	}
 
-	return c.deleteObsoleteDeployments(ctx, existingDeployments)
+	if err := c.deleteObsoleteDeployments(ctx, existingDeployments); err != nil {
+		return err
+	}
+	if err := c.deleteObsoleteServices(ctx, existingServices); err != nil {
+		return err
+	}
+	if err := c.deleteObsoleteIngresses(ctx, existingIngresses); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // TriggerRollingRestart triggers a rolling restart of the deployment
@@ -212,6 +269,38 @@ func (c *K8sController) listExistingDeployments(ctx context.Context) (map[string
 		existingDeployments[deployment.Name] = deployment
 	}
 	return existingDeployments, nil
+}
+
+func (c *K8sController) listExistingServices(ctx context.Context) (map[string]*core.Service, error) {
+	serviceList, err := c.clientset.CoreV1().Services(c.namespace).List(ctx, meta.ListOptions{
+		LabelSelector: "created-by=maos",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list existing services: %v", err)
+	}
+
+	existingServices := make(map[string]*core.Service)
+	for i := range serviceList.Items {
+		service := &serviceList.Items[i]
+		existingServices[service.Name] = service
+	}
+	return existingServices, nil
+}
+
+func (c *K8sController) listExistingIngress(ctx context.Context) (map[string]*networking.Ingress, error) {
+	ingressList, err := c.clientset.NetworkingV1().Ingresses(c.namespace).List(ctx, meta.ListOptions{
+		LabelSelector: "created-by=maos",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list existing ingresses: %v", err)
+	}
+
+	existingIngresses := make(map[string]*networking.Ingress)
+	for i := range ingressList.Items {
+		ingress := &ingressList.Items[i]
+		existingIngresses[ingress.Name] = ingress
+	}
+	return existingIngresses, nil
 }
 
 func (c *K8sController) createDeployment(ctx context.Context, params DeploymentParams) (*apps.Deployment, error) {
@@ -349,6 +438,7 @@ func (c *K8sController) createDeploymentStruct(params DeploymentParams, sa *core
 		params.Labels = make(map[string]string)
 	}
 	params.Labels["created-by"] = "maos"
+	params.Labels["app"] = params.Name
 
 	return &apps.Deployment{
 		ObjectMeta: meta.ObjectMeta{
@@ -379,6 +469,70 @@ func (c *K8sController) createDeploymentStruct(params DeploymentParams, sa *core
 								},
 								Limits: core.ResourceList{
 									core.ResourceMemory: memoryLimit,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func (c *K8sController) createServiceStruct(params DeploymentParams) *core.Service {
+	serviceName := params.Name
+	servicePort := params.ServicePort
+
+	return &core.Service{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      serviceName,
+			Namespace: c.namespace,
+			Labels:    params.Labels,
+		},
+		Spec: core.ServiceSpec{
+			Selector: params.Labels,
+			Ports: []core.ServicePort{
+				{
+					Port:       servicePort,
+					TargetPort: intstr.FromInt(int(servicePort)),
+					Protocol:   core.ProtocolTCP,
+				},
+			},
+			Type: core.ServiceTypeClusterIP,
+		},
+	}
+}
+
+func (c *K8sController) createIngressStruct(params DeploymentParams) *networking.Ingress {
+	ingressName := params.Name
+
+	return &networking.Ingress{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      ingressName,
+			Namespace: c.namespace,
+			Labels:    params.Labels,
+			Annotations: map[string]string{
+				"nginx.ingress.kubernetes.io/proxy-body-size": params.BodyLimit,
+			},
+		},
+		Spec: networking.IngressSpec{
+			Rules: []networking.IngressRule{
+				{
+					Host: params.IngressHost,
+					IngressRuleValue: networking.IngressRuleValue{
+						HTTP: &networking.HTTPIngressRuleValue{
+							Paths: []networking.HTTPIngressPath{
+								{
+									Path:     "/",
+									PathType: lo.ToPtr(networking.PathTypePrefix),
+									Backend: networking.IngressBackend{
+										Service: &networking.IngressServiceBackend{
+											Name: params.Name,
+											Port: networking.ServiceBackendPort{
+												Number: params.ServicePort,
+											},
+										},
+									},
 								},
 							},
 						},
@@ -458,4 +612,81 @@ func getCurrentNamespace() (string, error) {
 	}
 
 	return strings.TrimSpace(string(data)), nil
+}
+
+func (c *K8sController) updateService(ctx context.Context, existingService *core.Service, params DeploymentParams) error {
+	slog.Info("Updating service", "name", existingService.Name)
+
+	newService := c.createServiceStruct(params)
+	existingService.Spec = newService.Spec
+	existingService.ObjectMeta.Labels = newService.ObjectMeta.Labels
+
+	_, err := c.clientset.CoreV1().Services(c.namespace).Update(ctx, existingService, meta.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to update service: %v", err)
+	}
+
+	return nil
+}
+
+func (c *K8sController) updateIngress(ctx context.Context, existingIngress *networking.Ingress, params DeploymentParams) error {
+	slog.Info("Updating ingress", "name", existingIngress.Name)
+
+	newIngress := c.createIngressStruct(params)
+	existingIngress.Spec = newIngress.Spec
+	existingIngress.ObjectMeta.Labels = newIngress.ObjectMeta.Labels
+	existingIngress.ObjectMeta.Annotations = newIngress.ObjectMeta.Annotations
+
+	_, err := c.clientset.NetworkingV1().Ingresses(c.namespace).Update(ctx, existingIngress, meta.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to update ingress: %v", err)
+	}
+
+	return nil
+}
+
+func (c *K8sController) createService(ctx context.Context, params DeploymentParams) error {
+	slog.Info("Creating service", "name", params.Name)
+
+	service := c.createServiceStruct(params)
+	_, err := c.clientset.CoreV1().Services(c.namespace).Create(ctx, service, meta.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to create service: %v", err)
+	}
+
+	return nil
+}
+
+func (c *K8sController) createIngress(ctx context.Context, params DeploymentParams) error {
+	slog.Info("Creating ingress", "name", params.Name)
+
+	ingress := c.createIngressStruct(params)
+	_, err := c.clientset.NetworkingV1().Ingresses(c.namespace).Create(ctx, ingress, meta.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to create ingress: %v", err)
+	}
+
+	return nil
+}
+
+func (c *K8sController) deleteObsoleteServices(ctx context.Context, obsoleteServices map[string]*core.Service) error {
+	for name, service := range obsoleteServices {
+		slog.Info("Deleting obsolete service", "name", name)
+		err := c.clientset.CoreV1().Services(c.namespace).Delete(ctx, service.Name, meta.DeleteOptions{})
+		if err != nil && !errors.IsNotFound(err) {
+			slog.Error("Failed to delete service", "name", name, "error", err)
+		}
+	}
+	return nil
+}
+
+func (c *K8sController) deleteObsoleteIngresses(ctx context.Context, obsoleteIngresses map[string]*networking.Ingress) error {
+	for name, ingress := range obsoleteIngresses {
+		slog.Info("Deleting obsolete ingress", "name", name)
+		err := c.clientset.NetworkingV1().Ingresses(c.namespace).Delete(ctx, ingress.Name, meta.DeleteOptions{})
+		if err != nil && !errors.IsNotFound(err) {
+			slog.Error("Failed to delete ingress", "name", name, "error", err)
+		}
+	}
+	return nil
 }

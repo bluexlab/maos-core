@@ -8,8 +8,10 @@ import (
 	"github.com/stretchr/testify/require"
 	apps "k8s.io/api/apps/v1"
 	core "k8s.io/api/core/v1"
+	networking "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes/fake"
 )
 
@@ -25,7 +27,7 @@ func TestK8sController_UpdateDeploymentSet(t *testing.T) {
 		ObjectMeta: meta.ObjectMeta{
 			Name:      "existing-deployment",
 			Namespace: "test-namespace",
-			Labels:    map[string]string{"created-by": "maos", "app": "existing-test"},
+			Labels:    map[string]string{"created-by": "maos", "app": "existing-deployment", "component": "existing-test"},
 		},
 		Spec: apps.DeploymentSpec{
 			Replicas: lo.ToPtr(int32(1)),
@@ -65,7 +67,7 @@ func TestK8sController_UpdateDeploymentSet(t *testing.T) {
 		{
 			Name:          "existing-deployment",
 			Replicas:      2,
-			Labels:        map[string]string{"app": "updated-test"},
+			Labels:        map[string]string{"component": "updated-test"},
 			Image:         "updated-image:v2",
 			EnvVars:       map[string]string{"UPDATED_ENV": "updated-value"},
 			APIKey:        "updated-api-key",
@@ -75,7 +77,7 @@ func TestK8sController_UpdateDeploymentSet(t *testing.T) {
 		{
 			Name:          "new-deployment",
 			Replicas:      1,
-			Labels:        map[string]string{"app": "new-test"},
+			Labels:        map[string]string{"component": "new-test"},
 			Image:         "new-image:v1",
 			EnvVars:       map[string]string{"NEW_ENV": "new-value"},
 			APIKey:        "new-api-key",
@@ -94,7 +96,7 @@ func TestK8sController_UpdateDeploymentSet(t *testing.T) {
 	require.NotNil(t, updatedDeployment)
 	require.Equal(t, int32(2), *updatedDeployment.Spec.Replicas)
 	require.Equal(t, "updated-image:v2", updatedDeployment.Spec.Template.Spec.Containers[0].Image)
-	require.Equal(t, "updated-test", updatedDeployment.Labels["app"])
+	require.Equal(t, "updated-test", updatedDeployment.Labels["component"])
 
 	// Verify the existing secret was updated
 	updatedSecret, err := clientset.CoreV1().Secrets("test-namespace").Get(ctx, "existing-deployment-api-key", meta.GetOptions{})
@@ -108,7 +110,7 @@ func TestK8sController_UpdateDeploymentSet(t *testing.T) {
 	require.NotNil(t, newDeployment)
 	require.Equal(t, int32(1), *newDeployment.Spec.Replicas)
 	require.Equal(t, "new-image:v1", newDeployment.Spec.Template.Spec.Containers[0].Image)
-	require.Equal(t, "new-test", newDeployment.Labels["app"])
+	require.Equal(t, "new-test", newDeployment.Labels["component"])
 
 	// Verify the new secret was created
 	newSecret, err := clientset.CoreV1().Secrets("test-namespace").Get(ctx, "new-deployment-api-key", meta.GetOptions{})
@@ -140,7 +142,7 @@ func TestK8sController_UpdateDeploymentSet_EmptyCluster(t *testing.T) {
 		{
 			Name:          "new-deployment",
 			Replicas:      2,
-			Labels:        map[string]string{"app": "test-app"},
+			Labels:        map[string]string{"component": "test-app"},
 			Image:         "test-image:v1",
 			EnvVars:       map[string]string{"ENV_VAR": "value"},
 			APIKey:        "test-api-key",
@@ -159,7 +161,7 @@ func TestK8sController_UpdateDeploymentSet_EmptyCluster(t *testing.T) {
 	require.NotNil(t, newDeployment)
 	require.Equal(t, int32(2), *newDeployment.Spec.Replicas)
 	require.Equal(t, "test-image:v1", newDeployment.Spec.Template.Spec.Containers[0].Image)
-	require.Equal(t, "test-app", newDeployment.Labels["app"])
+	require.Equal(t, "test-app", newDeployment.Labels["component"])
 
 	// Verify the new secret was created
 	newSecret, err := clientset.CoreV1().Secrets("test-namespace").Get(ctx, "new-deployment-api-key", meta.GetOptions{})
@@ -181,6 +183,576 @@ func TestK8sController_UpdateDeploymentSet_EmptyCluster(t *testing.T) {
 	sa, err := clientset.CoreV1().ServiceAccounts("test-namespace").Get(ctx, "new-deployment", meta.GetOptions{})
 	require.NoError(t, err)
 	require.NotNil(t, sa)
+}
+
+// TestK8sController_UpdateDeploymentSet_HasService tests the scenario where hasService is true
+func TestK8sController_UpdateDeploymentSet_HasService_WithEmptyCluster(t *testing.T) {
+	clientset := fake.NewSimpleClientset()
+
+	// Create a K8sController with the fake clientset
+	controller := &K8sController{
+		clientset: clientset,
+		namespace: "test-namespace",
+	}
+
+	ctx := context.Background()
+
+	// Create a deployment set with a service
+	deploymentSet := []DeploymentParams{
+		{
+			Name:          "existing-deployment",
+			Replicas:      2,
+			Labels:        map[string]string{"component": "test-app"},
+			Image:         "test-image:v1",
+			EnvVars:       map[string]string{"ENV_VAR": "value"},
+			APIKey:        "test-api-key",
+			MemoryRequest: "64Mi",
+			MemoryLimit:   "128Mi",
+			HasService:    true, // Set hasService to true
+			ServicePort:   8080,
+			BodyLimit:     "1Mi", // Set bodyLimit
+		},
+	}
+
+	// Run the UpdateDeploymentSet method
+	err := controller.UpdateDeploymentSet(ctx, deploymentSet)
+	require.NoError(t, err)
+
+	// Verify the new deployment was created
+	newDeployment, err := clientset.AppsV1().Deployments("test-namespace").Get(ctx, "existing-deployment", meta.GetOptions{})
+	require.NoError(t, err)
+	require.NotNil(t, newDeployment)
+	require.Equal(t, int32(2), *newDeployment.Spec.Replicas)
+	require.Equal(t, "test-image:v1", newDeployment.Spec.Template.Spec.Containers[0].Image)
+	require.Equal(t, "test-app", newDeployment.Labels["component"])
+	// verify service was updated
+	updatedService, err := clientset.CoreV1().Services("test-namespace").Get(ctx, "existing-deployment", meta.GetOptions{})
+	require.NoError(t, err)
+	require.NotNil(t, updatedService)
+	require.Equal(t, int32(8080), updatedService.Spec.Ports[0].Port)
+}
+
+func TestK8sController_UpdateDeploymentSet_HasService(t *testing.T) {
+	// Create a fake clientset with an existing service and deployment
+	existingServiceAccount := &core.ServiceAccount{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      "existing-deployment",
+			Namespace: "test-namespace",
+		},
+	}
+	existingDeployment := &apps.Deployment{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      "existing-deployment",
+			Namespace: "test-namespace",
+			Labels:    map[string]string{"created-by": "maos", "app": "existing-deployment", "component": "existing-test"},
+		},
+		Spec: apps.DeploymentSpec{
+			Replicas: lo.ToPtr(int32(1)),
+			Template: core.PodTemplateSpec{
+				Spec: core.PodSpec{
+					ServiceAccountName: "existing-deployment",
+					Containers: []core.Container{
+						{
+							Name:  "existing-deployment",
+							Image: "existing-image:v1",
+						},
+					},
+				},
+			},
+		},
+	}
+	existingService := &core.Service{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      "existing-service",
+			Namespace: "test-namespace",
+			Labels:    map[string]string{"created-by": "maos", "app": "existing-deployment", "component": "existing-test"},
+		},
+		Spec: core.ServiceSpec{
+			Selector: map[string]string{"app": "test-app"},
+			Ports: []core.ServicePort{
+				{
+					Port:       80,
+					TargetPort: intstr.FromInt(80),
+				},
+			},
+		},
+	}
+	clientset := fake.NewSimpleClientset(existingServiceAccount, existingDeployment, existingService)
+
+	// Create a K8sController with the fake clientset
+	controller := &K8sController{
+		clientset: clientset,
+		namespace: "test-namespace",
+	}
+
+	ctx := context.Background()
+
+	// Create a deployment set with a service
+	deploymentSet := []DeploymentParams{
+		{
+			Name:          "existing-deployment",
+			Replicas:      2,
+			Labels:        map[string]string{"component": "test-app"},
+			Image:         "test-image:v1",
+			EnvVars:       map[string]string{"ENV_VAR": "value"},
+			APIKey:        "test-api-key",
+			MemoryRequest: "64Mi",
+			MemoryLimit:   "128Mi",
+			HasService:    true, // Set hasService to true
+			ServicePort:   8080,
+			BodyLimit:     "1Mi", // Set bodyLimit
+		},
+	}
+
+	// Run the UpdateDeploymentSet method
+	err := controller.UpdateDeploymentSet(ctx, deploymentSet)
+	require.NoError(t, err)
+
+	// Verify the new deployment was created
+	newDeployment, err := clientset.AppsV1().Deployments("test-namespace").Get(ctx, "existing-deployment", meta.GetOptions{})
+	require.NoError(t, err)
+	require.NotNil(t, newDeployment)
+	require.Equal(t, int32(2), *newDeployment.Spec.Replicas)
+	require.Equal(t, "test-image:v1", newDeployment.Spec.Template.Spec.Containers[0].Image)
+	require.Equal(t, "test-app", newDeployment.Labels["component"])
+	// verify service was updated
+	updatedService, err := clientset.CoreV1().Services("test-namespace").Get(ctx, "existing-deployment", meta.GetOptions{})
+	require.NoError(t, err)
+	require.NotNil(t, updatedService)
+	require.Equal(t, int32(8080), updatedService.Spec.Ports[0].Port)
+}
+
+// TestK8sController_UpdateDeploymentSet_HasServiceAndIngress tests the scenario where both hasService and hasIngress are true
+func TestK8sController_UpdateDeploymentSet_HasServiceAndIngress_WithEmptyCluster(t *testing.T) {
+	clientset := fake.NewSimpleClientset()
+
+	// Create a K8sController with the fake clientset
+	controller := &K8sController{
+		clientset: clientset,
+		namespace: "test-namespace",
+	}
+
+	ctx := context.Background()
+
+	// Create a deployment set with a service and ingress
+	deploymentSet := []DeploymentParams{
+		{
+			Name:          "existing-deployment",
+			Replicas:      2,
+			Labels:        map[string]string{"component": "test-app"},
+			Image:         "test-image:v1",
+			EnvVars:       map[string]string{"ENV_VAR": "value"},
+			APIKey:        "test-api-key",
+			MemoryRequest: "64Mi",
+			MemoryLimit:   "128Mi",
+			HasService:    true,          // Set hasService to true
+			ServicePort:   8080,          // Set service port
+			HasIngress:    true,          // Set hasIngress to true
+			IngressHost:   "example.com", // Set ingress host
+			BodyLimit:     "1Mi",         // Set bodyLimit
+		},
+	}
+
+	// Run the UpdateDeploymentSet method
+	err := controller.UpdateDeploymentSet(ctx, deploymentSet)
+	require.NoError(t, err)
+
+	// Verify the new deployment was created
+	newDeployment, err := clientset.AppsV1().Deployments("test-namespace").Get(ctx, "existing-deployment", meta.GetOptions{})
+	require.NoError(t, err)
+	require.NotNil(t, newDeployment)
+	require.Equal(t, int32(2), *newDeployment.Spec.Replicas)
+	require.Equal(t, "test-image:v1", newDeployment.Spec.Template.Spec.Containers[0].Image)
+	require.Equal(t, "test-app", newDeployment.Labels["component"])
+
+	// Verify the new service was created
+	newService, err := clientset.CoreV1().Services("test-namespace").Get(ctx, "existing-deployment", meta.GetOptions{})
+	require.NoError(t, err)
+	require.NotNil(t, newService)
+	require.Equal(t, int32(8080), newService.Spec.Ports[0].Port)
+
+	// Verify the new ingress was created
+	newIngress, err := clientset.NetworkingV1().Ingresses("test-namespace").Get(ctx, "existing-deployment", meta.GetOptions{})
+	require.NoError(t, err)
+	require.NotNil(t, newIngress)
+	require.Equal(t, "example.com", newIngress.Spec.Rules[0].Host)
+	require.Equal(t, int32(8080), newIngress.Spec.Rules[0].HTTP.Paths[0].Backend.Service.Port.Number)
+}
+
+func TestK8sController_UpdateDeploymentSet_HasServiceAndIngress(t *testing.T) {
+	// Create a fake clientset with an existing service and ingress
+	existingServiceAccount := &core.ServiceAccount{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      "existing-deployment",
+			Namespace: "test-namespace",
+		},
+	}
+	existingDeployment := &apps.Deployment{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      "existing-deployment",
+			Namespace: "test-namespace",
+			Labels:    map[string]string{"created-by": "maos", "app": "existing-deployment", "component": "existing-test"},
+		},
+		Spec: apps.DeploymentSpec{
+			Replicas: lo.ToPtr(int32(1)),
+			Template: core.PodTemplateSpec{
+				Spec: core.PodSpec{
+					ServiceAccountName: "existing-deployment",
+					Containers: []core.Container{
+						{
+							Name:  "existing-deployment",
+							Image: "existing-image:v1",
+						},
+					},
+				},
+			},
+		},
+	}
+	existingService := &core.Service{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      "existing-deployment",
+			Namespace: "test-namespace",
+			Labels:    map[string]string{"created-by": "maos", "app": "existing-deployment", "component": "existing-test"},
+		},
+		Spec: core.ServiceSpec{
+			Selector: map[string]string{"component": "existing-test"},
+			Ports: []core.ServicePort{
+				{
+					Port:       80,
+					TargetPort: intstr.FromInt(80),
+				},
+			},
+		},
+	}
+	existingIngress := &networking.Ingress{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      "existing-deployment",
+			Namespace: "test-namespace",
+			Labels:    map[string]string{"created-by": "maos", "app": "existing-deployment", "component": "existing-test"},
+		},
+		Spec: networking.IngressSpec{
+			Rules: []networking.IngressRule{
+				{
+					Host: "old-example.com",
+					IngressRuleValue: networking.IngressRuleValue{
+						HTTP: &networking.HTTPIngressRuleValue{
+							Paths: []networking.HTTPIngressPath{
+								{
+									Path:     "/",
+									PathType: lo.ToPtr(networking.PathTypePrefix),
+									Backend: networking.IngressBackend{
+										Service: &networking.IngressServiceBackend{
+											Name: "existing-deployment",
+											Port: networking.ServiceBackendPort{
+												Number: 80,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	clientset := fake.NewSimpleClientset(existingServiceAccount, existingDeployment, existingService, existingIngress)
+
+	// Create a K8sController with the fake clientset
+	controller := &K8sController{
+		clientset: clientset,
+		namespace: "test-namespace",
+	}
+
+	ctx := context.Background()
+
+	// Create a deployment set with a service and ingress
+	deploymentSet := []DeploymentParams{
+		{
+			Name:          "existing-deployment",
+			Replicas:      2,
+			Labels:        map[string]string{"component": "test-app"},
+			Image:         "test-image:v1",
+			EnvVars:       map[string]string{"ENV_VAR": "value"},
+			APIKey:        "test-api-key",
+			MemoryRequest: "64Mi",
+			MemoryLimit:   "128Mi",
+			HasService:    true,          // Set hasService to true
+			ServicePort:   8080,          // Set service port
+			HasIngress:    true,          // Set hasIngress to true
+			IngressHost:   "example.com", // Set ingress host
+			BodyLimit:     "1Mi",         // Set bodyLimit
+		},
+	}
+
+	// Run the UpdateDeploymentSet method
+	err := controller.UpdateDeploymentSet(ctx, deploymentSet)
+	require.NoError(t, err)
+
+	// Verify the new deployment was updated
+	newDeployment, err := clientset.AppsV1().Deployments("test-namespace").Get(ctx, "existing-deployment", meta.GetOptions{})
+	require.NoError(t, err)
+	require.NotNil(t, newDeployment)
+	require.Equal(t, int32(2), *newDeployment.Spec.Replicas)
+	require.Equal(t, "test-image:v1", newDeployment.Spec.Template.Spec.Containers[0].Image)
+	require.Equal(t, "test-app", newDeployment.Labels["component"])
+
+	// Verify the new service was updated
+	newService, err := clientset.CoreV1().Services("test-namespace").Get(ctx, "existing-deployment", meta.GetOptions{})
+	require.NoError(t, err)
+	require.NotNil(t, newService)
+	require.Equal(t, int32(8080), newService.Spec.Ports[0].Port)
+
+	// Verify the new ingress was updated
+	newIngress, err := clientset.NetworkingV1().Ingresses("test-namespace").Get(ctx, "existing-deployment", meta.GetOptions{})
+	require.NoError(t, err)
+	require.NotNil(t, newIngress)
+	require.Equal(t, "example.com", newIngress.Spec.Rules[0].Host)
+	require.Equal(t, int32(8080), newIngress.Spec.Rules[0].HTTP.Paths[0].Backend.Service.Port.Number)
+}
+
+func TestK8sController_UpdateDeploymentSet_WithExistingServiceAndIngressAndUpdateToBlankSet(t *testing.T) {
+	// Create a fake clientset with an existing service and ingress
+	existingServiceAccount := &core.ServiceAccount{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      "existing-deployment",
+			Namespace: "test-namespace",
+		},
+	}
+	existingDeployment := &apps.Deployment{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      "existing-deployment",
+			Namespace: "test-namespace",
+			Labels:    map[string]string{"created-by": "maos", "app": "existing-deployment", "component": "existing-test"},
+		},
+		Spec: apps.DeploymentSpec{
+			Replicas: lo.ToPtr(int32(1)),
+			Template: core.PodTemplateSpec{
+				Spec: core.PodSpec{
+					ServiceAccountName: "existing-deployment",
+					Containers: []core.Container{
+						{
+							Name:  "existing-deployment",
+							Image: "existing-image:v1",
+						},
+					},
+				},
+			},
+		},
+	}
+	existingService := &core.Service{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      "existing-deployment",
+			Namespace: "test-namespace",
+			Labels:    map[string]string{"created-by": "maos", "app": "existing-deployment", "component": "existing-test"},
+		},
+		Spec: core.ServiceSpec{
+			Selector: map[string]string{"component": "existing-test"},
+			Ports: []core.ServicePort{
+				{
+					Port:       80,
+					TargetPort: intstr.FromInt(80),
+				},
+			},
+		},
+	}
+	existingIngress := &networking.Ingress{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      "existing-deployment",
+			Namespace: "test-namespace",
+			Labels:    map[string]string{"created-by": "maos", "app": "existing-deployment", "component": "existing-test"},
+		},
+		Spec: networking.IngressSpec{
+			Rules: []networking.IngressRule{
+				{
+					Host: "old-example.com",
+					IngressRuleValue: networking.IngressRuleValue{
+						HTTP: &networking.HTTPIngressRuleValue{
+							Paths: []networking.HTTPIngressPath{
+								{
+									Path:     "/",
+									PathType: lo.ToPtr(networking.PathTypePrefix),
+									Backend: networking.IngressBackend{
+										Service: &networking.IngressServiceBackend{
+											Name: "existing-deployment",
+											Port: networking.ServiceBackendPort{
+												Number: 80,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	clientset := fake.NewSimpleClientset(existingServiceAccount, existingDeployment, existingService, existingIngress)
+
+	// Create a K8sController with the fake clientset
+	controller := &K8sController{
+		clientset: clientset,
+		namespace: "test-namespace",
+	}
+
+	ctx := context.Background()
+
+	// Create a deployment set with a service and ingress
+	deploymentSet := []DeploymentParams{}
+
+	// Run the UpdateDeploymentSet method
+	err := controller.UpdateDeploymentSet(ctx, deploymentSet)
+	require.NoError(t, err)
+
+	// Verify the there is no deployment
+	deploymentList, err := clientset.AppsV1().Deployments(controller.namespace).List(ctx, meta.ListOptions{
+		LabelSelector: "created-by=maos",
+	})
+	require.NoError(t, err)
+	require.Empty(t, deploymentList.Items)
+
+	// Verify the there is no service
+	serviceList, err := clientset.CoreV1().Services(controller.namespace).List(ctx, meta.ListOptions{
+		LabelSelector: "created-by=maos",
+	})
+	require.NoError(t, err)
+	require.Empty(t, serviceList.Items)
+
+	// Verify the there is no ingress
+	ingressList, err := clientset.NetworkingV1().Ingresses(controller.namespace).List(ctx, meta.ListOptions{
+		LabelSelector: "created-by=maos",
+	})
+	require.NoError(t, err)
+	require.Empty(t, ingressList.Items)
+}
+
+func TestK8sController_UpdateDeploymentSet_WithExistingServiceAndIngressAndUpdateToNoServiceAndIngress(t *testing.T) {
+	// Create a fake clientset with an existing service and ingress
+	existingServiceAccount := &core.ServiceAccount{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      "existing-deployment",
+			Namespace: "test-namespace",
+		},
+	}
+	existingDeployment := &apps.Deployment{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      "existing-deployment",
+			Namespace: "test-namespace",
+			Labels:    map[string]string{"created-by": "maos", "app": "existing-deployment", "component": "existing-test"},
+		},
+		Spec: apps.DeploymentSpec{
+			Replicas: lo.ToPtr(int32(1)),
+			Template: core.PodTemplateSpec{
+				Spec: core.PodSpec{
+					ServiceAccountName: "existing-deployment",
+					Containers: []core.Container{
+						{
+							Name:  "existing-deployment",
+							Image: "existing-image:v1",
+						},
+					},
+				},
+			},
+		},
+	}
+	existingService := &core.Service{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      "existing-deployment",
+			Namespace: "test-namespace",
+			Labels:    map[string]string{"created-by": "maos", "app": "existing-deployment", "component": "existing-test"},
+		},
+		Spec: core.ServiceSpec{
+			Selector: map[string]string{"component": "existing-test"},
+			Ports: []core.ServicePort{
+				{
+					Port:       80,
+					TargetPort: intstr.FromInt(80),
+				},
+			},
+		},
+	}
+	existingIngress := &networking.Ingress{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      "existing-deployment",
+			Namespace: "test-namespace",
+			Labels:    map[string]string{"created-by": "maos", "app": "existing-deployment", "component": "existing-test"},
+		},
+		Spec: networking.IngressSpec{
+			Rules: []networking.IngressRule{
+				{
+					Host: "old-example.com",
+					IngressRuleValue: networking.IngressRuleValue{
+						HTTP: &networking.HTTPIngressRuleValue{
+							Paths: []networking.HTTPIngressPath{
+								{
+									Path:     "/",
+									PathType: lo.ToPtr(networking.PathTypePrefix),
+									Backend: networking.IngressBackend{
+										Service: &networking.IngressServiceBackend{
+											Name: "existing-deployment",
+											Port: networking.ServiceBackendPort{
+												Number: 80,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	clientset := fake.NewSimpleClientset(existingServiceAccount, existingDeployment, existingService, existingIngress)
+
+	// Create a K8sController with the fake clientset
+	controller := &K8sController{
+		clientset: clientset,
+		namespace: "test-namespace",
+	}
+
+	ctx := context.Background()
+
+	// Create a deployment set with a service and ingress
+	deploymentSet := []DeploymentParams{
+		{
+			Name:          "existing-deployment",
+			Replicas:      2,
+			Labels:        map[string]string{"component": "test-app"},
+			Image:         "test-image:v1",
+			EnvVars:       map[string]string{"ENV_VAR": "value"},
+			APIKey:        "test-api-key",
+			MemoryRequest: "64Mi",
+			MemoryLimit:   "128Mi",
+		},
+	}
+
+	// Run the UpdateDeploymentSet method
+	err := controller.UpdateDeploymentSet(ctx, deploymentSet)
+	require.NoError(t, err)
+
+	// Verify the deployment was updated
+	newDeployment, err := clientset.AppsV1().Deployments(controller.namespace).Get(ctx, "existing-deployment", meta.GetOptions{})
+	require.NoError(t, err)
+	require.NotNil(t, newDeployment)
+	require.Equal(t, int32(2), *newDeployment.Spec.Replicas)
+	require.Equal(t, "test-image:v1", newDeployment.Spec.Template.Spec.Containers[0].Image)
+	require.Equal(t, "test-app", newDeployment.Labels["component"])
+
+	// Verify the there is no service
+	serviceList, err := clientset.CoreV1().Services(controller.namespace).List(ctx, meta.ListOptions{
+		LabelSelector: "created-by=maos",
+	})
+	require.NoError(t, err)
+	require.Empty(t, serviceList.Items)
+
+	// Verify the there is no ingress
+	ingressList, err := clientset.NetworkingV1().Ingresses(controller.namespace).List(ctx, meta.ListOptions{
+		LabelSelector: "created-by=maos",
+	})
+	require.NoError(t, err)
+	require.Empty(t, ingressList.Items)
 }
 
 func TestK8sController_TriggerRollingRestart(t *testing.T) {

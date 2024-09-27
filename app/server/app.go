@@ -166,7 +166,7 @@ func (a *App) loadConfig() Config {
 	// Validate the struct
 	validate := validator.New()
 	if err := validate.Struct(config); err != nil {
-		a.logger.Error("Validation failed: %v", err)
+		a.logger.Error("Validation failed", "err", err)
 		os.Exit(1)
 	}
 

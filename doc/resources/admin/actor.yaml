@@ -57,6 +57,14 @@ patch:
           properties:
             name:
               type: string
+            role:
+              type: string
+              enum:
+                - agent
+                - service
+                - portal
+                - user
+                - other
             enabled:
               type: boolean
             deployable:

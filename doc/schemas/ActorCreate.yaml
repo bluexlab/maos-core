@@ -2,6 +2,14 @@ type: object
 properties:
   name:
     type: string
+  role:
+    type: string
+    enum:
+      - agent
+      - service
+      - portal
+      - user
+      - other
   enabled:
     type: boolean
   deployable:
@@ -10,6 +18,8 @@ properties:
     type: boolean
 required:
   - name
+  - role
 example:
   name: "actor-16888"
+  role: "user"
   enabled: true

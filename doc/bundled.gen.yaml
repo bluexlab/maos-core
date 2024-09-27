@@ -638,6 +638,12 @@ paths:
                   items:
                     type: string
                   description: The text to embedded.
+                input_type:
+                  type: string
+                  description: The type of the input.
+                  enum:
+                    - document
+                    - query
               required:
                 - model_id
                 - input
@@ -1220,6 +1226,14 @@ paths:
               properties:
                 name:
                   type: string
+                role:
+                  type: string
+                  enum:
+                    - agent
+                    - service
+                    - portal
+                    - user
+                    - other
                 enabled:
                   type: boolean
                 deployable:
@@ -2170,6 +2184,14 @@ components:
           format: int64
         name:
           type: string
+        role:
+          type: string
+          enum:
+            - agent
+            - service
+            - portal
+            - user
+            - other
         enabled:
           type: boolean
         deployable:
@@ -2187,6 +2209,7 @@ components:
       required:
         - id
         - name
+        - role
         - enabled
         - deployable
         - configurable
@@ -2203,6 +2226,14 @@ components:
       properties:
         name:
           type: string
+        role:
+          type: string
+          enum:
+            - agent
+            - service
+            - portal
+            - user
+            - other
         enabled:
           type: boolean
         deployable:
@@ -2211,8 +2242,10 @@ components:
           type: boolean
       required:
         - name
+        - role
       example:
         name: actor-16888
+        role: user
         enabled: true
     Deployment:
       type: object

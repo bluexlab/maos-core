@@ -7,6 +7,7 @@ WITH actor_token_count AS (
 SELECT
   actors.id,
   actors.name,
+  actors.role,
   actors.queue_id,
   actors.enabled,
   actors.deployable,
@@ -32,6 +33,7 @@ SELECT
   actors.id,
   actors.name,
   actors.queue_id,
+  actors.role,
   actors.enabled,
   actors.deployable,
   actors.configurable,
@@ -46,6 +48,7 @@ WHERE actors.id = @id;
 INSERT INTO actors(
     name,
     queue_id,
+    role,
     enabled,
     deployable,
     configurable,
@@ -53,6 +56,7 @@ INSERT INTO actors(
 ) VALUES (
     @name::text,
     @queue_id::bigint,
+    @role::actor_role,
     @enabled::boolean,
     @deployable::boolean,
     @configurable::boolean,
@@ -62,6 +66,7 @@ INSERT INTO actors(
 -- name: ActorUpdate :one
 UPDATE actors SET
     name = COALESCE(sqlc.narg('name')::text, name),
+    role = COALESCE(sqlc.narg('role')::actor_role, role),
     enabled = COALESCE(sqlc.narg('enabled')::boolean, enabled),
     deployable = COALESCE(sqlc.narg('deployable')::boolean, deployable),
     configurable = COALESCE(sqlc.narg('configurable')::boolean, configurable),

@@ -15,6 +15,7 @@ func InsertActor(t *testing.T, ctx context.Context, ds DataSource, name string) 
 	}
 	actor, err := query.ActorInsert(ctx, ds, &dbsqlc.ActorInsertParams{
 		Name:         name,
+		Role:         dbsqlc.ActorRole("agent"),
 		QueueID:      queue.ID,
 		Enabled:      true,
 		Deployable:   false,
@@ -26,7 +27,7 @@ func InsertActor(t *testing.T, ctx context.Context, ds DataSource, name string) 
 	return actor
 }
 
-func InsertActor2(t *testing.T, ctx context.Context, ds DataSource, name string, enabled bool, deployable bool, configurable bool) *dbsqlc.Actor {
+func InsertActor2(t *testing.T, ctx context.Context, ds DataSource, name string, role string, enabled bool, deployable bool, configurable bool) *dbsqlc.Actor {
 	query := dbsqlc.New()
 	queue, err := query.QueueInsert(ctx, ds, &dbsqlc.QueueInsertParams{Name: name})
 	if err != nil {
@@ -34,6 +35,7 @@ func InsertActor2(t *testing.T, ctx context.Context, ds DataSource, name string,
 	}
 	actor, err := query.ActorInsert(ctx, ds, &dbsqlc.ActorInsertParams{
 		Name:         name,
+		Role:         dbsqlc.ActorRole(role),
 		QueueID:      queue.ID,
 		Enabled:      enabled,
 		Deployable:   deployable,

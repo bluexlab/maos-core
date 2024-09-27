@@ -52,6 +52,7 @@ func TestListActorsWithDB(t *testing.T) {
 			assert.NotEmpty(t, actor.Id)
 			assert.NotEmpty(t, actor.Name)
 			assert.NotZero(t, actor.CreatedAt)
+			assert.NotEmpty(t, actor.Role)
 			// Add checks for new fields
 			assert.NotNil(t, actor.Enabled)
 			assert.NotNil(t, actor.Deployable)
@@ -97,7 +98,7 @@ func TestListActorsWithDB(t *testing.T) {
 			assert.NotEmpty(t, actor.Id)
 			assert.NotEmpty(t, actor.Name)
 			assert.NotZero(t, actor.CreatedAt)
-			// Add checks for new fields
+			assert.NotEmpty(t, actor.Role)
 			assert.NotNil(t, actor.Enabled)
 			assert.NotNil(t, actor.Deployable)
 			assert.NotNil(t, actor.Configurable)
@@ -136,6 +137,7 @@ func TestListActorsWithDB(t *testing.T) {
 		actorResponse := jsonResponse.Data[0]
 		assert.Equal(t, actor.ID, actorResponse.Id)
 		assert.Equal(t, actor.Name, actorResponse.Name)
+		assert.EqualValues(t, actor.Role, actorResponse.Role)
 		assert.True(t, actorResponse.Enabled)
 		assert.False(t, actorResponse.Deployable)
 		assert.False(t, actorResponse.Configurable)
@@ -177,6 +179,7 @@ func TestCreateActorWithDB(t *testing.T) {
 		request := api.AdminCreateActorRequestObject{
 			Body: &api.AdminCreateActorJSONRequestBody{
 				Name:         "TestActor",
+				Role:         api.ActorCreateRole("agent"),
 				Enabled:      lo.ToPtr(true),
 				Deployable:   lo.ToPtr(true),
 				Configurable: lo.ToPtr(true),
@@ -190,6 +193,7 @@ func TestCreateActorWithDB(t *testing.T) {
 		jsonResponse := response.(api.AdminCreateActor201JSONResponse)
 		assert.NotEmpty(t, jsonResponse.Id)
 		assert.Equal(t, request.Body.Name, jsonResponse.Name)
+		assert.Equal(t, api.ActorRole("agent"), jsonResponse.Role)
 		assert.NotZero(t, jsonResponse.CreatedAt)
 
 		// Check new fields
@@ -203,6 +207,7 @@ func TestCreateActorWithDB(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, jsonResponse.Id, actor.ID)
 		assert.Equal(t, jsonResponse.Name, actor.Name)
+		assert.EqualValues(t, "agent", actor.Role)
 		assert.Equal(t, jsonResponse.CreatedAt, actor.CreatedAt)
 		assert.Equal(t, jsonResponse.Enabled, actor.Enabled)
 		assert.Equal(t, jsonResponse.Deployable, actor.Deployable)
@@ -223,6 +228,7 @@ func TestCreateActorWithDB(t *testing.T) {
 		request := api.AdminCreateActorRequestObject{
 			Body: &api.AdminCreateActorJSONRequestBody{
 				Name:       "TestActor",
+				Role:       api.ActorCreateRole("agent"),
 				Deployable: lo.ToPtr(true),
 			},
 		}
@@ -234,6 +240,7 @@ func TestCreateActorWithDB(t *testing.T) {
 		jsonResponse := response.(api.AdminCreateActor201JSONResponse)
 		assert.NotEmpty(t, jsonResponse.Id)
 		assert.Equal(t, request.Body.Name, jsonResponse.Name)
+		assert.Equal(t, api.ActorRole("agent"), jsonResponse.Role)
 		assert.NotZero(t, jsonResponse.CreatedAt)
 
 		// Check new fields
@@ -247,6 +254,7 @@ func TestCreateActorWithDB(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, jsonResponse.Id, actor.ID)
 		assert.Equal(t, jsonResponse.Name, actor.Name)
+		assert.EqualValues(t, "agent", actor.Role)
 		assert.Equal(t, jsonResponse.CreatedAt, actor.CreatedAt)
 		assert.Equal(t, jsonResponse.Enabled, actor.Enabled)
 		assert.Equal(t, jsonResponse.Deployable, actor.Deployable)
@@ -316,6 +324,7 @@ func TestUpdateActor(t *testing.T) {
 			Id: existingActor.ID,
 			Body: &api.AdminUpdateActorJSONRequestBody{
 				Name:         lo.ToPtr("UpdatedActor"),
+				Role:         lo.ToPtr(api.AdminUpdateActorJSONBodyRole("portal")),
 				Enabled:      lo.ToPtr(false),
 				Deployable:   lo.ToPtr(true),
 				Configurable: lo.ToPtr(true),
@@ -330,6 +339,7 @@ func TestUpdateActor(t *testing.T) {
 		jsonResponse := response.(api.AdminUpdateActor200JSONResponse)
 		assert.Equal(t, existingActor.ID, jsonResponse.Data.Id)
 		assert.Equal(t, "UpdatedActor", jsonResponse.Data.Name)
+		assert.Equal(t, api.ActorRole("portal"), jsonResponse.Data.Role)
 		assert.False(t, jsonResponse.Data.Enabled)
 		assert.True(t, jsonResponse.Data.Deployable)
 		assert.True(t, jsonResponse.Data.Configurable)
@@ -360,6 +370,7 @@ func TestUpdateActor(t *testing.T) {
 		jsonResponse := response.(api.AdminUpdateActor200JSONResponse)
 		assert.Equal(t, existingActor.ID, jsonResponse.Data.Id)
 		assert.Equal(t, "PartiallyUpdatedActor", jsonResponse.Data.Name)
+		assert.Equal(t, api.ActorRole("agent"), jsonResponse.Data.Role)
 		assert.False(t, jsonResponse.Data.Enabled)
 
 		// Check that other fields remain unchanged

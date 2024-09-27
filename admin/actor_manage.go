@@ -35,6 +35,7 @@ func ListActors(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acce
 			return api.Actor{
 				Id:           row.ID,
 				Name:         row.Name,
+				Role:         api.ActorRole(row.Role),
 				CreatedAt:    row.CreatedAt,
 				Renameable:   row.Renameable,
 				TokenCount:   row.TokenCount,
@@ -73,6 +74,7 @@ func CreateActor(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acc
 
 	actor, err := accessor.Querier().ActorInsert(ctx, accessor.Source(), &dbsqlc.ActorInsertParams{
 		Name:         request.Body.Name,
+		Role:         dbsqlc.ActorRole(request.Body.Role),
 		QueueID:      queue.ID,
 		Enabled:      lo.FromPtrOr(request.Body.Enabled, true),
 		Deployable:   lo.FromPtrOr(request.Body.Deployable, false),
@@ -88,6 +90,7 @@ func CreateActor(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acc
 	return api.AdminCreateActor201JSONResponse{
 		Id:           actor.ID,
 		Name:         actor.Name,
+		Role:         api.ActorRole(actor.Role),
 		Enabled:      actor.Enabled,
 		Deployable:   actor.Deployable,
 		Configurable: actor.Configurable,
@@ -120,6 +123,7 @@ func GetActor(ctx context.Context, logger *slog.Logger, accessor dbaccess.Access
 		Data: api.Actor{
 			Id:           actor.ID,
 			Name:         actor.Name,
+			Role:         api.ActorRole(actor.Role),
 			TokenCount:   actor.TokenCount,
 			CreatedAt:    actor.CreatedAt,
 			Renameable:   actor.Renameable,
@@ -136,6 +140,7 @@ func UpdateActor(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acc
 	actor, err := accessor.Querier().ActorUpdate(ctx, accessor.Source(), &dbsqlc.ActorUpdateParams{
 		ID:           int64(request.Id),
 		Name:         request.Body.Name,
+		Role:         dbsqlc.NullActorRole{ActorRole: dbsqlc.ActorRole(lo.FromPtrOr(request.Body.Role, "")), Valid: request.Body.Role != nil},
 		Enabled:      request.Body.Enabled,
 		Deployable:   request.Body.Deployable,
 		Configurable: request.Body.Configurable,
@@ -155,6 +160,7 @@ func UpdateActor(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acc
 		Data: api.Actor{
 			Id:           actor.ID,
 			Name:         actor.Name,
+			Role:         api.ActorRole(actor.Role),
 			Enabled:      actor.Enabled,
 			Deployable:   actor.Deployable,
 			Configurable: actor.Configurable,

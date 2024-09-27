@@ -9,6 +9,51 @@ import (
 	"fmt"
 )
 
+type ActorRole string
+
+const (
+	ActorRoleAgent   ActorRole = "agent"
+	ActorRoleService ActorRole = "service"
+	ActorRolePortal  ActorRole = "portal"
+	ActorRoleUser    ActorRole = "user"
+	ActorRoleOther   ActorRole = "other"
+)
+
+func (e *ActorRole) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ActorRole(s)
+	case string:
+		*e = ActorRole(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ActorRole: %T", src)
+	}
+	return nil
+}
+
+type NullActorRole struct {
+	ActorRole ActorRole
+	Valid     bool // Valid is true if ActorRole is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullActorRole) Scan(value interface{}) error {
+	if value == nil {
+		ns.ActorRole, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ActorRole.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullActorRole) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ActorRole), nil
+}
+
 type DeploymentStatus string
 
 const (
@@ -111,6 +156,7 @@ type Actor struct {
 	Enabled      bool
 	Deployable   bool
 	Configurable bool
+	Role         ActorRole
 }
 
 type ApiToken struct {

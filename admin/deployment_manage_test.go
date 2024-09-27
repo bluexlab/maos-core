@@ -348,8 +348,8 @@ func TestGetDeployment(t *testing.T) {
 		accessor := dbaccess.New(dbPool)
 
 		// Create two actors
-		actor1 := fixture.InsertActor2(t, ctx, dbPool, "actor1", true, true, true)
-		actor2 := fixture.InsertActor2(t, ctx, dbPool, "actor2", true, false, true)
+		actor1 := fixture.InsertActor2(t, ctx, dbPool, "actor1", "agent", true, true, true)
+		actor2 := fixture.InsertActor2(t, ctx, dbPool, "actor2", "agent", true, false, true)
 
 		// Create a config suite
 		createResponse, err := admin.CreateDeployment(ctx, logger, accessor, api.AdminCreateDeploymentRequestObject{
@@ -431,7 +431,7 @@ func TestGetDeployment(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		accessor := dbaccess.New(dbPool)
 
-		actor := fixture.InsertActor2(t, ctx, dbPool, "actor-kube", true, true, true)
+		actor := fixture.InsertActor2(t, ctx, dbPool, "actor-kube", "agent", true, true, true)
 
 		// Create a config suite
 		createResponse, err := admin.CreateDeployment(ctx, logger, accessor, api.AdminCreateDeploymentRequestObject{
@@ -1136,8 +1136,8 @@ func TestPublishDeployment(t *testing.T) {
 		suiteStore := testhelper.NewMockSuiteStore()
 
 		// Create two actors
-		actor1 := fixture.InsertActor2(t, ctx, dbPool, "actor1", true, true, true)
-		actor2 := fixture.InsertActor2(t, ctx, dbPool, "actor2", true, false, true)
+		actor1 := fixture.InsertActor2(t, ctx, dbPool, "actor1", "agent", true, true, true)
+		actor2 := fixture.InsertActor2(t, ctx, dbPool, "actor2", "agent", true, false, true)
 
 		// Create a deployment and a config suite
 		createdDeployment, err := accessor.Querier().DeploymentInsertWithConfigSuite(ctx, accessor.Source(), &dbsqlc.DeploymentInsertWithConfigSuiteParams{

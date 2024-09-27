@@ -21,7 +21,7 @@ delete_actor AS (
     WHERE actors.id = $1
     AND EXISTS (SELECT 1 FROM check_actor WHERE actor_exists = true)
     AND NOT EXISTS (SELECT 1 FROM check_config WHERE config_exists = true)
-    RETURNING id, name, queue_id, created_at, metadata, updated_at, enabled, deployable, configurable
+    RETURNING id, name, queue_id, created_at, metadata, updated_at, enabled, deployable, configurable, role
 )
 SELECT
     CASE
@@ -50,6 +50,7 @@ SELECT
   actors.id,
   actors.name,
   actors.queue_id,
+  actors.role,
   actors.enabled,
   actors.deployable,
   actors.configurable,
@@ -65,6 +66,7 @@ type ActorFindByIdRow struct {
 	ID           int64
 	Name         string
 	QueueID      int64
+	Role         ActorRole
 	Enabled      bool
 	Deployable   bool
 	Configurable bool
@@ -80,6 +82,7 @@ func (q *Queries) ActorFindById(ctx context.Context, db DBTX, id int64) (*ActorF
 		&i.ID,
 		&i.Name,
 		&i.QueueID,
+		&i.Role,
 		&i.Enabled,
 		&i.Deployable,
 		&i.Configurable,
@@ -94,6 +97,7 @@ const actorInsert = `-- name: ActorInsert :one
 INSERT INTO actors(
     name,
     queue_id,
+    role,
     enabled,
     deployable,
     configurable,
@@ -101,16 +105,18 @@ INSERT INTO actors(
 ) VALUES (
     $1::text,
     $2::bigint,
-    $3::boolean,
+    $3::actor_role,
     $4::boolean,
     $5::boolean,
-    coalesce($6::jsonb, '{}')
-) RETURNING id, name, queue_id, created_at, metadata, updated_at, enabled, deployable, configurable
+    $6::boolean,
+    coalesce($7::jsonb, '{}')
+) RETURNING id, name, queue_id, created_at, metadata, updated_at, enabled, deployable, configurable, role
 `
 
 type ActorInsertParams struct {
 	Name         string
 	QueueID      int64
+	Role         ActorRole
 	Enabled      bool
 	Deployable   bool
 	Configurable bool
@@ -121,6 +127,7 @@ func (q *Queries) ActorInsert(ctx context.Context, db DBTX, arg *ActorInsertPara
 	row := db.QueryRow(ctx, actorInsert,
 		arg.Name,
 		arg.QueueID,
+		arg.Role,
 		arg.Enabled,
 		arg.Deployable,
 		arg.Configurable,
@@ -137,6 +144,7 @@ func (q *Queries) ActorInsert(ctx context.Context, db DBTX, arg *ActorInsertPara
 		&i.Enabled,
 		&i.Deployable,
 		&i.Configurable,
+		&i.Role,
 	)
 	return &i, err
 }
@@ -150,6 +158,7 @@ WITH actor_token_count AS (
 SELECT
   actors.id,
   actors.name,
+  actors.role,
   actors.queue_id,
   actors.enabled,
   actors.deployable,
@@ -173,6 +182,7 @@ type ActorListPagenatedParams struct {
 type ActorListPagenatedRow struct {
 	ID           int64
 	Name         string
+	Role         ActorRole
 	QueueID      int64
 	Enabled      bool
 	Deployable   bool
@@ -195,6 +205,7 @@ func (q *Queries) ActorListPagenated(ctx context.Context, db DBTX, arg *ActorLis
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
+			&i.Role,
 			&i.QueueID,
 			&i.Enabled,
 			&i.Deployable,
@@ -217,16 +228,18 @@ func (q *Queries) ActorListPagenated(ctx context.Context, db DBTX, arg *ActorLis
 const actorUpdate = `-- name: ActorUpdate :one
 UPDATE actors SET
     name = COALESCE($1::text, name),
-    enabled = COALESCE($2::boolean, enabled),
-    deployable = COALESCE($3::boolean, deployable),
-    configurable = COALESCE($4::boolean, configurable),
-    metadata = COALESCE($5::jsonb, metadata)
-WHERE id = $6
-RETURNING id, name, queue_id, created_at, metadata, updated_at, enabled, deployable, configurable
+    role = COALESCE($2::actor_role, role),
+    enabled = COALESCE($3::boolean, enabled),
+    deployable = COALESCE($4::boolean, deployable),
+    configurable = COALESCE($5::boolean, configurable),
+    metadata = COALESCE($6::jsonb, metadata)
+WHERE id = $7
+RETURNING id, name, queue_id, created_at, metadata, updated_at, enabled, deployable, configurable, role
 `
 
 type ActorUpdateParams struct {
 	Name         *string
+	Role         NullActorRole
 	Enabled      *bool
 	Deployable   *bool
 	Configurable *bool
@@ -237,6 +250,7 @@ type ActorUpdateParams struct {
 func (q *Queries) ActorUpdate(ctx context.Context, db DBTX, arg *ActorUpdateParams) (*Actor, error) {
 	row := db.QueryRow(ctx, actorUpdate,
 		arg.Name,
+		arg.Role,
 		arg.Enabled,
 		arg.Deployable,
 		arg.Configurable,
@@ -254,6 +268,7 @@ func (q *Queries) ActorUpdate(ctx context.Context, db DBTX, arg *ActorUpdatePara
 		&i.Enabled,
 		&i.Deployable,
 		&i.Configurable,
+		&i.Role,
 	)
 	return &i, err
 }

@@ -5,6 +5,14 @@ properties:
     format: int64
   name:
     type: string
+  role:
+    type: string
+    enum:
+      - agent
+      - service
+      - portal
+      - user
+      - other
   enabled:
     type: boolean
   deployable:
@@ -23,6 +31,7 @@ properties:
 required:
   - id
   - name
+  - role
   - enabled
   - deployable
   - configurable

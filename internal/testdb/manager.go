@@ -68,7 +68,7 @@ func (m *Manager) Acquire(ctx context.Context) (*pgxpool.Pool, error) {
 	url := getTestDatabaseURL()
 	config, err := pgxpool.ParseConfig(url)
 	if err != nil {
-		m.logger.Error("Failed to parse testing db url", url, "error", err)
+		m.logger.Error("Failed to parse testing db url", "url", url, "error", err)
 		return nil, err
 	}
 
@@ -77,7 +77,7 @@ func (m *Manager) Acquire(ctx context.Context) (*pgxpool.Pool, error) {
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
-		m.logger.Error("Failed to create pool for testing db url", url, "error", err)
+		m.logger.Error("Failed to create pool for testing db url", "url", url, "error", err)
 		return nil, err
 	}
 	m.addSchemasAndPool(schemaName, pool)
@@ -85,7 +85,7 @@ func (m *Manager) Acquire(ctx context.Context) (*pgxpool.Pool, error) {
 	accessor := dbaccess.New(pool)
 	_, err = migrate.New(accessor, nil).Migrate(ctx, migrate.DirectionUp, &migrate.MigrateOpts{})
 	if err != nil {
-		m.logger.Error("Failed to migrate testing db url", url, "error", err)
+		m.logger.Error("Failed to migrate testing db url", "url", url, "error", err)
 		return nil, err
 	}
 

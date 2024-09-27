@@ -49,6 +49,7 @@ type Querier interface {
 	DeploymentReject(ctx context.Context, db DBTX, arg *DeploymentRejectParams) (*Deployment, error)
 	DeploymentSubmitForReview(ctx context.Context, db DBTX, id int64) (*Deployment, error)
 	DeploymentUpdate(ctx context.Context, db DBTX, arg *DeploymentUpdateParams) (*Deployment, error)
+	GetActorByConfigId(ctx context.Context, db DBTX, id int64) (*Actor, error)
 	InvocationFindById(ctx context.Context, db DBTX, id int64) (*Invocation, error)
 	InvocationGetAvailable(ctx context.Context, db DBTX, arg *InvocationGetAvailableParams) ([]*Invocation, error)
 	InvocationInsert(ctx context.Context, db DBTX, arg *InvocationInsertParams) (*InvocationInsertRow, error)

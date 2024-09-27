@@ -129,7 +129,7 @@ func GetDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.A
 
 		// insert kubernetes config
 		if row.ActorDeployable {
-			InsertMissingKubeConfigsWithDefault(content)
+			InsertMissingKubeConfigsWithDefault(content, string(row.ActorRole))
 		}
 
 		return api.Config{
@@ -511,6 +511,16 @@ func updateKubernetesDeployments(
 			continue
 		}
 
+		hasService := config.ActorRole == "portal" || config.ActorRole == "service"
+		servicePort := int64(0)
+		if hasService {
+			servicePort, err = strconv.ParseInt(content["KUBE_SERVICE_PORT"], 10, 32)
+			if err != nil {
+				return fmt.Errorf("failed to parse KUBE_SERVICE_PORT: %v", err)
+			}
+		}
+		hasIngress := config.ActorRole == "portal"
+
 		// Prepare deployment params
 		params := k8s.DeploymentParams{
 			Name:          "maos-" + config.ActorName,
@@ -521,6 +531,11 @@ func updateKubernetesDeployments(
 			APIKey:        apiTokens[config.ActorId],
 			MemoryRequest: content["KUBE_MEMORY_REQUEST"],
 			MemoryLimit:   content["KUBE_MEMORY_LIMIT"],
+			HasService:    hasService,
+			ServicePort:   int32(servicePort),
+			HasIngress:    hasIngress,
+			IngressHost:   content["KUBE_INGRESS_HOST"],
+			BodyLimit:     content["KUBE_INGRESS_BODY_LIMIT"],
 		}
 
 		deploymentSet = append(deploymentSet, params)

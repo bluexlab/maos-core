@@ -22,7 +22,6 @@ func UpdateConfig(
 	logger.Info("AdminUpdateConfig",
 		"id", request.Id,
 		"user", request.Body.User,
-		"min_actor_version", request.Body.MinActorVersion,
 		"content", request.Body.Content,
 	)
 
@@ -34,7 +33,18 @@ func UpdateConfig(
 		}, nil
 	}
 
-	err = ValidateKubeConfig(*request.Body.Content)
+	actor, err := accessor.Querier().GetActorByConfigId(ctx, accessor.Source(), request.Id)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return api.AdminUpdateConfig404Response{}, nil
+		}
+		logger.Error("Cannot get actor by config id", "error", err)
+		return api.AdminUpdateConfig500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot get actor by config id: %v", err)},
+		}, nil
+	}
+
+	err = ValidateKubeConfig(*request.Body.Content, string(actor.Role))
 	if err != nil {
 		logger.Error("Invalid kube config", "error", err)
 		return api.AdminUpdateConfig400JSONResponse{

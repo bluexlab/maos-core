@@ -225,6 +225,7 @@ SELECT DISTINCT ON (configs.actor_id)
     configs.config_suite_id,
     actors.id AS actor_id,
     actors.name AS actor_name,
+    actors.role AS actor_role,
     actors.enabled AS actor_enabled,
     actors.configurable AS actor_configurable,
     actors.deployable AS actor_deployable
@@ -244,6 +245,7 @@ type ConfigListBySuiteIdGroupByActorRow struct {
 	ConfigSuiteID     *int64
 	ActorId_2         int64
 	ActorName         string
+	ActorRole         ActorRole
 	ActorEnabled      bool
 	ActorConfigurable bool
 	ActorDeployable   bool
@@ -268,6 +270,7 @@ func (q *Queries) ConfigListBySuiteIdGroupByActor(ctx context.Context, db DBTX, 
 			&i.ConfigSuiteID,
 			&i.ActorId_2,
 			&i.ActorName,
+			&i.ActorRole,
 			&i.ActorEnabled,
 			&i.ActorConfigurable,
 			&i.ActorDeployable,
@@ -348,6 +351,33 @@ func (q *Queries) ConfigUpdateInactiveContentByCreator(ctx context.Context, db D
 		&i.UpdatedBy,
 		&i.UpdatedAt,
 		&i.ActorName,
+	)
+	return &i, err
+}
+
+const getActorByConfigId = `-- name: GetActorByConfigId :one
+SELECT actors.id, actors.name, actors.queue_id, actors.created_at, actors.metadata, actors.updated_at, actors.enabled, actors.deployable, actors.configurable, actors.role
+FROM configs
+JOIN actors ON configs.actor_id = actors.id
+WHERE configs.id = $1::bigint
+ORDER BY configs.created_at DESC, configs.id DESC
+LIMIT 1
+`
+
+func (q *Queries) GetActorByConfigId(ctx context.Context, db DBTX, id int64) (*Actor, error) {
+	row := db.QueryRow(ctx, getActorByConfigId, id)
+	var i Actor
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.QueueID,
+		&i.CreatedAt,
+		&i.Metadata,
+		&i.UpdatedAt,
+		&i.Enabled,
+		&i.Deployable,
+		&i.Configurable,
+		&i.Role,
 	)
 	return &i, err
 }

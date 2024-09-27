@@ -41,6 +41,14 @@ AND configs.config_suite_id = @config_suite_id::bigint
 ORDER BY configs.created_at DESC, configs.id DESC
 LIMIT 1;
 
+-- name: GetActorByConfigId :one
+SELECT actors.*
+FROM configs
+JOIN actors ON configs.actor_id = actors.id
+WHERE configs.id = @id::bigint
+ORDER BY configs.created_at DESC, configs.id DESC
+LIMIT 1;
+
 -- name: ConfigListBySuiteIdGroupByActor :many
 SELECT DISTINCT ON (configs.actor_id)
     configs.id,
@@ -52,6 +60,7 @@ SELECT DISTINCT ON (configs.actor_id)
     configs.config_suite_id,
     actors.id AS actor_id,
     actors.name AS actor_name,
+    actors.role AS actor_role,
     actors.enabled AS actor_enabled,
     actors.configurable AS actor_configurable,
     actors.deployable AS actor_deployable

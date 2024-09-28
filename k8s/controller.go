@@ -21,7 +21,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-// DeploymentParams struct defines the parameters for a deployment
+// DeploymentParams defines the parameters for a deployment
 type DeploymentParams struct {
 	Name          string
 	Replicas      int32
@@ -84,6 +84,7 @@ func NewK8sController() (*K8sController, error) {
 // UpdateDeploymentSet updates the set of deployments
 func (c *K8sController) UpdateDeploymentSet(ctx context.Context, deploymentSet []DeploymentParams) error {
 	slog.Info("Updating deployment set", "deploymentSet", lo.Map(deploymentSet, func(d DeploymentParams, _ int) string { return d.Name }))
+
 	existingDeployments, err := c.listExistingDeployments(ctx)
 	if err != nil {
 		return err
@@ -100,50 +101,79 @@ func (c *K8sController) UpdateDeploymentSet(ctx context.Context, deploymentSet [
 	}
 
 	for _, params := range deploymentSet {
-		if existingDeployment, exists := existingDeployments[params.Name]; exists {
-			err := c.updateDeployment(ctx, existingDeployment, params)
-			if err != nil {
-				return fmt.Errorf("failed to update deployment %s: %v", params.Name, err)
-			}
-			delete(existingDeployments, params.Name)
-		} else {
-			_, err := c.createDeployment(ctx, params)
-			if err != nil {
-				return fmt.Errorf("failed to create deployment %s: %v", params.Name, err)
-			}
+		if err := c.processDeployment(ctx, params, existingDeployments); err != nil {
+			return err
 		}
 
-		if params.HasService {
-			if existingService, exists := existingServices[params.Name]; exists {
-				err := c.updateService(ctx, existingService, params)
-				if err != nil {
-					return fmt.Errorf("failed to update service %s: %v", params.Name, err)
-				}
-				delete(existingServices, params.Name)
-			} else {
-				err := c.createService(ctx, params)
-				if err != nil {
-					return fmt.Errorf("failed to create service %s: %v", params.Name, err)
-				}
-			}
+		if err := c.processService(ctx, params, existingServices); err != nil {
+			return err
 		}
 
-		if params.HasIngress {
-			if existingIngress, exists := existingIngresses[params.Name]; exists {
-				err := c.updateIngress(ctx, existingIngress, params)
-				if err != nil {
-					return fmt.Errorf("failed to update ingress %s: %v", params.Name, err)
-				}
-				delete(existingIngresses, params.Name)
-			} else {
-				err := c.createIngress(ctx, params)
-				if err != nil {
-					return fmt.Errorf("failed to create ingress %s: %v", params.Name, err)
-				}
-			}
+		if err := c.processIngress(ctx, params, existingIngresses); err != nil {
+			return err
 		}
 	}
 
+	if err := c.deleteObsoleteResources(ctx, existingDeployments, existingServices, existingIngresses); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *K8sController) processDeployment(ctx context.Context, params DeploymentParams, existingDeployments map[string]*apps.Deployment) error {
+	if existingDeployment, exists := existingDeployments[params.Name]; exists {
+		err := c.updateDeployment(ctx, existingDeployment, params)
+		if err != nil {
+			return fmt.Errorf("failed to update deployment %s: %v", params.Name, err)
+		}
+		delete(existingDeployments, params.Name)
+	} else {
+		_, err := c.createDeployment(ctx, params)
+		if err != nil {
+			return fmt.Errorf("failed to create deployment %s: %v", params.Name, err)
+		}
+	}
+	return nil
+}
+
+func (c *K8sController) processService(ctx context.Context, params DeploymentParams, existingServices map[string]*core.Service) error {
+	if params.HasService {
+		if existingService, exists := existingServices[params.Name]; exists {
+			err := c.updateService(ctx, existingService, params)
+			if err != nil {
+				return fmt.Errorf("failed to update service %s: %v", params.Name, err)
+			}
+			delete(existingServices, params.Name)
+		} else {
+			err := c.createService(ctx, params)
+			if err != nil {
+				return fmt.Errorf("failed to create service %s: %v", params.Name, err)
+			}
+		}
+	}
+	return nil
+}
+
+func (c *K8sController) processIngress(ctx context.Context, params DeploymentParams, existingIngresses map[string]*networking.Ingress) error {
+	if params.HasIngress {
+		if existingIngress, exists := existingIngresses[params.Name]; exists {
+			err := c.updateIngress(ctx, existingIngress, params)
+			if err != nil {
+				return fmt.Errorf("failed to update ingress %s: %v", params.Name, err)
+			}
+			delete(existingIngresses, params.Name)
+		} else {
+			err := c.createIngress(ctx, params)
+			if err != nil {
+				return fmt.Errorf("failed to create ingress %s: %v", params.Name, err)
+			}
+		}
+	}
+	return nil
+}
+
+func (c *K8sController) deleteObsoleteResources(ctx context.Context, existingDeployments map[string]*apps.Deployment, existingServices map[string]*core.Service, existingIngresses map[string]*networking.Ingress) error {
 	if err := c.deleteObsoleteDeployments(ctx, existingDeployments); err != nil {
 		return err
 	}
@@ -153,7 +183,6 @@ func (c *K8sController) UpdateDeploymentSet(ctx context.Context, deploymentSet [
 	if err := c.deleteObsoleteIngresses(ctx, existingIngresses); err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -204,28 +233,35 @@ func (c *K8sController) UpdateSecret(ctx context.Context, secretName string, sec
 	secret, err := c.clientset.CoreV1().Secrets(c.namespace).Get(ctx, secretName, meta.GetOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
-			slog.Info("Secret not found, creating", "name", secretName)
-			newSecret := &core.Secret{
-				ObjectMeta: meta.ObjectMeta{
-					Name:      secretName,
-					Namespace: c.namespace,
-					Labels: map[string]string{
-						"created-by": "maos",
-					},
-				},
-				StringData: secretData,
-				Type:       core.SecretTypeOpaque,
-			}
-			_, err = c.clientset.CoreV1().Secrets(c.namespace).Create(ctx, newSecret, meta.CreateOptions{})
-			if err != nil {
-				return fmt.Errorf("failed to create secret: %v", err)
-			}
-			return nil
+			return c.createSecret(ctx, secretName, secretData)
 		}
 		return fmt.Errorf("failed to get secret: %v", err)
 	}
 
-	// Update the existing secret
+	return c.updateExistingSecret(ctx, secret, secretData)
+}
+
+func (c *K8sController) createSecret(ctx context.Context, secretName string, secretData map[string]string) error {
+	slog.Info("Secret not found, creating", "name", secretName)
+	newSecret := &core.Secret{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      secretName,
+			Namespace: c.namespace,
+			Labels: map[string]string{
+				"created-by": "maos",
+			},
+		},
+		StringData: secretData,
+		Type:       core.SecretTypeOpaque,
+	}
+	_, err := c.clientset.CoreV1().Secrets(c.namespace).Create(ctx, newSecret, meta.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to create secret: %v", err)
+	}
+	return nil
+}
+
+func (c *K8sController) updateExistingSecret(ctx context.Context, secret *core.Secret, secretData map[string]string) error {
 	if secret.Data == nil {
 		secret.Data = make(map[string][]byte)
 	}
@@ -233,11 +269,11 @@ func (c *K8sController) UpdateSecret(ctx context.Context, secretName string, sec
 		if v == "" {
 			delete(secret.Data, k)
 		} else {
-			secret.Data[k] = ([]byte(v))
+			secret.Data[k] = []byte(v)
 		}
 	}
 
-	_, err = c.clientset.CoreV1().Secrets(c.namespace).Update(ctx, secret, meta.UpdateOptions{
+	_, err := c.clientset.CoreV1().Secrets(c.namespace).Update(ctx, secret, meta.UpdateOptions{
 		FieldValidation: "Strict",
 	})
 	if err != nil {
@@ -435,10 +471,11 @@ func (c *K8sController) createDeploymentStruct(params DeploymentParams, sa *core
 	envVars := c.createEnvVars(params)
 
 	if params.Labels == nil {
-		params.Labels = make(map[string]string)
+		slog.Error("Labels must not be nil", "name", params.Name)
+		return nil
 	}
+
 	params.Labels["created-by"] = "maos"
-	params.Labels["app"] = params.Name
 
 	return &apps.Deployment{
 		ObjectMeta: meta.ObjectMeta{
@@ -560,60 +597,6 @@ func (c *K8sController) createEnvVars(params DeploymentParams) []core.EnvVar {
 	return envVars
 }
 
-func parseSecretValue(value, defaultKey string) (string, string) {
-	secretName := strings.TrimPrefix(value, "[[SECRET]]")
-	secretKey := defaultKey
-	if strings.Contains(secretName, ":") {
-		parts := strings.SplitN(secretName, ":", 2)
-		secretName = parts[0]
-		secretKey = parts[1]
-	}
-	return secretName, secretKey
-}
-
-func createSecretEnvVar(envName, secretName, secretKey string) core.EnvVar {
-	return core.EnvVar{
-		Name: envName,
-		ValueFrom: &core.EnvVarSource{
-			SecretKeyRef: &core.SecretKeySelector{
-				LocalObjectReference: core.LocalObjectReference{
-					Name: secretName,
-				},
-				Key: secretKey,
-			},
-		},
-	}
-}
-
-func getKubernetesConfig() (*rest.Config, error) {
-	if inKubernetes() {
-		return rest.InClusterConfig()
-	}
-
-	kubeconfigPath := os.Getenv("KUBECONFIG_PATH")
-	if kubeconfigPath == "" {
-		return nil, fmt.Errorf("KUBECONFIG_PATH environment variable not set")
-	}
-	return clientcmd.BuildConfigFromFlags("", kubeconfigPath)
-}
-
-func inKubernetes() bool {
-	return os.Getenv("KUBERNETES_SERVICE_HOST") != ""
-}
-
-func getCurrentNamespace() (string, error) {
-	if !inKubernetes() {
-		return "default", nil
-	}
-
-	data, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
-	if err != nil {
-		return "", fmt.Errorf("error reading namespace file: %v", err)
-	}
-
-	return strings.TrimSpace(string(data)), nil
-}
-
 func (c *K8sController) updateService(ctx context.Context, existingService *core.Service, params DeploymentParams) error {
 	slog.Info("Updating service", "name", existingService.Name)
 
@@ -689,4 +672,58 @@ func (c *K8sController) deleteObsoleteIngresses(ctx context.Context, obsoleteIng
 		}
 	}
 	return nil
+}
+
+func parseSecretValue(value, defaultKey string) (string, string) {
+	secretName := strings.TrimPrefix(value, "[[SECRET]]")
+	secretKey := defaultKey
+	if strings.Contains(secretName, ":") {
+		parts := strings.SplitN(secretName, ":", 2)
+		secretName = parts[0]
+		secretKey = parts[1]
+	}
+	return secretName, secretKey
+}
+
+func createSecretEnvVar(envName, secretName, secretKey string) core.EnvVar {
+	return core.EnvVar{
+		Name: envName,
+		ValueFrom: &core.EnvVarSource{
+			SecretKeyRef: &core.SecretKeySelector{
+				LocalObjectReference: core.LocalObjectReference{
+					Name: secretName,
+				},
+				Key: secretKey,
+			},
+		},
+	}
+}
+
+func getKubernetesConfig() (*rest.Config, error) {
+	if inKubernetes() {
+		return rest.InClusterConfig()
+	}
+
+	kubeconfigPath := os.Getenv("KUBECONFIG_PATH")
+	if kubeconfigPath == "" {
+		return nil, fmt.Errorf("KUBECONFIG_PATH environment variable not set")
+	}
+	return clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+}
+
+func inKubernetes() bool {
+	return os.Getenv("KUBERNETES_SERVICE_HOST") != ""
+}
+
+func getCurrentNamespace() (string, error) {
+	if !inKubernetes() {
+		return "default", nil
+	}
+
+	data, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+	if err != nil {
+		return "", fmt.Errorf("error reading namespace file: %v", err)
+	}
+
+	return strings.TrimSpace(string(data)), nil
 }

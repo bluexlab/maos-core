@@ -498,7 +498,7 @@ func (c *K8sController) createDeploymentStruct(params DeploymentParams, sa *core
 						{
 							Name:            params.Name,
 							Image:           params.Image,
-							ImagePullPolicy: core.PullIfNotPresent,
+							ImagePullPolicy: core.PullAlways,
 							Env:             envVars,
 							Resources: core.ResourceRequirements{
 								Requests: core.ResourceList{

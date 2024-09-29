@@ -81,6 +81,9 @@ paths:
   /v1/admin/deployments/{id}:
     $ref: "./resources/admin/deployment.yaml"
 
+  /v1/admin/deployments/{id}/restart:
+    $ref: "./resources/admin/deployment_restart.yaml"
+
   /v1/admin/deployments/{id}/submit:
     $ref: "./resources/admin/deployment_submit.yaml"
 

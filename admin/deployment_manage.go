@@ -459,6 +459,83 @@ func DeleteDeployment(ctx context.Context, logger *slog.Logger, accessor dbacces
 	return api.AdminDeleteDeployment200Response{}, nil
 }
 
+func RestartDeployment(
+	ctx context.Context,
+	logger *slog.Logger,
+	accessor dbaccess.Accessor,
+	controller k8s.Controller,
+	request api.AdminRestartDeploymentRequestObject) (api.AdminRestartDeploymentResponseObject, error) {
+	logger.Info("AdminRestartDeployment", "id", request.Id, "user", request.Body.User)
+
+	if request.Body == nil || request.Body.User == "" {
+		return api.AdminRestartDeployment401Response{}, nil
+	}
+
+	tx, err := accessor.Source().Begin(ctx)
+	if err != nil {
+		logger.Error("Cannot start transaction", "error", err)
+		return api.AdminRestartDeployment500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot restart deployment. Cannot start transaction: %v", err)},
+		}, nil
+	}
+	defer tx.Rollback(ctx)
+
+	// Query deployment and check status
+	deployment, err := accessor.Querier().DeploymentGetById(ctx, tx, int64(request.Id))
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return api.AdminRestartDeployment404Response{}, nil
+		}
+		logger.Error("Cannot get deployment", "error", err)
+		return api.AdminRestartDeployment500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot restart deployment. Cannot get deployment: %v", err)},
+		}, nil
+	}
+
+	if deployment.Status != "deployed" {
+		return api.AdminRestartDeployment404Response{}, nil
+	}
+
+	if deployment.ConfigSuiteID == nil {
+		logger.Error("Cannot restart deployment", "error", "Deployment has no config suite", "id", deployment.ID)
+		return api.AdminRestartDeployment500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: "Cannot restart deployment. Deployment has no config suite"},
+		}, nil
+	}
+
+	// update kubernetes actor deployments
+	configs, err := accessor.Querier().ConfigListBySuiteIdGroupByActor(ctx, tx, *deployment.ConfigSuiteID)
+	if err != nil {
+		logger.Error("Cannot get configs", "error", err)
+		return api.AdminRestartDeployment500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot get configs: %v", err)},
+		}, nil
+	}
+
+	// rotate actor api keys
+	// it generates new api keys for each actor
+	// and set the old ones to expire after 15 minutes
+	apiTokens, err := rotateActorApiKeys(ctx, accessor, tx, configs, request.Body.User)
+	if err != nil {
+		logger.Error("Cannot rotate actor api keys", "error", err)
+		return api.AdminRestartDeployment500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot rotate actor api keys: %v", err)},
+		}, nil
+	}
+
+	err = updateKubernetesDeployments(ctx, controller, deployment, configs, apiTokens)
+	if err != nil {
+		logger.Error("Cannot update kubernetes deployments", "error", err)
+		return api.AdminRestartDeployment500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot update kubernetes deployments: %v", err)},
+		}, nil
+	}
+
+	tx.Commit(ctx)
+
+	return api.AdminRestartDeployment201Response{}, nil
+}
+
 func deserializeNotes(content []byte) *map[string]interface{} {
 	var notesMap map[string]interface{}
 	err := json.Unmarshal(content, &notesMap)

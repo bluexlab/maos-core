@@ -21,7 +21,6 @@ import (
 type mockK8sController struct {
 	k8s.Controller
 	updatedDeploymentSets [][]k8s.DeploymentParams
-	restartedDeployments  []string
 }
 
 func (m *mockK8sController) UpdateDeploymentSet(ctx context.Context, deploymentSet []k8s.DeploymentParams) error {
@@ -30,7 +29,6 @@ func (m *mockK8sController) UpdateDeploymentSet(ctx context.Context, deploymentS
 }
 
 func (m *mockK8sController) TriggerRollingRestart(ctx context.Context, deploymentName string) error {
-	m.restartedDeployments = append(m.restartedDeployments, deploymentName)
 	return nil
 }
 
@@ -1208,6 +1206,11 @@ func TestPublishDeployment(t *testing.T) {
 		require.NotNil(t, dbSuite.DeployedAt)
 		require.Equal(t, "admin", *dbSuite.UpdatedBy)
 
+		// Verify that UpdateDeploymentSet was called
+		require.Len(t, mockController.updatedDeploymentSets, 1)
+		updatedSet := mockController.updatedDeploymentSets[0]
+		require.Len(t, updatedSet, 1) // We expect 1 actor config
+
 		// Verify that the suite was published to the suite store
 		publishedSuites, err := suiteStore.ReadSuites(ctx)
 		require.NoError(t, err)
@@ -1443,5 +1446,141 @@ func TestDeleteDeployment(t *testing.T) {
 
 		errorResponse := deleteResponse.(api.AdminDeleteDeployment500JSONResponse)
 		require.Contains(t, errorResponse.Error, "Cannot delete deployment")
+	})
+}
+
+func TestRestartDeployment(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	logger := testhelper.Logger(t)
+
+	setupRestartDeploymentTest := func(t *testing.T, status string) (*pgxpool.Pool, dbaccess.Accessor, int64) {
+		t.Helper()
+		dbPool := testhelper.TestDB(ctx, t)
+		accessor := dbaccess.New(dbPool)
+
+		// Create two actors
+		actor1 := fixture.InsertActor2(t, ctx, dbPool, "actor1", "agent", true, true, true)
+		actor2 := fixture.InsertActor2(t, ctx, dbPool, "actor2", "agent", true, false, true)
+
+		// Create a deployment
+		createdDeployment, err := accessor.Querier().DeploymentInsertWithConfigSuite(ctx, accessor.Source(), &dbsqlc.DeploymentInsertWithConfigSuiteParams{
+			CreatedBy: "test-user",
+			Name:      "test-deployment",
+			Reviewers: []string{"reviewer1", "reviewer2"},
+		})
+		require.NoError(t, err)
+		require.NotNil(t, createdDeployment)
+
+		// Update deployment status
+		_, err = dbPool.Exec(ctx, "UPDATE deployments SET status = $1 WHERE id = $2", status, createdDeployment.ID)
+		require.NoError(t, err)
+
+		// Create configs for each actor
+		config1 := fixture.InsertConfig2(t, ctx, dbPool, actor1.ID, createdDeployment.ConfigSuiteID, "test-user", map[string]string{
+			"key":                 "value1",
+			"KUBE_DOCKER_IMAGE":   "actor1-image:latest",
+			"KUBE_REPLICAS":       "2",
+			"KUBE_MEMORY_REQUEST": "256Mi",
+			"KUBE_MEMORY_LIMIT":   "512Mi",
+		})
+		config2 := fixture.InsertConfig2(t, ctx, dbPool, actor2.ID, createdDeployment.ConfigSuiteID, "test-user", map[string]string{
+			"key":                 "value2",
+			"KUBE_DOCKER_IMAGE":   "actor2-image:latest",
+			"KUBE_REPLICAS":       "3",
+			"KUBE_MEMORY_REQUEST": "256Mi",
+			"KUBE_MEMORY_LIMIT":   "512Mi",
+		})
+		require.NotNil(t, config1)
+		require.NotNil(t, config2)
+
+		return dbPool, accessor, createdDeployment.ID
+	}
+
+	t.Run("Successfully restart deployed deployment", func(t *testing.T) {
+		t.Parallel()
+		_, accessor, createdDeploymentId := setupRestartDeploymentTest(t, "deployed")
+
+		mockController := &mockK8sController{}
+		restartRequest := api.AdminRestartDeploymentRequestObject{
+			Id:   createdDeploymentId,
+			Body: &api.AdminRestartDeploymentJSONRequestBody{User: "admin"},
+		}
+		restartResponse, err := admin.RestartDeployment(ctx, logger, accessor, mockController, restartRequest)
+		require.NoError(t, err)
+		require.IsType(t, api.AdminRestartDeployment201Response{}, restartResponse)
+
+		// Verify that the status remains "deployed"
+		dbDeployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), createdDeploymentId)
+		require.NoError(t, err)
+		require.EqualValues(t, "deployed", dbDeployment.Status)
+
+		// Verify that UpdateDeploymentSet was called
+		require.Len(t, mockController.updatedDeploymentSets, 1)
+		updatedSet := mockController.updatedDeploymentSets[0]
+		require.Len(t, updatedSet, 1) // We expect 1 actor config
+	})
+
+	t.Run("Attempt to restart non-deployed deployment", func(t *testing.T) {
+		t.Parallel()
+		_, accessor, createdDeploymentId := setupRestartDeploymentTest(t, "reviewing")
+
+		mockController := &mockK8sController{}
+		restartRequest := api.AdminRestartDeploymentRequestObject{
+			Id:   createdDeploymentId,
+			Body: &api.AdminRestartDeploymentJSONRequestBody{User: "admin"},
+		}
+		restartResponse, err := admin.RestartDeployment(ctx, logger, accessor, mockController, restartRequest)
+		require.NoError(t, err)
+		require.IsType(t, api.AdminRestartDeployment404Response{}, restartResponse)
+	})
+
+	t.Run("Attempt to restart non-existent deployment", func(t *testing.T) {
+		t.Parallel()
+		dbPool := testhelper.TestDB(ctx, t)
+		accessor := dbaccess.New(dbPool)
+
+		mockController := &mockK8sController{}
+		restartRequest := api.AdminRestartDeploymentRequestObject{
+			Id:   9999,
+			Body: &api.AdminRestartDeploymentJSONRequestBody{User: "admin"},
+		}
+		restartResponse, err := admin.RestartDeployment(ctx, logger, accessor, mockController, restartRequest)
+		require.NoError(t, err)
+		require.IsType(t, api.AdminRestartDeployment404Response{}, restartResponse)
+	})
+
+	t.Run("Missing user in request body", func(t *testing.T) {
+		t.Parallel()
+		_, accessor, createdDeploymentId := setupRestartDeploymentTest(t, "deployed")
+
+		mockController := &mockK8sController{}
+		restartRequest := api.AdminRestartDeploymentRequestObject{
+			Id:   createdDeploymentId,
+			Body: &api.AdminRestartDeploymentJSONRequestBody{},
+		}
+		restartResponse, err := admin.RestartDeployment(ctx, logger, accessor, mockController, restartRequest)
+		require.NoError(t, err)
+		require.IsType(t, api.AdminRestartDeployment401Response{}, restartResponse)
+	})
+
+	t.Run("Database error", func(t *testing.T) {
+		t.Parallel()
+		dbPool, accessor, createdDeploymentId := setupRestartDeploymentTest(t, "deployed")
+
+		// Close the database pool to simulate a database error
+		dbPool.Close()
+
+		mockController := &mockK8sController{}
+		restartRequest := api.AdminRestartDeploymentRequestObject{
+			Id:   createdDeploymentId,
+			Body: &api.AdminRestartDeploymentJSONRequestBody{User: "admin"},
+		}
+		restartResponse, err := admin.RestartDeployment(ctx, logger, accessor, mockController, restartRequest)
+		require.NoError(t, err)
+		require.IsType(t, api.AdminRestartDeployment500JSONResponse{}, restartResponse)
+
+		errorResponse := restartResponse.(api.AdminRestartDeployment500JSONResponse)
+		require.Contains(t, errorResponse.Error, "Cannot restart deployment")
 	})
 }

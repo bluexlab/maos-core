@@ -593,6 +593,7 @@ func (c *K8sController) createEnvVars(params DeploymentParams) []core.EnvVar {
 
 	secretName := fmt.Sprintf("%s-api-key", params.Name)
 	envVars = append(envVars, createSecretEnvVar("MAOS_API_KEY", secretName, "MAOS_API_KEY"))
+	envVars = append(envVars, core.EnvVar{Name: "MAOS_CREATED_AT", Value: fmt.Sprintf("%d", time.Now().UnixMilli())})
 
 	return envVars
 }

@@ -369,6 +369,14 @@ func (s *APIHandler) AdminDeleteDeployment(ctx context.Context, request api.Admi
 	return admin.DeleteDeployment(ctx, s.logger, s.accessor, request)
 }
 
+func (s *APIHandler) AdminRestartDeployment(ctx context.Context, request api.AdminRestartDeploymentRequestObject) (api.AdminRestartDeploymentResponseObject, error) {
+	token := ValidatePermissions(ctx, "AdminRestartDeployment")
+	if token == nil {
+		return api.AdminRestartDeployment401Response{}, nil
+	}
+	return admin.RestartDeployment(ctx, s.logger, s.accessor, s.k8sController, request)
+}
+
 func (s *APIHandler) AdminUpdateConfig(ctx context.Context, request api.AdminUpdateConfigRequestObject) (api.AdminUpdateConfigResponseObject, error) {
 	token := ValidatePermissions(ctx, "AdminUpdateConfig")
 	if token == nil {

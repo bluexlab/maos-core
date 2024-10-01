@@ -35,6 +35,7 @@ var (
 		"AdminPublishDeployment":         {"admin"},
 		"AdminRejectDeployment":          {"admin"},
 		"AdminRestartDeployment":         {"admin"},
+		"AdminListPodMetrics":            {"admin"},
 		"AdminListReferenceConfigSuites": {"admin"},
 		"AdminGetSetting":                {"admin"},
 		"AdminUpdateSetting":             {"admin"},

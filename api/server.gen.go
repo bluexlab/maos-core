@@ -420,6 +420,18 @@ type MessageContent4 struct {
 // Permission defines model for Permission.
 type Permission string
 
+// PodMetrics defines model for PodMetrics.
+type PodMetrics struct {
+	// Cpu CPU usage in milli-cores
+	Cpu int64 `json:"cpu"`
+
+	// Memory Memory usage in bytes
+	Memory int64 `json:"memory"`
+
+	// Name Name of the pod
+	Name string `json:"name"`
+}
+
 // ReferenceConfigSuite defines model for ReferenceConfigSuite.
 type ReferenceConfigSuite struct {
 	ActorName    string `json:"actor_name"`
@@ -949,6 +961,9 @@ type ServerInterface interface {
 	// Submit the Deployment for reviewing. Only draft deployments can be submitted. After submitting, the deployment will be in `reviewing` status. Reviewers will be notified.
 	// (POST /v1/admin/deployments/{id}/submit)
 	AdminSubmitDeployment(w http.ResponseWriter, r *http.Request, id int64)
+	// Get pod metrics
+	// (GET /v1/admin/metrics/pods)
+	AdminListPodMetrics(w http.ResponseWriter, r *http.Request)
 	// List reference config suites
 	// (GET /v1/admin/reference_config_suites)
 	AdminListReferenceConfigSuites(w http.ResponseWriter, r *http.Request)
@@ -1692,6 +1707,28 @@ func (siw *ServerInterfaceWrapper) AdminSubmitDeployment(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminSubmitDeployment(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminListPodMetrics operation middleware
+func (siw *ServerInterfaceWrapper) AdminListPodMetrics(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminListPodMetrics(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2580,6 +2617,8 @@ func HandlerWithOptions(si ServerInterface, options GorillaServerOptions) http.H
 
 	r.HandleFunc(options.BaseURL+"/v1/admin/deployments/{id}/submit", wrapper.AdminSubmitDeployment).Methods("POST")
 
+	r.HandleFunc(options.BaseURL+"/v1/admin/metrics/pods", wrapper.AdminListPodMetrics).Methods("GET")
+
 	r.HandleFunc(options.BaseURL+"/v1/admin/reference_config_suites", wrapper.AdminListReferenceConfigSuites).Methods("GET")
 
 	r.HandleFunc(options.BaseURL+"/v1/admin/secrets", wrapper.AdminListSecrets).Methods("GET")
@@ -3459,6 +3498,41 @@ func (response AdminSubmitDeployment404Response) VisitAdminSubmitDeploymentRespo
 type AdminSubmitDeployment500JSONResponse struct{ N500JSONResponse }
 
 func (response AdminSubmitDeployment500JSONResponse) VisitAdminSubmitDeploymentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminListPodMetricsRequestObject struct {
+}
+
+type AdminListPodMetricsResponseObject interface {
+	VisitAdminListPodMetricsResponse(w http.ResponseWriter) error
+}
+
+type AdminListPodMetrics200JSONResponse struct {
+	Pods []PodMetrics `json:"pods"`
+}
+
+func (response AdminListPodMetrics200JSONResponse) VisitAdminListPodMetricsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminListPodMetrics401Response struct {
+}
+
+func (response AdminListPodMetrics401Response) VisitAdminListPodMetricsResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type AdminListPodMetrics500JSONResponse struct{ N500JSONResponse }
+
+func (response AdminListPodMetrics500JSONResponse) VisitAdminListPodMetricsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
 
@@ -4441,6 +4515,9 @@ type StrictServerInterface interface {
 	// Submit the Deployment for reviewing. Only draft deployments can be submitted. After submitting, the deployment will be in `reviewing` status. Reviewers will be notified.
 	// (POST /v1/admin/deployments/{id}/submit)
 	AdminSubmitDeployment(ctx context.Context, request AdminSubmitDeploymentRequestObject) (AdminSubmitDeploymentResponseObject, error)
+	// Get pod metrics
+	// (GET /v1/admin/metrics/pods)
+	AdminListPodMetrics(ctx context.Context, request AdminListPodMetricsRequestObject) (AdminListPodMetricsResponseObject, error)
 	// List reference config suites
 	// (GET /v1/admin/reference_config_suites)
 	AdminListReferenceConfigSuites(ctx context.Context, request AdminListReferenceConfigSuitesRequestObject) (AdminListReferenceConfigSuitesResponseObject, error)
@@ -5086,6 +5163,30 @@ func (sh *strictHandler) AdminSubmitDeployment(w http.ResponseWriter, r *http.Re
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminSubmitDeploymentResponseObject); ok {
 		if err := validResponse.VisitAdminSubmitDeploymentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminListPodMetrics operation middleware
+func (sh *strictHandler) AdminListPodMetrics(w http.ResponseWriter, r *http.Request) {
+	var request AdminListPodMetricsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminListPodMetrics(ctx, request.(AdminListPodMetricsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminListPodMetrics")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminListPodMetricsResponseObject); ok {
+		if err := validResponse.VisitAdminListPodMetricsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

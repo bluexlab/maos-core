@@ -19,6 +19,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	metricsv1beta1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
+	metrics "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
 // DeploymentParams defines the parameters for a deployment
@@ -43,6 +45,12 @@ type Secret struct {
 	Keys []string
 }
 
+// PodWithMetrics represents a Pod with its associated metrics
+type PodWithMetrics struct {
+	Pod     core.Pod
+	Metrics *metricsv1beta1.PodMetrics
+}
+
 // Controller defines the methods that a Controller should implement
 type Controller interface {
 	UpdateDeploymentSet(ctx context.Context, deploymentSet []DeploymentParams) error
@@ -50,12 +58,15 @@ type Controller interface {
 	ListSecrets(ctx context.Context) ([]Secret, error)
 	UpdateSecret(ctx context.Context, secretName string, secretData map[string]string) error
 	DeleteSecret(ctx context.Context, secretName string) error
+	ListRunningPodsWithMetrics(ctx context.Context) ([]PodWithMetrics, error)
 }
 
 // K8sController implements the Controller interface
 type K8sController struct {
-	clientset kubernetes.Interface
-	namespace string
+	clientset     kubernetes.Interface
+	metricsClient metrics.Interface
+	namespace     string
+	config        *rest.Config
 }
 
 // NewK8sController creates a new Controller with a kubernetes clientset
@@ -70,14 +81,21 @@ func NewK8sController() (*K8sController, error) {
 		return nil, fmt.Errorf("error creating clientset: %v", err)
 	}
 
+	metricsClient, err := metrics.NewForConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("error creating metrics client: %v", err)
+	}
+
 	namespace, err := getCurrentNamespace()
 	if err != nil {
 		return nil, fmt.Errorf("error getting current namespace: %v", err)
 	}
 
 	return &K8sController{
-		clientset: clientset,
-		namespace: namespace,
+		clientset:     clientset,
+		metricsClient: metricsClient,
+		namespace:     namespace,
+		config:        config,
 	}, nil
 }
 
@@ -140,6 +158,41 @@ func (c *K8sController) TriggerRollingRestart(ctx context.Context, deploymentNam
 	}
 
 	return nil
+}
+
+// ListRunningPodsWithMetrics lists all running pods with metrics
+func (c *K8sController) ListRunningPodsWithMetrics(ctx context.Context) ([]PodWithMetrics, error) {
+	podList, err := c.clientset.CoreV1().Pods(c.namespace).List(ctx, meta.ListOptions{
+		LabelSelector: "created-by=maos",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list pods: %v", err)
+	}
+
+	podMetrics, err := c.metricsClient.MetricsV1beta1().PodMetricses(c.namespace).List(ctx, meta.ListOptions{
+		LabelSelector: "created-by=maos",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pod metrics: %v", err)
+	}
+
+	podsWithMetrics := make([]PodWithMetrics, 0, len(podList.Items))
+	for _, pod := range podList.Items {
+		if pod.Status.Phase == core.PodRunning {
+			metrics, found := lo.Find(podMetrics.Items, func(m metricsv1beta1.PodMetrics) bool {
+				return m.Name == pod.Name
+			})
+
+			if found {
+				podsWithMetrics = append(podsWithMetrics, PodWithMetrics{
+					Pod:     pod,
+					Metrics: &metrics,
+				})
+			}
+		}
+	}
+
+	return podsWithMetrics, nil
 }
 
 // ListSecrets lists all secrets in the namespace that are created by our application

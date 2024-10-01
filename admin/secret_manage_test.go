@@ -41,6 +41,11 @@ func (m *mockK8sController4Secret) UpdateDeploymentSet(ctx context.Context, depl
 	return args.Error(0)
 }
 
+func (m *mockK8sController4Secret) ListRunningPodsWithMetrics(ctx context.Context) ([]k8s.PodWithMetrics, error) {
+	args := m.Called(ctx)
+	return args.Get(0).([]k8s.PodWithMetrics), args.Error(1)
+}
+
 func TestListSecrets(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

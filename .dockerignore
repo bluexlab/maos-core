@@ -1,4 +1,7 @@
+.git
+.gitignore
 .env*
+Dockerfile
 
 vendor/
 bin/

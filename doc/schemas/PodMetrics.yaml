@@ -1,0 +1,17 @@
+type: object
+properties:
+  name:
+    type: string
+    description: Name of the pod
+  cpu:
+    type: integer
+    format: int64
+    description: CPU usage in milli-cores
+  memory:
+    type: integer
+    format: int64
+    description: Memory usage in bytes
+required:
+  - name
+  - cpu
+  - memory

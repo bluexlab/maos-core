@@ -536,6 +536,33 @@ func RestartDeployment(
 	return api.AdminRestartDeployment201Response{}, nil
 }
 
+func ListPodMetrics(
+	ctx context.Context,
+	controller k8s.Controller,
+	request api.AdminListPodMetricsRequestObject,
+) (api.AdminListPodMetricsResponseObject, error) {
+	metrics, err := controller.ListRunningPodsWithMetrics(ctx)
+	if err != nil {
+		return api.AdminListPodMetrics500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot list pod metrics: %v", err)},
+		}, nil
+	}
+
+	podMetrics := make([]api.PodMetrics, 0, len(metrics))
+	for _, metric := range metrics {
+		podMetric := api.PodMetrics{
+			Name:   metric.Pod.Name,
+			Cpu:    metric.Metrics.Containers[0].Usage.Cpu().MilliValue(),
+			Memory: metric.Metrics.Containers[0].Usage.Memory().Value(),
+		}
+		podMetrics = append(podMetrics, podMetric)
+	}
+
+	return api.AdminListPodMetrics200JSONResponse{
+		Pods: podMetrics,
+	}, nil
+}
+
 func deserializeNotes(content []byte) *map[string]interface{} {
 	var notesMap map[string]interface{}
 	err := json.Unmarshal(content, &notesMap)

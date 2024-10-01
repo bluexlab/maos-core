@@ -377,6 +377,14 @@ func (s *APIHandler) AdminRestartDeployment(ctx context.Context, request api.Adm
 	return admin.RestartDeployment(ctx, s.logger, s.accessor, s.k8sController, request)
 }
 
+func (s *APIHandler) AdminListPodMetrics(ctx context.Context, request api.AdminListPodMetricsRequestObject) (api.AdminListPodMetricsResponseObject, error) {
+	token := ValidatePermissions(ctx, "AdminListPodMetrics")
+	if token == nil {
+		return api.AdminListPodMetrics401Response{}, nil
+	}
+	return admin.ListPodMetrics(ctx, s.k8sController, request)
+}
+
 func (s *APIHandler) AdminUpdateConfig(ctx context.Context, request api.AdminUpdateConfigRequestObject) (api.AdminUpdateConfigResponseObject, error) {
 	token := ValidatePermissions(ctx, "AdminUpdateConfig")
 	if token == nil {

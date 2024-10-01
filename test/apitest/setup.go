@@ -50,6 +50,11 @@ func (m *MockK8sController) DeleteSecret(ctx context.Context, secretName string)
 	return args.Error(0)
 }
 
+func (m *MockK8sController) ListRunningPodsWithMetrics(ctx context.Context) ([]k8s.PodWithMetrics, error) {
+	args := m.Called(ctx)
+	return args.Get(0).([]k8s.PodWithMetrics), args.Error(1)
+}
+
 // SetupHttpTestWithDb sets up two test servers and database accessors.
 // It can simulate two running services in HA mode.
 func SetupHttpTestWithDb(t *testing.T, ctx context.Context) (*httptest.Server, dbaccess.Accessor, *httptest.Server) {

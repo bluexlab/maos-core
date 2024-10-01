@@ -121,6 +121,71 @@ func (c *K8sController) UpdateDeploymentSet(ctx context.Context, deploymentSet [
 	return nil
 }
 
+// TriggerRollingRestart triggers a rolling restart of the deployment
+func (c *K8sController) TriggerRollingRestart(ctx context.Context, deploymentName string) error {
+	slog.Info("Triggered rolling restart", "namespace", c.namespace, "deployment", deploymentName)
+	deployment, err := c.clientset.AppsV1().Deployments(c.namespace).Get(ctx, deploymentName, meta.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get deployment: %v", err)
+	}
+
+	if deployment.Spec.Template.ObjectMeta.Annotations == nil {
+		deployment.Spec.Template.ObjectMeta.Annotations = make(map[string]string)
+	}
+	deployment.Spec.Template.ObjectMeta.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
+
+	_, err = c.clientset.AppsV1().Deployments(c.namespace).Update(ctx, deployment, meta.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to update deployment: %v", err)
+	}
+
+	return nil
+}
+
+// ListSecrets lists all secrets in the namespace that are created by our application
+func (c *K8sController) ListSecrets(ctx context.Context) ([]Secret, error) {
+	secretList, err := c.clientset.CoreV1().Secrets(c.namespace).List(ctx, meta.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list secrets: %v", err)
+	}
+
+	secrets := make([]Secret, 0, len(secretList.Items))
+	for _, secret := range secretList.Items {
+		keys := make([]string, 0, len(secret.Data))
+		for k := range secret.Data {
+			keys = append(keys, k)
+		}
+		secrets = append(secrets, Secret{
+			Name: secret.Name,
+			Keys: keys,
+		})
+	}
+
+	return secrets, nil
+}
+
+// UpdateSecret updates or creates a secret
+func (c *K8sController) UpdateSecret(ctx context.Context, secretName string, secretData map[string]string) error {
+	secret, err := c.clientset.CoreV1().Secrets(c.namespace).Get(ctx, secretName, meta.GetOptions{})
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return c.createSecret(ctx, secretName, secretData)
+		}
+		return fmt.Errorf("failed to get secret: %v", err)
+	}
+
+	return c.updateExistingSecret(ctx, secret, secretData)
+}
+
+// DeleteSecret deletes a secret
+func (c *K8sController) DeleteSecret(ctx context.Context, secretName string) error {
+	err := c.clientset.CoreV1().Secrets(c.namespace).Delete(ctx, secretName, meta.DeleteOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to delete secret: %v", err)
+	}
+	return nil
+}
+
 func (c *K8sController) processDeployment(ctx context.Context, params DeploymentParams, existingDeployments map[string]*apps.Deployment) error {
 	if existingDeployment, exists := existingDeployments[params.Name]; exists {
 		err := c.updateDeployment(ctx, existingDeployment, params)
@@ -186,61 +251,6 @@ func (c *K8sController) deleteObsoleteResources(ctx context.Context, existingDep
 	return nil
 }
 
-// TriggerRollingRestart triggers a rolling restart of the deployment
-func (c *K8sController) TriggerRollingRestart(ctx context.Context, deploymentName string) error {
-	slog.Info("Triggered rolling restart", "namespace", c.namespace, "deployment", deploymentName)
-	deployment, err := c.clientset.AppsV1().Deployments(c.namespace).Get(ctx, deploymentName, meta.GetOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to get deployment: %v", err)
-	}
-
-	if deployment.Spec.Template.ObjectMeta.Annotations == nil {
-		deployment.Spec.Template.ObjectMeta.Annotations = make(map[string]string)
-	}
-	deployment.Spec.Template.ObjectMeta.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
-
-	_, err = c.clientset.AppsV1().Deployments(c.namespace).Update(ctx, deployment, meta.UpdateOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to update deployment: %v", err)
-	}
-
-	return nil
-}
-
-// ListSecrets lists all secrets in the namespace that are created by our application
-func (c *K8sController) ListSecrets(ctx context.Context) ([]Secret, error) {
-	secretList, err := c.clientset.CoreV1().Secrets(c.namespace).List(ctx, meta.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to list secrets: %v", err)
-	}
-
-	secrets := make([]Secret, 0, len(secretList.Items))
-	for _, secret := range secretList.Items {
-		keys := make([]string, 0, len(secret.Data))
-		for k := range secret.Data {
-			keys = append(keys, k)
-		}
-		secrets = append(secrets, Secret{
-			Name: secret.Name,
-			Keys: keys,
-		})
-	}
-
-	return secrets, nil
-}
-
-func (c *K8sController) UpdateSecret(ctx context.Context, secretName string, secretData map[string]string) error {
-	secret, err := c.clientset.CoreV1().Secrets(c.namespace).Get(ctx, secretName, meta.GetOptions{})
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return c.createSecret(ctx, secretName, secretData)
-		}
-		return fmt.Errorf("failed to get secret: %v", err)
-	}
-
-	return c.updateExistingSecret(ctx, secret, secretData)
-}
-
 func (c *K8sController) createSecret(ctx context.Context, secretName string, secretData map[string]string) error {
 	slog.Info("Secret not found, creating", "name", secretName)
 	newSecret := &core.Secret{
@@ -280,14 +290,6 @@ func (c *K8sController) updateExistingSecret(ctx context.Context, secret *core.S
 		return fmt.Errorf("failed to update secret: %v", err)
 	}
 
-	return nil
-}
-
-func (c *K8sController) DeleteSecret(ctx context.Context, secretName string) error {
-	err := c.clientset.CoreV1().Secrets(c.namespace).Delete(ctx, secretName, meta.DeleteOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to delete secret: %v", err)
-	}
 	return nil
 }
 

@@ -283,7 +283,7 @@ func (s *APIHandler) AdminListApiTokens(ctx context.Context, request api.AdminLi
 	if token == nil {
 		return api.AdminListApiTokens401Response{}, nil
 	}
-	return admin.ListApiTokens(ctx, s.accessor, request)
+	return admin.ListApiTokens(ctx, s.logger, s.accessor, request)
 }
 
 func (s *APIHandler) AdminCreateApiToken(ctx context.Context, request api.AdminCreateApiTokenRequestObject) (api.AdminCreateApiTokenResponseObject, error) {
@@ -291,7 +291,7 @@ func (s *APIHandler) AdminCreateApiToken(ctx context.Context, request api.AdminC
 	if token == nil {
 		return api.AdminCreateApiToken401Response{}, nil
 	}
-	return admin.CreateApiToken(ctx, s.accessor, request)
+	return admin.CreateApiToken(ctx, s.logger, s.accessor, request)
 }
 
 func (s *APIHandler) AdminDeleteApiToken(ctx context.Context, request api.AdminDeleteApiTokenRequestObject) (api.AdminDeleteApiTokenResponseObject, error) {
@@ -299,7 +299,7 @@ func (s *APIHandler) AdminDeleteApiToken(ctx context.Context, request api.AdminD
 	if token == nil {
 		return api.AdminDeleteApiToken401Response{}, nil
 	}
-	return admin.DeleteApiToken(ctx, s.accessor, request)
+	return admin.DeleteApiToken(ctx, s.logger, s.accessor, request)
 }
 
 func (s *APIHandler) AdminListDeployments(ctx context.Context, request api.AdminListDeploymentsRequestObject) (api.AdminListDeploymentsResponseObject, error) {

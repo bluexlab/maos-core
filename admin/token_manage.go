@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"log/slog"
 
 	"github.com/samber/lo"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
@@ -13,13 +14,15 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/util"
 )
 
-func ListApiTokens(ctx context.Context, accessor dbaccess.Accessor, request api.AdminListApiTokensRequestObject) (api.AdminListApiTokensResponseObject, error) {
+func ListApiTokens(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminListApiTokensRequestObject) (api.AdminListApiTokensResponseObject, error) {
+	logger.Info("ListApiTokens", "page", request.Params.Page, "pageSize", request.Params.PageSize, "actorId", request.Params.ActorId, "createdBy", request.Params.CreatedBy)
+
 	page, _ := lo.Coalesce[*int](request.Params.Page, &defaultPage)
 	pageSize, _ := lo.Coalesce[*int](request.Params.PageSize, &defaultPageSize)
 	res, err := accessor.Querier().ApiTokenListByPage(ctx, accessor.Source(), &dbsqlc.ApiTokenListByPageParams{
 		ActorId:  request.Params.ActorId,
 		Page:     max(int64(*page), 1),
-		PageSize: min(max(int64(*pageSize), 1), 100),
+		PageSize: util.Clamp(int64(*pageSize), 1, 1000),
 	})
 	if err != nil {
 		return api.AdminListApiTokens500JSONResponse{
@@ -45,7 +48,9 @@ func ListApiTokens(ctx context.Context, accessor dbaccess.Accessor, request api.
 	return response, nil
 }
 
-func CreateApiToken(ctx context.Context, accessor dbaccess.Accessor, request api.AdminCreateApiTokenRequestObject) (api.AdminCreateApiTokenResponseObject, error) {
+func CreateApiToken(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminCreateApiTokenRequestObject) (api.AdminCreateApiTokenResponseObject, error) {
+	logger.Info("CreateApiToken", "actorId", request.Body.ActorId, "createdBy", request.Body.CreatedBy, "expireAt", request.Body.ExpireAt)
+
 	if request.Body.ActorId == 0 ||
 		request.Body.CreatedBy == "" ||
 		request.Body.ExpireAt == 0 {
@@ -79,7 +84,9 @@ func CreateApiToken(ctx context.Context, accessor dbaccess.Accessor, request api
 	}, nil
 }
 
-func DeleteApiToken(ctx context.Context, accessor dbaccess.Accessor, request api.AdminDeleteApiTokenRequestObject) (api.AdminDeleteApiTokenResponseObject, error) {
+func DeleteApiToken(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminDeleteApiTokenRequestObject) (api.AdminDeleteApiTokenResponseObject, error) {
+	logger.Info("DeleteApiToken", "id", request.Id)
+
 	err := accessor.Querier().ApiTokenDelete(ctx, accessor.Source(), request.Id)
 	if err != nil {
 		return api.AdminDeleteApiToken500JSONResponse{

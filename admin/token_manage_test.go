@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"testing"
 	"time"
@@ -43,7 +44,8 @@ func TestListApiTokensWithDB(t *testing.T) {
 			},
 		}
 
-		response, err := ListApiTokens(ctx, accessor, request)
+		logger := slog.Default()
+		response, err := ListApiTokens(ctx, logger, accessor, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminListApiTokens200JSONResponse{}, response)
@@ -96,7 +98,8 @@ func TestListApiTokensWithDB(t *testing.T) {
 		})
 
 		accessor := dbaccess.New(dbPool)
-		response, err := ListApiTokens(ctx, accessor, request)
+		logger := slog.Default()
+		response, err := ListApiTokens(ctx, logger, accessor, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminListApiTokens200JSONResponse{}, response)
@@ -124,7 +127,8 @@ func TestListApiTokensWithDB(t *testing.T) {
 		accessor := dbaccess.New(dbPool)
 		dbPool.Close()
 
-		response, err := ListApiTokens(ctx, accessor, request)
+		logger := slog.Default()
+		response, err := ListApiTokens(ctx, logger, accessor, request)
 
 		assert.NoError(t, err)
 		assert.EqualValues(t,
@@ -164,7 +168,8 @@ func TestCreateApiTokenWithDB(t *testing.T) {
 			ExpireAt:    request.Body.ExpireAt,
 		}
 
-		response, err := CreateApiToken(ctx, accessor, request)
+		logger := slog.Default()
+		response, err := CreateApiToken(ctx, logger, accessor, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminCreateApiToken201JSONResponse{}, response)
@@ -203,7 +208,8 @@ func TestCreateApiTokenWithDB(t *testing.T) {
 		}
 
 		dbPool.Close()
-		response, err := CreateApiToken(ctx, accessor, request)
+		logger := slog.Default()
+		response, err := CreateApiToken(ctx, logger, accessor, request)
 
 		assert.NoError(t, err)
 		assert.EqualValues(t,
@@ -231,7 +237,8 @@ func TestDeleteApiToken(t *testing.T) {
 			Id: token.ID,
 		}
 
-		response, err := DeleteApiToken(ctx, accessor, request)
+		logger := slog.Default()
+		response, err := DeleteApiToken(ctx, logger, accessor, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminDeleteApiToken204Response{}, response)
@@ -252,7 +259,8 @@ func TestDeleteApiToken(t *testing.T) {
 			Id: "non-existent-token",
 		}
 
-		response, err := DeleteApiToken(ctx, accessor, request)
+		logger := slog.Default()
+		response, err := DeleteApiToken(ctx, logger, accessor, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminDeleteApiToken204Response{}, response)
@@ -270,7 +278,8 @@ func TestDeleteApiToken(t *testing.T) {
 		}
 
 		dbPool.Close()
-		response, err := DeleteApiToken(ctx, accessor, request)
+		logger := slog.Default()
+		response, err := DeleteApiToken(ctx, logger, accessor, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminDeleteApiToken500JSONResponse{}, response)

@@ -161,6 +161,7 @@ func TestCreateCompletion(t *testing.T) {
 	t.Run("Bad request - Invalid message content", func(t *testing.T) {
 		// Prepare a request body with invalid message content
 		invalidRequestBody := api.CreateCompletionJSONRequestBody{
+			TraceId: "123",
 			ModelId: "test-model",
 			Messages: []api.Message{{
 				Role:    api.MessageRole("user"),
@@ -181,6 +182,7 @@ func TestCreateCompletion(t *testing.T) {
 	t.Run("Bad request - Invalid base64 image encoding", func(t *testing.T) {
 		// Prepare a request body with invalid base64 image encoding
 		invalidRequestBody := api.CreateCompletionJSONRequestBody{
+			TraceId: "123",
 			ModelId: "test-model",
 			Messages: []api.Message{{
 				Role:    api.MessageRole("user"),
@@ -207,7 +209,7 @@ func TestListCompletionModels(t *testing.T) {
 
 	t.Run("Successful listing of completion models", func(t *testing.T) {
 		// Send the request
-		resp, resBody := GetHttp(t, server.URL+"/v1/completion/models", "test-token")
+		resp, resBody := GetHttp(t, server.URL+"/v1/completion/models?trace_id=123", "test-token")
 
 		// Assert the response
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -234,7 +236,7 @@ func TestListCompletionModels(t *testing.T) {
 
 	t.Run("Unauthorized request", func(t *testing.T) {
 		// Send the request without a token
-		resp, _ := GetHttp(t, server.URL+"/v1/completion/models", "")
+		resp, _ := GetHttp(t, server.URL+"/v1/completion/models?trace_id=123", "")
 
 		// Assert the response
 		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)

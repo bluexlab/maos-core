@@ -111,6 +111,16 @@ func (s *APIHandler) CreateEmbedding(ctx context.Context, request api.CreateEmbe
 }
 
 func (s *APIHandler) CreateCompletion(ctx context.Context, request api.CreateCompletionRequestObject) (api.CreateCompletionResponseObject, error) {
+	s.logger.Info(
+		"CreateCompletion",
+		"trace_id", request.Body.TraceId,
+		"ModelId", request.Body.ModelId,
+		"MaxTokens", request.Body.MaxTokens,
+		"Temperature", request.Body.Temperature,
+		"StopSequences", request.Body.StopSequences,
+		"Messages", request.Body.Messages,
+	)
+
 	return400Error := func(message string) (api.CreateCompletionResponseObject, error) {
 		return api.CreateCompletion400JSONResponse{N400JSONResponse: api.N400JSONResponse{Error: message}}, nil
 	}
@@ -158,6 +168,7 @@ func (s *APIHandler) CreateCompletion(ctx context.Context, request api.CreateCom
 
 	result, err := adapter.GetCompletion(ctx, completionRequest)
 	if err != nil {
+		s.logger.Error("Error creating completion", "error", err)
 		return api.CreateCompletion500JSONResponse{
 			N500JSONResponse: api.N500JSONResponse{
 				Error: err.Error(),
@@ -188,6 +199,8 @@ func (s *APIHandler) CreateCompletion(ctx context.Context, request api.CreateCom
 }
 
 func (s *APIHandler) ListCompletionModels(ctx context.Context, request api.ListCompletionModelsRequestObject) (api.ListCompletionModelsResponseObject, error) {
+	s.logger.Info("ListCompletionModels", "trace_id", request.Params.TraceId)
+
 	token := ValidatePermissions(ctx, "ListEmbeddingModels")
 	if token == nil {
 		return api.ListCompletionModels401Response{}, nil

@@ -54,8 +54,11 @@ func NewAzureAdapter(endpoint, credential string) (*AzureAdapter, error) {
 }
 
 func (a *AzureAdapter) GetCompletion(ctx context.Context, request llm.CompletionRequest) (llm.CompletionResult, error) {
+	slog.Info("AzureAdapter Getting completion", "modelID", request.ModelID)
+
 	deploymentName, err := GetAzureDeploymentByModelID(request.ModelID)
 	if err != nil {
+		slog.Error("AzureAdapter GetAzureDeploymentByModelID failed", "error", err)
 		return llm.CompletionResult{}, err
 	}
 
@@ -87,6 +90,7 @@ func (a *AzureAdapter) GetCompletion(ctx context.Context, request llm.Completion
 
 	resp, err := a.client.GetChatCompletions(ctx, body, nil)
 	if err != nil {
+		slog.Error("AzureAdapter Getting completion", "error", err)
 		return llm.CompletionResult{}, err
 	}
 	return FromGetChatCompletionsResponse(resp), nil

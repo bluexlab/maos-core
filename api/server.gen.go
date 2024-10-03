@@ -317,7 +317,7 @@ type InvocationJob struct {
 	// Id The unique identifier for the invocation job
 	Id string `json:"id"`
 
-	// Meta The metadata of the invocation job. it contains 'kind' to specify the type of the invocation job
+	// Meta The metadata of the invocation job. It contains 'kind' to specify the type of the invocation job and 'trace_id' to trace the invocation job
 	Meta map[string]interface{} `json:"meta"`
 
 	// Payload The payload for the invocation job
@@ -337,6 +337,9 @@ type InvocationResult struct {
 
 	// Id The unique identifier for the invocation job
 	Id string `json:"id"`
+
+	// Meta The metadata of the invocation job. It contains 'kind' to specify the type of the invocation job and 'trace_id' to trace the invocation job
+	Meta map[string]interface{} `json:"meta"`
 
 	// Result The result of the invocation job
 	Result *map[string]interface{} `json:"result,omitempty"`
@@ -589,6 +592,15 @@ type CreateCompletionJSONBody struct {
 	// StopSequences Custom text sequences that will cause the model to stop generating.
 	StopSequences *[]string `json:"stop_sequences,omitempty"`
 	Temperature   *float32  `json:"temperature,omitempty"`
+
+	// TraceId A unique identifier for the request.
+	TraceId string `json:"trace_id"`
+}
+
+// ListCompletionModelsParams defines parameters for ListCompletionModels.
+type ListCompletionModelsParams struct {
+	// TraceId A unique identifier for the request.
+	TraceId string `form:"trace_id" json:"trace_id"`
 }
 
 // GetCallerConfigParams defines parameters for GetCallerConfig.
@@ -617,7 +629,7 @@ type CreateInvocationAsyncJSONBody struct {
 	// Actor The name of the actor to process the invocation job
 	Actor string `json:"actor"`
 
-	// Meta The metadata of the invocation job
+	// Meta The metadata of the invocation job. If trace_id is not provided, it will be generated.
 	Meta map[string]interface{} `json:"meta"`
 
 	// Payload The payload for the invocation job
@@ -635,7 +647,7 @@ type CreateInvocationSyncJSONBody struct {
 	// Actor The name of the actor to process the invocation job
 	Actor string `json:"actor"`
 
-	// Meta The metadata of the invocation job
+	// Meta The metadata of the invocation job. If trace_id is not provided, it will be generated.
 	Meta map[string]interface{} `json:"meta"`
 
 	// Payload The payload for the invocation job
@@ -987,7 +999,7 @@ type ServerInterface interface {
 	CreateCompletion(w http.ResponseWriter, r *http.Request)
 	// Get model list.
 	// (GET /v1/completion/models)
-	ListCompletionModels(w http.ResponseWriter, r *http.Request)
+	ListCompletionModels(w http.ResponseWriter, r *http.Request, params ListCompletionModelsParams)
 	// Get configuration of the caller
 	// (GET /v1/config)
 	GetCallerConfig(w http.ResponseWriter, r *http.Request, params GetCallerConfigParams)
@@ -1917,6 +1929,8 @@ func (siw *ServerInterfaceWrapper) CreateCompletion(w http.ResponseWriter, r *ht
 // ListCompletionModels operation middleware
 func (siw *ServerInterfaceWrapper) ListCompletionModels(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+
 	ctx := r.Context()
 
 	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
@@ -1925,8 +1939,26 @@ func (siw *ServerInterfaceWrapper) ListCompletionModels(w http.ResponseWriter, r
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListCompletionModelsParams
+
+	// ------------- Required query parameter "trace_id" -------------
+
+	if paramValue := r.URL.Query().Get("trace_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "trace_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "trace_id", r.URL.Query(), &params.TraceId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "trace_id", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListCompletionModels(w, r)
+		siw.Handler.ListCompletionModels(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3809,6 +3841,7 @@ func (response CreateCompletion500JSONResponse) VisitCreateCompletionResponse(w 
 }
 
 type ListCompletionModelsRequestObject struct {
+	Params ListCompletionModelsParams
 }
 
 type ListCompletionModelsResponseObject interface {
@@ -5388,8 +5421,10 @@ func (sh *strictHandler) CreateCompletion(w http.ResponseWriter, r *http.Request
 }
 
 // ListCompletionModels operation middleware
-func (sh *strictHandler) ListCompletionModels(w http.ResponseWriter, r *http.Request) {
+func (sh *strictHandler) ListCompletionModels(w http.ResponseWriter, r *http.Request, params ListCompletionModelsParams) {
 	var request ListCompletionModelsRequestObject
+
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListCompletionModels(ctx, request.(ListCompletionModelsRequestObject))

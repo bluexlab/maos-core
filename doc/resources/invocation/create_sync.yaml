@@ -50,7 +50,7 @@ post:
               description: The name of the actor to process the invocation job
             meta:
               type: object
-              description: The metadata of the invocation job
+              description: The metadata of the invocation job. If trace_id is not provided, it will be generated.
             payload:
               type: object
               description: The payload for the invocation job

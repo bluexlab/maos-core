@@ -122,7 +122,9 @@ paths:
                   description: The name of the actor to process the invocation job
                 meta:
                   type: object
-                  description: The metadata of the invocation job
+                  description: >-
+                    The metadata of the invocation job. If trace_id is not
+                    provided, it will be generated.
                 payload:
                   type: object
                   description: The payload for the invocation job
@@ -231,7 +233,9 @@ paths:
                   description: The name of the actor to process the invocation job
                 meta:
                   type: object
-                  description: The metadata of the invocation job
+                  description: >-
+                    The metadata of the invocation job. If trace_id is not
+                    provided, it will be generated.
                 payload:
                   type: object
                   description: The payload for the invocation job
@@ -462,6 +466,13 @@ paths:
       operationId: listCompletionModels
       tags:
         - Completion
+      parameters:
+        - in: query
+          name: trace_id
+          schema:
+            type: string
+          description: A unique identifier for the request.
+          required: true
       responses:
         '200':
           description: OK
@@ -513,6 +524,9 @@ paths:
             schema:
               type: object
               properties:
+                trace_id:
+                  type: string
+                  description: A unique identifier for the request.
                 model_id:
                   type: string
                   description: The model id.
@@ -533,6 +547,7 @@ paths:
                 max_tokens:
                   type: integer
               required:
+                - trace_id
                 - model_id
                 - messages
             examples:
@@ -1934,6 +1949,12 @@ components:
           type: integer
           format: int64
           description: The timestamp when the job was finalized
+        meta:
+          type: object
+          description: >-
+            The metadata of the invocation job. It contains 'kind' to specify
+            the type of the invocation job and 'trace_id' to trace the
+            invocation job
         result:
           type: object
           description: The result of the invocation job
@@ -1943,6 +1964,7 @@ components:
       required:
         - id
         - state
+        - meta
     InvocationJob:
       type: object
       properties:
@@ -1952,8 +1974,9 @@ components:
         meta:
           type: object
           description: >-
-            The metadata of the invocation job. it contains 'kind' to specify
-            the type of the invocation job
+            The metadata of the invocation job. It contains 'kind' to specify
+            the type of the invocation job and 'trace_id' to trace the
+            invocation job
         payload:
           type: object
           description: The payload for the invocation job

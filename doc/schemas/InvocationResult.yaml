@@ -13,6 +13,9 @@ properties:
     type: integer
     format: int64
     description: The timestamp when the job was finalized
+  meta:
+    type: object
+    description: The metadata of the invocation job. It contains 'kind' to specify the type of the invocation job and 'trace_id' to trace the invocation job
   result:
     type: object
     description: The result of the invocation job
@@ -22,3 +25,4 @@ properties:
 required:
   - id
   - state
+  - meta

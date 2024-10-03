@@ -5,7 +5,7 @@ properties:
     description: The unique identifier for the invocation job
   meta:
     type: object
-    description: The metadata of the invocation job. it contains 'kind' to specify the type of the invocation job
+    description: The metadata of the invocation job. It contains 'kind' to specify the type of the invocation job and 'trace_id' to trace the invocation job
   payload:
     type: object
     description: The payload for the invocation job

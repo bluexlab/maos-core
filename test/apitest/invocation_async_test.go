@@ -161,7 +161,7 @@ func TestInvocationGetEndpoint(t *testing.T) {
 		user := fixture.InsertActor(t, ctx, accessor.Source(), "user")
 		userToken := fixture.InsertToken(t, ctx, accessor.Source(), "user-token", user.ID, 0, []string{"create:invocation"})
 
-		body := `{"actor":"actor1","meta":{"kind": "test"},"payload":{"req": "16888"}}`
+		body := `{"actor":"actor1","meta":{"kind": "test", "trace_id": "123"},"payload":{"req": "16888"}}`
 		resp, respBody := PostHttp(t, server.URL+"/v1/invocations/async", body, userToken.ID)
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
 		id := testhelper.JsonToMap(t, respBody)["id"].(string)
@@ -177,7 +177,7 @@ func TestInvocationGetEndpoint(t *testing.T) {
 		resp, respBody := GetHttp(t, server.URL+"/v1/invocations/"+invId, userToken)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		testhelper.AssertJsonEqIgnoringFields(t,
-			fmt.Sprintf(`{"id":"%s","state":"completed","result":{"res":"16888"},"attempted_at":0,"finalized_at":0}`, invId),
+			fmt.Sprintf(`{"id":"%s","state":"completed","result":{"res":"16888"},"meta":{"kind":"test","trace_id":"123"},"attempted_at":0,"finalized_at":0}`, invId),
 			respBody,
 			"attempted_at",
 			"finalized_at",
@@ -190,7 +190,7 @@ func TestInvocationGetEndpoint(t *testing.T) {
 		resp, respBody := GetHttp(t, server.URL+"/v1/invocations/"+invId, userToken)
 		require.Equal(t, http.StatusAccepted, resp.StatusCode)
 		testhelper.AssertJsonEqIgnoringFields(t,
-			fmt.Sprintf(`{"id":"%s","state":"available"}`, invId),
+			fmt.Sprintf(`{"id":"%s","state":"available","meta":{"kind":"test","trace_id":"123"}}`, invId),
 			respBody,
 			"attempted_at",
 			"finalized_at",
@@ -205,7 +205,7 @@ func TestInvocationGetEndpoint(t *testing.T) {
 		resp, respBody := GetHttp(t, server.URL+"/v1/invocations/"+invId, userToken)
 		require.Equal(t, http.StatusAccepted, resp.StatusCode)
 		testhelper.AssertJsonEqIgnoringFields(t,
-			fmt.Sprintf(`{"id":"%s","state":"running","attempted_at":0}`, invId),
+			fmt.Sprintf(`{"id":"%s","state":"running","meta":{"kind":"test","trace_id":"123"},"attempted_at":0}`, invId),
 			respBody,
 			"attempted_at",
 			"finalized_at",
@@ -221,7 +221,7 @@ func TestInvocationGetEndpoint(t *testing.T) {
 		resp, respBody := GetHttp(t, server.URL+"/v1/invocations/"+invId+"?wait=1", userToken)
 		require.Equal(t, http.StatusAccepted, resp.StatusCode)
 		testhelper.AssertJsonEqIgnoringFields(t,
-			fmt.Sprintf(`{"id":"%s","state":"running","attempted_at":0}`, invId),
+			fmt.Sprintf(`{"id":"%s","state":"running","meta":{"kind":"test","trace_id":"123"},"attempted_at":0}`, invId),
 			respBody,
 			"attempted_at",
 			"finalized_at",
@@ -241,7 +241,7 @@ func TestInvocationGetEndpoint(t *testing.T) {
 		resp, respBody := GetHttp(t, server.URL+"/v1/invocations/"+invId+"?wait=1", userToken)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		testhelper.AssertJsonEqIgnoringFields(t,
-			fmt.Sprintf(`{"id":"%s","state":"completed","result":{"res":"16888"},"attempted_at":0,"finalized_at":0}`, invId),
+			fmt.Sprintf(`{"id":"%s","state":"completed","result":{"res":"16888"},"meta":{"kind":"test","trace_id":"123"},"attempted_at":0,"finalized_at":0}`, invId),
 			respBody,
 			"attempted_at",
 			"finalized_at",
@@ -261,7 +261,7 @@ func TestInvocationGetEndpoint(t *testing.T) {
 		resp, respBody := GetHttp(t, server.URL+"/v1/invocations/"+invId+"?wait=1", userToken)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		testhelper.AssertJsonEqIgnoringFields(t,
-			fmt.Sprintf(`{"id":"%s","state":"discarded","errors":{"err":"16888"},"attempted_at":0,"finalized_at":0}`, invId),
+			fmt.Sprintf(`{"id":"%s","state":"discarded","errors":{"err":"16888"},"meta":{"kind":"test","trace_id":"123"},"attempted_at":0,"finalized_at":0}`, invId),
 			respBody,
 			"attempted_at",
 			"finalized_at",

@@ -9,6 +9,9 @@ post:
         schema:
           type: object
           properties:
+            trace_id:
+              type: string
+              description: A unique identifier for the request.
             model_id:
               type: string
               description: The model id.
@@ -27,6 +30,7 @@ post:
             max_tokens:
               type: integer
           required:
+            - trace_id
             - model_id
             - messages
         examples:

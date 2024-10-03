@@ -41,6 +41,7 @@ func TestInvocationExecuteEndpoint(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, invocations, 1)
 			invocationId = invocations[0].ID
+			require.JSONEq(t, `{"kind":"test","trace_id":"456"}`, string(invocations[0].Metadata))
 
 			// set response for the invocation and set it to completed
 			body := `{"result":{"seq": "16888"}}`
@@ -48,7 +49,7 @@ func TestInvocationExecuteEndpoint(t *testing.T) {
 			require.Equal(t, http.StatusOK, resp.StatusCode)
 		}()
 
-		body := `{"actor":"actor1","meta":{"kind": "test"},"payload":{"key1": 16888,"key2":{"key3": "value3"}}}`
+		body := `{"actor":"actor1","meta":{"kind": "test", "trace_id": "456"},"payload":{"key1": 16888,"key2":{"key3": "value3"}}}`
 		resp, resBody := PostHttp(t, server.URL+"/v1/invocations/sync", body, userToken.ID)
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
 
@@ -56,6 +57,7 @@ func TestInvocationExecuteEndpoint(t *testing.T) {
 		require.Equal(t, strconv.FormatInt(invocationId, 10), resJson["id"])
 		require.Equal(t, map[string]interface{}{"seq": "16888"}, resJson["result"])
 		require.Equal(t, "completed", resJson["state"])
+		require.Equal(t, map[string]interface{}{"kind": "test", "trace_id": "456"}, resJson["meta"].(map[string]interface{}))
 	})
 
 	t.Run("timeout", func(t *testing.T) {
@@ -65,12 +67,12 @@ func TestInvocationExecuteEndpoint(t *testing.T) {
 		user := fixture.InsertActor(t, ctx, accessor.Source(), "user")
 		userToken := fixture.InsertToken(t, ctx, accessor.Source(), "user-token", user.ID, 0, []string{"create:invocation"})
 
-		body := `{"actor":"actor1","meta":{"kind": "test"},"payload":{"key1": 16888,"key2":{"key3": "value3"}}}`
+		body := `{"actor":"actor1","meta":{"kind": "test", "trace_id": "456"},"payload":{"key1": 16888,"key2":{"key3": "value3"}}}`
 		resp, body := PostHttp(t, server.URL+"/v1/invocations/sync?wait=1", body, userToken.ID)
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
 		bodyJson := testhelper.JsonToMap(t, body)
 		require.NotEmpty(t, bodyJson["id"])
-		testhelper.AssertJsonEqIgnoringFields(t, `{"id":"`+bodyJson["id"].(string)+`","state":"available"}`, body, "result")
+		testhelper.AssertJsonEqIgnoringFields(t, `{"id":"`+bodyJson["id"].(string)+`","state":"available","meta":{"kind":"test","trace_id":"456"}}`, body, "result")
 	})
 
 	t.Run("multiple actors and executions", func(t *testing.T) {
@@ -126,7 +128,7 @@ func TestInvocationExecuteEndpoint(t *testing.T) {
 			// random sleep to simulate different execution times
 			time.Sleep(time.Duration(rand.Intn(6)+5) * time.Millisecond)
 
-			body := fmt.Sprintf(`{"actor":"actor1","meta":{"kind": "test"},"payload":{"req": "%d"}}`, i)
+			body := fmt.Sprintf(`{"actor":"actor1","meta":{"kind": "test", "trace_id": "789"},"payload":{"req": "%d"}}`, i)
 			resp, resBody := PostHttp(t, server.URL+"/v1/invocations/sync", body, userToken.ID)
 			if http.StatusCreated != resp.StatusCode {
 				errCh <- fmt.Errorf("response status code is %d not 201", resp.StatusCode)

@@ -15,7 +15,7 @@ func InsertInvocation(t *testing.T, ctx context.Context, ds DataSource, state st
 		CreatedAt: time.Now().Unix(),
 		Priority:  1,
 		Payload:   []byte(payload),
-		Metadata:  []byte(`{"kind": "test"}`),
+		Metadata:  []byte(`{"kind": "test", "trace_id": "123"}`),
 		ActorName: actor,
 	})
 	if err != nil {

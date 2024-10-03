@@ -2,6 +2,9 @@ package invocation
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"fmt"
 	"log/slog"
 	"strconv"
 	"time"
@@ -103,12 +106,18 @@ func (m *Manager) Close(ctx context.Context) error {
 }
 
 func (m *Manager) InsertInvocation(ctx context.Context, callerActorId int64, request api.CreateInvocationAsyncRequestObject) (api.CreateInvocationAsyncResponseObject, error) {
-	m.logger.Debug("InsertInvocation start", "callerActorId", callerActorId, "requestBody", request.Body)
+	m.logger.Debug("InsertInvocation start", "traceId", request.Body.Meta["trace_id"], "callerActorId", callerActorId, "requestBody", request.Body)
 
 	if len(request.Body.Meta) == 0 {
 		return api.CreateInvocationAsync400JSONResponse{
 			N400JSONResponse: api.N400JSONResponse{Error: "Meta is required"},
 		}, nil
+	}
+
+	// ensure trace_id is set
+	traceId := request.Body.Meta["trace_id"]
+	if traceId == nil {
+		request.Body.Meta["trace_id"] = generateTraceId()
 	}
 
 	metadata, err := json.Marshal(request.Body.Meta)
@@ -182,11 +191,21 @@ func (m *Manager) GetInvocationById(ctx context.Context, callerActorId int64, re
 				N500JSONResponse: api.N500JSONResponse{Error: "Failed to parse result or errors"},
 			}
 		}
+
+		meta, err := parseJson(invocation.Metadata)
+		if err != nil {
+			m.logger.Error("Failed to parse metadata", "err", err)
+			return api.GetInvocationById500JSONResponse{
+				N500JSONResponse: api.N500JSONResponse{Error: "Failed to parse metadata"},
+			}
+		}
+
 		if lo.Contains(finalizedStatuses, invocation.State) {
 			return api.GetInvocationById200JSONResponse{
 				Id:          request.Id,
 				AttemptedAt: invocation.AttemptedAt,
 				FinalizedAt: invocation.FinalizedAt,
+				Meta:        *meta,
 				State:       api.InvocationState(invocation.State),
 				Result:      result,
 				Errors:      errors,
@@ -196,6 +215,7 @@ func (m *Manager) GetInvocationById(ctx context.Context, callerActorId int64, re
 			Id:          request.Id,
 			AttemptedAt: invocation.AttemptedAt,
 			FinalizedAt: invocation.FinalizedAt,
+			Meta:        *meta,
 			State:       api.InvocationState(invocation.State),
 			Result:      result,
 			Errors:      errors,
@@ -240,12 +260,18 @@ func (m *Manager) GetInvocationById(ctx context.Context, callerActorId int64, re
 }
 
 func (m *Manager) ExecuteInvocationSync(ctx context.Context, callerActorId int64, request api.CreateInvocationSyncRequestObject) (api.CreateInvocationSyncResponseObject, error) {
-	m.logger.Info("ExecuteInvocationSync start", "callerActorId", callerActorId, "requestBody", request.Body)
+	m.logger.Info("ExecuteInvocationSync start", "traceId", request.Body.Meta["trace_id"], "callerActorId", callerActorId, "requestBody", request.Body)
 
 	if len(request.Body.Meta) == 0 {
 		return api.CreateInvocationSync400JSONResponse{
 			N400JSONResponse: api.N400JSONResponse{Error: "Meta is required"},
 		}, nil
+	}
+
+	// ensure trace_id is set
+	traceId := request.Body.Meta["trace_id"]
+	if traceId == nil {
+		request.Body.Meta["trace_id"] = generateTraceId()
 	}
 
 	metadata, err := json.Marshal(request.Body.Meta)
@@ -318,11 +344,20 @@ func (m *Manager) ExecuteInvocationSync(ctx context.Context, callerActorId int64
 				N500JSONResponse: api.N500JSONResponse{Error: "Failed to parse result or errors"},
 			}, nil
 		}
+		meta, err := parseJson(latestInvocation.Metadata)
+		if err != nil {
+			m.logger.Error("Failed to parse metadata", "err", err)
+			return api.CreateInvocationSync500JSONResponse{
+				N500JSONResponse: api.N500JSONResponse{Error: "Failed to parse metadata"},
+			}, nil
+		}
+
 		return api.CreateInvocationSync201JSONResponse{
 			Id:          invocationIdStr,
 			AttemptedAt: latestInvocation.AttemptedAt,
 			FinalizedAt: latestInvocation.FinalizedAt,
 			State:       api.InvocationState(latestInvocation.State),
+			Meta:        *meta,
 			Result:      result,
 			Errors:      errors,
 		}, nil
@@ -343,7 +378,7 @@ func (m *Manager) ExecuteInvocationSync(ctx context.Context, callerActorId int64
 }
 
 func (m *Manager) ReturnInvocationResponse(ctx context.Context, callerActorId int64, request api.ReturnInvocationResponseRequestObject) (api.ReturnInvocationResponseResponseObject, error) {
-	m.logger.Info("ReturnInvocationResponse start", "callerActorId", callerActorId, "requestBody", request.Body.Result)
+	m.logger.Info("ReturnInvocationResponse start", "InvokeId", request.InvokeId, "callerActorId", callerActorId, "requestBody", request.Body.Result)
 
 	// Find the invocation
 	invocationId, err := strconv.ParseInt(request.InvokeId, 10, 64)
@@ -392,7 +427,7 @@ func (m *Manager) ReturnInvocationResponse(ctx context.Context, callerActorId in
 }
 
 func (m *Manager) ReturnInvocationError(ctx context.Context, callerActorId int64, request api.ReturnInvocationErrorRequestObject) (api.ReturnInvocationErrorResponseObject, error) {
-	m.logger.Info("ReturnInvocationError start", "callerActorId", callerActorId, "requestBody", request.Body.Errors)
+	m.logger.Info("ReturnInvocationError start", "InvokeId", request.InvokeId, "callerActorId", callerActorId, "requestBody", request.Body.Errors)
 
 	// Find the invocation
 	invocationId, err := strconv.ParseInt(request.InvokeId, 10, 64)
@@ -441,7 +476,7 @@ func (m *Manager) ReturnInvocationError(ctx context.Context, callerActorId int64
 }
 
 func (m *Manager) GetNextInvocation(ctx context.Context, callerActorId int64, queueId int64, request api.GetNextInvocationRequestObject) (api.GetNextInvocationResponseObject, error) {
-	m.logger.Info("GetNextInvocation start", "callerActorId", callerActorId, "requestParams", request.Params)
+	m.logger.Info("GetNextInvocation start", "callerActorId", callerActorId, "queueId", queueId, "wait", request.Params.Wait)
 
 	getAvailble := func() (*dbsqlc.Invocation, error) {
 		invocations, err := m.accessor.Querier().InvocationGetAvailable(ctx, m.accessor.Source(), &dbsqlc.InvocationGetAvailableParams{
@@ -469,6 +504,7 @@ func (m *Manager) GetNextInvocation(ctx context.Context, callerActorId int64, qu
 		}
 
 		if invocation != nil {
+			m.logger.Debug("Return NextInvocation", "InvokeId", invocation.ID)
 			return m.createGetNextResponse(invocation)
 		}
 
@@ -522,4 +558,16 @@ func parseJson(data []byte) (*map[string]interface{}, error) {
 	var result map[string]interface{}
 	err := json.Unmarshal(data, &result)
 	return &result, err
+}
+
+func generateTraceId() string {
+	numBytes := (32*3)/4 + 1
+
+	randomBytes := make([]byte, numBytes)
+	_, err := rand.Read(randomBytes)
+	if err != nil {
+		panic(fmt.Errorf("failed to generate random bytes: %v", err))
+	}
+
+	return base64.RawURLEncoding.EncodeToString(randomBytes)
 }

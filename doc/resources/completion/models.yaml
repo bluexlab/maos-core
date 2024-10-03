@@ -3,6 +3,13 @@ get:
   operationId: listCompletionModels
   tags:
     - Completion
+  parameters:
+    - in: query
+      name: trace_id
+      schema:
+        type: string
+      description: A unique identifier for the request.
+      required: true
   responses:
     200:
       description: OK

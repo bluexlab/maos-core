@@ -35,7 +35,7 @@ func TestInvocationGetNextEndpoint(t *testing.T) {
 		resp, resBody := GetHttp(t, server.URL+"/v1/invocations/next", token.ID)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		require.JSONEq(t,
-			fmt.Sprintf(`{"id":"%d", "meta":{"kind":"test"}, "payload":{"seq":1}}`, invocation),
+			fmt.Sprintf(`{"id":"%d", "meta":{"kind":"test","trace_id":"123"}, "payload":{"seq":1}}`, invocation),
 			resBody)
 
 		row, err := accessor.Querier().InvocationFindById(ctx, accessor.Source(), invocation)
@@ -60,7 +60,7 @@ func TestInvocationGetNextEndpoint(t *testing.T) {
 		resp, resBody := GetHttp(t, server.URL+"/v1/invocations/next", token.ID)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		require.JSONEq(t,
-			fmt.Sprintf(`{"id":"%d", "meta":{"kind":"test"}, "payload":{"seq":1}}`, invocation),
+			fmt.Sprintf(`{"id":"%d", "meta":{"kind":"test","trace_id":"123"}, "payload":{"seq":1}}`, invocation),
 			resBody)
 	})
 
@@ -76,7 +76,7 @@ func TestInvocationGetNextEndpoint(t *testing.T) {
 		go func() {
 			time.Sleep(10 * time.Millisecond)
 
-			body := `{"actor":"test-actor","meta":{"kind": "test"},"payload":{"seq": 16888}}`
+			body := `{"actor":"test-actor","meta":{"kind": "test", "trace_id": "456"},"payload":{"seq": 16888}}`
 			resp, resBody := PostHttp(t, server.URL+"/v1/invocations/async", body, userToken.ID)
 			require.Equal(t, http.StatusCreated, resp.StatusCode)
 			var res map[string]interface{}
@@ -87,7 +87,7 @@ func TestInvocationGetNextEndpoint(t *testing.T) {
 		resp, resBody := GetHttp(t, server.URL+"/v1/invocations/next", token.ID)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		require.JSONEq(t,
-			fmt.Sprintf(`{"id":"%s", "meta":{"kind":"test"}, "payload":{"seq":16888}}`, invocationId),
+			fmt.Sprintf(`{"id":"%s", "meta":{"kind":"test","trace_id":"456"}, "payload":{"seq":16888}}`, invocationId),
 			resBody)
 	})
 
@@ -103,7 +103,7 @@ func TestInvocationGetNextEndpoint(t *testing.T) {
 		wg := sync.WaitGroup{}
 		wg.Add(count)
 		insert := func(i int) {
-			body := fmt.Sprintf(`{"actor":"test-actor","meta":{"kind": "test"},"payload":{"seq": "%d"}}`, i)
+			body := fmt.Sprintf(`{"actor":"test-actor","meta":{"kind": "test", "trace_id": "456"},"payload":{"seq": "%d"}}`, i)
 			resp, _ := PostHttp(t, server.URL+"/v1/invocations/async", body, userToken.ID)
 			require.Equal(t, http.StatusCreated, resp.StatusCode)
 			wg.Done()

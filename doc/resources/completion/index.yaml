@@ -19,6 +19,10 @@ post:
               type: array
               items:
                 $ref: "../../schemas/Message.yaml"
+            tools:
+              type: array
+              items:
+                $ref: "../../schemas/Tool.yaml"
             stop_sequences:
               description: Custom text sequences that will cause the model to stop generating.
               type: array

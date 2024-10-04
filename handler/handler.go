@@ -17,22 +17,38 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/llm/adapter"
 )
 
-func NewAPIHandler(logger *slog.Logger, accessor dbaccess.Accessor, suiteStore suitestore.SuiteStore, k8sController k8s.Controller) *APIHandler {
+type NewAPIHandlerParams struct {
+	Logger          *slog.Logger
+	Accessor        dbaccess.Accessor
+	SuiteStore      suitestore.SuiteStore
+	K8sController   k8s.Controller
+	AOAIEndpoint    string
+	AOAIAPIKey      string
+	AnthropicAPIKey string
+}
+
+func NewAPIHandler(params NewAPIHandlerParams) *APIHandler {
 	return &APIHandler{
-		logger:            logger,
-		accessor:          accessor,
-		invocationManager: invocation.NewManager(logger, accessor),
-		suiteStore:        suiteStore,
-		k8sController:     k8sController,
+		logger:            params.Logger,
+		accessor:          params.Accessor,
+		invocationManager: invocation.NewManager(params.Logger, params.Accessor),
+		suiteStore:        params.SuiteStore,
+		k8sController:     params.K8sController,
+		AdapterCredentials: adapter.AdapterCredentials{
+			AOAIEndpoint:    params.AOAIEndpoint,
+			AOAIAPIKey:      params.AOAIAPIKey,
+			AnthropicAPIKey: params.AnthropicAPIKey,
+		},
 	}
 }
 
 type APIHandler struct {
-	logger            *slog.Logger
-	accessor          dbaccess.Accessor
-	invocationManager *invocation.Manager
-	suiteStore        suitestore.SuiteStore
-	k8sController     k8s.Controller
+	logger             *slog.Logger
+	accessor           dbaccess.Accessor
+	invocationManager  *invocation.Manager
+	suiteStore         suitestore.SuiteStore
+	k8sController      k8s.Controller
+	AdapterCredentials adapter.AdapterCredentials
 }
 
 func (s *APIHandler) Start(ctx context.Context) error {
@@ -130,7 +146,7 @@ func (s *APIHandler) CreateCompletion(ctx context.Context, request api.CreateCom
 		return api.CreateCompletion401Response{}, nil
 	}
 
-	adapter, err := adapter.CreateAdapter(request.Body.ModelId)
+	adapter, err := adapter.CreateAdapter(request.Body.ModelId, s.AdapterCredentials)
 	if err != nil {
 		return return400Error(fmt.Sprintf("Model %s not found", request.Body.ModelId))
 	}

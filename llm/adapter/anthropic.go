@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
@@ -20,11 +19,13 @@ var AnthropicModelMap = map[string]string{
 
 type _AnthropicAdapter struct {
 	httpClient *http.Client
+	apiKey     string
 }
 
-func NewAnthropicAdapter() *_AnthropicAdapter {
+func NewAnthropicAdapter(apiKey string) *_AnthropicAdapter {
 	return &_AnthropicAdapter{
 		httpClient: &http.Client{},
+		apiKey:     apiKey,
 	}
 }
 
@@ -41,7 +42,7 @@ func (a *_AnthropicAdapter) GetCompletion(ctx context.Context, request llm.Compl
 	if err != nil {
 		return llm.CompletionResult{}, err
 	}
-	httpRequest.Header.Add("x-api-key", os.Getenv("ANTHROPIC_API_KEY"))
+	httpRequest.Header.Add("x-api-key", a.apiKey)
 	httpRequest.Header.Add("anthropic-version", "2023-06-01")
 	httpRequest.Header.Add("Content-Type", "application/json")
 

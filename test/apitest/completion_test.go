@@ -41,7 +41,7 @@ func TestCreateCompletion(t *testing.T) {
 
 	// Override the CreateAdapter function to return our mock
 	originalCreateAdapter := adapter.CreateAdapter
-	adapter.CreateAdapter = func(modelId string) (adapter.LLMAdapter, error) {
+	adapter.CreateAdapter = func(modelId string, credentials adapter.AdapterCredentials) (adapter.LLMAdapter, error) {
 		return mockAdapter, nil
 	}
 	defer func() { adapter.CreateAdapter = originalCreateAdapter }()
@@ -134,7 +134,7 @@ func TestCreateCompletion(t *testing.T) {
 
 	t.Run("Bad request", func(t *testing.T) {
 		originalCreateAdapter := adapter.CreateAdapter
-		adapter.CreateAdapter = func(modelId string) (adapter.LLMAdapter, error) {
+		adapter.CreateAdapter = func(modelId string, credentials adapter.AdapterCredentials) (adapter.LLMAdapter, error) {
 			require.Equal(t, "invalid-model", modelId)
 			return nil, fmt.Errorf("invalid model")
 		}

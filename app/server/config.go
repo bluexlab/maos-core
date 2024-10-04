@@ -17,4 +17,11 @@ type Config struct {
 	SuiteStorePrefix       string `envconfig:"SUITE_STORE_PREFIX"`
 	SuiteStoreScanInterval string `envconfig:"SUITE_STORE_SCAN_INTERVAL" validate:"omitempty"`
 	MaosDisplayName        string `envconfig:"MAOS_DISPLAY_NAME" validate:"required"`
+
+	// Azure OpenAI
+	AOAIEndpoint string `envconfig:"AOAI_ENDPOINT" validate:"required"`
+	AOAIAPIKey   string `envconfig:"AOAI_API_KEY" validate:"required"`
+
+	// Anthropic
+	AnthropicAPIKey string `envconfig:"ANTHROPIC_API_KEY" validate:"required"`
 }

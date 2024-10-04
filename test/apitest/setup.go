@@ -111,7 +111,15 @@ func builder(t *testing.T, ctx context.Context, pool *pgxpool.Pool) (*httptest.S
 
 	mockK8sController := new(MockK8sController)
 
-	apiHandler := handler.NewAPIHandler(logger.WithGroup("APIHandler"), accessor, suiteStore, mockK8sController)
+	apiHandler := handler.NewAPIHandler(handler.NewAPIHandlerParams{
+		Logger:          logger.WithGroup("APIHandler"),
+		Accessor:        accessor,
+		SuiteStore:      suiteStore,
+		K8sController:   mockK8sController,
+		AOAIEndpoint:    "--AOAI_ENDPOINT--",
+		AOAIAPIKey:      "--AOAI_API_KEY--",
+		AnthropicAPIKey: "--ANTHROPIC_API_KEY--",
+	})
 	err := apiHandler.Start(ctx)
 	require.NoError(t, err)
 

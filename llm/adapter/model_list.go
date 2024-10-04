@@ -53,9 +53,15 @@ func GetModelList() []llm.Model {
 	return modelList
 }
 
+type AdapterCredentials struct {
+	AOAIEndpoint    string
+	AOAIAPIKey      string
+	AnthropicAPIKey string
+}
+
 // CreateAdapter creates an adapter for the given model ID
 // This is a variable so we can inject it for testing
-var CreateAdapter = func(modelId string) (LLMAdapter, error) {
+var CreateAdapter = func(modelId string, credentials AdapterCredentials) (LLMAdapter, error) {
 	model, ok := GetModelByID(modelId)
 	if !ok {
 		return nil, fmt.Errorf("model %s not found", modelId)
@@ -63,9 +69,9 @@ var CreateAdapter = func(modelId string) (LLMAdapter, error) {
 
 	switch model.Provider {
 	case PROVIDER_AZURE:
-		return NewAzureAdapter(model.ID, model.Provider)
+		return NewAzureAdapter(credentials.AOAIEndpoint, credentials.AOAIAPIKey)
 	case PROVIDER_ANTHROPIC:
-		return NewAnthropicAdapter(), nil
+		return NewAnthropicAdapter(credentials.AnthropicAPIKey), nil
 	default:
 		return nil, fmt.Errorf("unsupported provider: %s", model.Provider)
 	}

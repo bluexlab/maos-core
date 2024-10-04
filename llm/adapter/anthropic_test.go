@@ -14,7 +14,7 @@ import (
 
 func TestAnthropicClaudeWithText(t *testing.T) {
 	t.Skip()
-	client := adapter.NewAnthropicAdapter()
+	client := adapter.NewAnthropicAdapter(os.Getenv("ANTHROPIC_API_KEY"))
 
 	maxTokens := int32(1000)
 	req := llm.CompletionRequest{
@@ -45,7 +45,7 @@ func TestAnthropicClaudeWithText(t *testing.T) {
 func TestAnthropicClaudeWitTool(t *testing.T) {
 	t.Skip()
 
-	client := adapter.NewAnthropicAdapter()
+	client := adapter.NewAnthropicAdapter(os.Getenv("ANTHROPIC_API_KEY"))
 
 	add := func(argument json.RawMessage) (string, error) {
 		var args struct {
@@ -162,7 +162,7 @@ func TestAnthropicClaudeWithImage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	client := adapter.NewAnthropicAdapter()
+	client := adapter.NewAnthropicAdapter(os.Getenv("ANTHROPIC_API_KEY"))
 
 	maxTokens := int32(1000)
 	req := llm.CompletionRequest{

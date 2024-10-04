@@ -125,7 +125,15 @@ func (a *App) Run() {
 		os.Exit(1)
 	}
 
-	apiHandler := handler.NewAPIHandler(a.logger.WithGroup("APIHandler"), accessor, suiteStore, k8sController)
+	apiHandler := handler.NewAPIHandler(handler.NewAPIHandlerParams{
+		Logger:          a.logger.WithGroup("APIHandler"),
+		Accessor:        accessor,
+		SuiteStore:      suiteStore,
+		K8sController:   k8sController,
+		AOAIEndpoint:    config.AOAIEndpoint,
+		AOAIAPIKey:      config.AOAIAPIKey,
+		AnthropicAPIKey: config.AnthropicAPIKey,
+	})
 	err = apiHandler.Start(ctx)
 	if err != nil {
 		a.logger.Error("Failed to initialize handler", "err", err)

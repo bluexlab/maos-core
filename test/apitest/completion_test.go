@@ -60,6 +60,7 @@ func TestCreateCompletion(t *testing.T) {
 					},
 				},
 			},
+			Tools:       []llm.Tool{},
 			Temperature: nil,
 			MaxTokens:   lo.ToPtr(int32(8000)),
 		}

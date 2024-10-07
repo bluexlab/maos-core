@@ -135,6 +135,7 @@ func (s *APIHandler) CreateCompletion(ctx context.Context, request api.CreateCom
 		"Temperature", request.Body.Temperature,
 		"StopSequences", request.Body.StopSequences,
 		"Messages", request.Body.Messages,
+		"Tools", request.Body.Tools,
 	)
 
 	return400Error := func(message string) (api.CreateCompletionResponseObject, error) {
@@ -175,9 +176,25 @@ func (s *APIHandler) CreateCompletion(ctx context.Context, request api.CreateCom
 		messages = append(messages, msg)
 	}
 
+	tools := make([]llm.Tool, 0)
+	// if request.Body.Tools != nil {
+	// 	for _, t := range *request.Body.Tools {
+	// 		parameters, err := json.Marshal(lo.FromPtr(t.Parameters))
+	// 		if err != nil {
+	// 			return return400Error("Invalid tool parameters")
+	// 		}
+	// 		tools = append(tools, llm.Tool{
+	// 			Name:        lo.FromPtr(t.Name),
+	// 			Description: lo.FromPtr(t.Description),
+	// 			Parameters:  parameters,
+	// 		})
+	// 	}
+	// }
+
 	completionRequest := llm.CompletionRequest{
 		ModelID:     request.Body.ModelId,
 		Messages:    messages,
+		Tools:       tools,
 		Temperature: request.Body.Temperature,
 		MaxTokens:   lo.ToPtr(int32(lo.FromPtrOr(request.Body.MaxTokens, 8000))),
 	}

@@ -534,6 +534,10 @@ paths:
                   type: array
                   items:
                     $ref: '#/components/schemas/Message'
+                tools:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Tool'
                 stop_sequences:
                   description: >-
                     Custom text sequences that will cause the model to stop
@@ -2067,6 +2071,19 @@ components:
       required:
         - role
         - content
+    Tool:
+      type: object
+      description: The tool that is used to process the message.
+      properties:
+        name:
+          type: string
+          description: The name of the tool.
+        description:
+          type: string
+          description: The description of the tool.
+        parameters:
+          type: object
+          description: The parameters of the tool. It's defined by JSON schema.
     Embedding:
       type: object
       properties:

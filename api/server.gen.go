@@ -462,6 +462,18 @@ type Setting struct {
 	DisplayName               string `json:"display_name"`
 }
 
+// Tool The tool that is used to process the message.
+type Tool struct {
+	// Description The description of the tool.
+	Description *string `json:"description,omitempty"`
+
+	// Name The name of the tool.
+	Name *string `json:"name,omitempty"`
+
+	// Parameters The parameters of the tool. It's defined by JSON schema.
+	Parameters *map[string]interface{} `json:"parameters,omitempty"`
+}
+
 // N400 defines model for 400.
 type N400 = Error
 
@@ -592,6 +604,7 @@ type CreateCompletionJSONBody struct {
 	// StopSequences Custom text sequences that will cause the model to stop generating.
 	StopSequences *[]string `json:"stop_sequences,omitempty"`
 	Temperature   *float32  `json:"temperature,omitempty"`
+	Tools         *[]Tool   `json:"tools,omitempty"`
 
 	// TraceId A unique identifier for the request.
 	TraceId string `json:"trace_id"`

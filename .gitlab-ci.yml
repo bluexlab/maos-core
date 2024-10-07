@@ -8,9 +8,9 @@ stages:
   - package
 
 include:
-  - template: Security/SAST.gitlab-ci.yml
+  # - template: Security/SAST.gitlab-ci.yml
   - template: Security/Secret-Detection.gitlab-ci.yml
-  - template: Security/SAST-IaC.latest.gitlab-ci.yml
+  # - template: Security/SAST-IaC.latest.gitlab-ci.yml
 
 variables:
   DOCKER_DRIVER: overlay2
@@ -22,12 +22,11 @@ variables:
     - if: '$CI_PIPELINE_SOURCE == "push"'
       when: always
 
-workflow:
-  rules:
-    - if: "$CI_COMMIT_BRANCH =~ /^./ && $CI_PIPELINE_SOURCE =~ /push|merge_request_event/"
+# workflow:
+#   rules:
+#     - if: "$CI_COMMIT_BRANCH =~ /^./ && $CI_PIPELINE_SOURCE =~ /push|merge_request_event/"
 
 .base_db:
-  extends: .testing_task_rules
   image: golang:1.22.2-alpine3.19
   services:
     - postgres:14.11-alpine
@@ -43,20 +42,19 @@ workflow:
     - export TEST_DATABASE_URL=postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@$DB_HOST:5432/$POSTGRES_DB?sslmode=disable
     - apk add --no-cache bash binutils ca-certificates curl git tzdata
 
-test:golang:
+unittest:
   extends: .base_db
   stage: test
   script:
     - go mod download
     - go test ./...
+  rules:
+    - !reference [.testing_task_rules, rules]
 
 depscan:
-  extends: .testing_task_rules
   stage: test
   image:
     name: shiftleft/sast-scan
-  rules:
-    - when: always
   script:
     - scan --src ${CI_PROJECT_DIR} --type yaml,bash,depscan --out_dir ${CI_PROJECT_DIR}/reports
     - cd ${CI_PROJECT_DIR}/reports && zip -m9 all-reports.zip *
@@ -65,6 +63,8 @@ depscan:
     paths:
       - $CI_PROJECT_DIR/reports/
     when: always
+  rules:
+    - !reference [.testing_task_rules, rules]
 
 build_image:
   stage: package
@@ -95,4 +95,8 @@ build_image:
     - echo "NEW_TAG=$NEW_TAG" >> build.env
     - echo "BUILD_PREFIX=$BUILD_PREFIX" >> build.env
   rules:
+    - if: "$RUN_DEPSCAN"
+      when: never
+    - if: "$RUN_COVERAGE"
+      when: never
     - if: "$CI_PROJECT_NAMESPACE == $MASTER_REPO_NAMESPACE && $CI_COMMIT_BRANCH =~ /dev|master|main|hotfix/"

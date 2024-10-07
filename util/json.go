@@ -15,3 +15,13 @@ func NewObjectJsonReader(obj any) (io.Reader, error) {
 	}
 	return buffer, nil
 }
+
+func ToJsonString(obj any) string {
+	buffer := &bytes.Buffer{}
+	jsonEncoder := json.NewEncoder(buffer)
+	err := jsonEncoder.Encode(obj)
+	if err != nil {
+		return ""
+	}
+	return buffer.String()
+}

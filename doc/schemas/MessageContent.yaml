@@ -30,14 +30,14 @@ oneOf:
             type: string
             description: The ID of the tool call. It must be the same as the ID of the tool call in the tool_call property.
           result:
-            type: object
+            type: string
             description: The result of the tool call.
           is_error:
             type: boolean
         required:
           - tool_call_id
           - result
-    required: 
+    required:
       - tool_result
   - type: object
     properties:

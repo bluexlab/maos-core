@@ -399,7 +399,7 @@ type MessageContent3 struct {
 		IsError *bool `json:"is_error,omitempty"`
 
 		// Result The result of the tool call.
-		Result map[string]interface{} `json:"result"`
+		Result string `json:"result"`
 
 		// ToolCallId The ID of the tool call. It must be the same as the ID of the tool call in the tool_call property.
 		ToolCallId string `json:"tool_call_id"`

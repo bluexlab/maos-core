@@ -1,3 +1,3 @@
 #!/bin/sh
 
-/app/maos-core-migrate up
+/app/maos-core-server migrate

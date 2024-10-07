@@ -16,6 +16,7 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/k8s"
 	"gitlab.com/navyx/ai/maos/maos-core/llm"
 	"gitlab.com/navyx/ai/maos/maos-core/llm/adapter"
+	"gitlab.com/navyx/ai/maos/maos-core/util"
 )
 
 type NewAPIHandlerParams struct {
@@ -160,6 +161,8 @@ func (s *APIHandler) CreateCompletion(ctx context.Context, request api.CreateCom
 			Content: make([]llm.Content, 0, len(m.Content)),
 		}
 		for _, c := range m.Content {
+			s.logger.Debug("CreateCompletion Message Content", "trace_id", request.Body.TraceId, "content", util.ToJsonString(c))
+
 			if content, err := c.AsMessageContent0(); err == nil && content.Text != "" {
 				msg.Content = append(msg.Content, llm.Content{Text: content.Text})
 			} else if content1, err := c.AsMessageContent1(); err == nil && content1.Image != "" {
@@ -170,6 +173,22 @@ func (s *APIHandler) CreateCompletion(ctx context.Context, request api.CreateCom
 				msg.Content = append(msg.Content, llm.Content{Image: decodedImage})
 			} else if content2, err := c.AsMessageContent2(); err == nil && content2.ImageUrl != "" {
 				msg.Content = append(msg.Content, llm.Content{ImageURL: content2.ImageUrl})
+			} else if content3, err := c.AsMessageContent3(); err == nil && content3.ToolResult.ToolCallId != "" {
+				msg.Content = append(msg.Content, llm.Content{ToolResult: &llm.ToolResult{
+					ID:      content3.ToolResult.ToolCallId,
+					Result:  content3.ToolResult.Result,
+					IsError: lo.FromPtrOr(content3.ToolResult.IsError, false),
+				}})
+			} else if content4, err := c.AsMessageContent4(); err == nil && content4.ToolCall.Id != nil {
+				arguments, err := json.Marshal(lo.FromPtrOr(content4.ToolCall.Arguments, map[string]interface{}{}))
+				if err != nil {
+					return return400Error("Invalid tool call arguments")
+				}
+				msg.Content = append(msg.Content, llm.Content{ToolCall: &llm.ToolCall{
+					ID:           lo.FromPtrOr(content4.ToolCall.Id, ""),
+					FunctionName: lo.FromPtrOr(content4.ToolCall.Name, ""),
+					Arguments:    string(arguments),
+				}})
 			} else {
 				return return400Error("Invalid message content")
 			}

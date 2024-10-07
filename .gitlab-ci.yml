@@ -15,13 +15,19 @@ include:
 variables:
   DOCKER_DRIVER: overlay2
   REPOSITORY_NAME: maos-core
-  MASTER_REPO_NAMESPACE: 'navyx/ai/maos'
+  MASTER_REPO_NAMESPACE: "navyx/ai/maos"
+
+.testing_task_rules:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: always
 
 workflow:
   rules:
-    - if: '$CI_COMMIT_BRANCH =~ /^./ && $CI_PIPELINE_SOURCE =~ /push|merge_request_event/'
+    - if: "$CI_COMMIT_BRANCH =~ /^./ && $CI_PIPELINE_SOURCE =~ /push|merge_request_event/"
 
 .base_db:
+  extends: .testing_task_rules
   image: golang:1.22.2-alpine3.19
   services:
     - postgres:14.11-alpine
@@ -45,6 +51,7 @@ test:golang:
     - go test ./...
 
 depscan:
+  extends: .testing_task_rules
   stage: test
   image:
     name: shiftleft/sast-scan
@@ -88,4 +95,4 @@ build_image:
     - echo "NEW_TAG=$NEW_TAG" >> build.env
     - echo "BUILD_PREFIX=$BUILD_PREFIX" >> build.env
   rules:
-    - if: '$CI_PROJECT_NAMESPACE == $MASTER_REPO_NAMESPACE && $CI_COMMIT_BRANCH =~ /dev|master|main|hotfix/'
+    - if: "$CI_PROJECT_NAMESPACE == $MASTER_REPO_NAMESPACE && $CI_COMMIT_BRANCH =~ /dev|master|main|hotfix/"

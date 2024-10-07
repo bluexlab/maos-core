@@ -230,6 +230,17 @@ func (s *APIHandler) CreateCompletion(ctx context.Context, request api.CreateCom
 					if c.ImageURL != "" {
 						content.FromMessageContent2(api.MessageContent2{ImageUrl: c.ImageURL})
 					}
+					if c.ToolCall != nil {
+						var msgContent4 api.MessageContent4
+						msgContent4.ToolCall.Id = &c.ToolCall.ID
+						msgContent4.ToolCall.Name = &c.ToolCall.FunctionName
+						err := json.Unmarshal([]byte(c.ToolCall.Arguments), &msgContent4.ToolCall.Arguments)
+						if err != nil {
+							s.logger.Error("Error unmarshalling tool call arguments", "error", err)
+							msgContent4.ToolCall.Arguments = &map[string]interface{}{}
+						}
+						content.FromMessageContent4(msgContent4)
+					}
 					return content
 				}),
 			}

@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 
@@ -177,19 +178,24 @@ func (s *APIHandler) CreateCompletion(ctx context.Context, request api.CreateCom
 	}
 
 	tools := make([]llm.Tool, 0)
-	// if request.Body.Tools != nil {
-	// 	for _, t := range *request.Body.Tools {
-	// 		parameters, err := json.Marshal(lo.FromPtr(t.Parameters))
-	// 		if err != nil {
-	// 			return return400Error("Invalid tool parameters")
-	// 		}
-	// 		tools = append(tools, llm.Tool{
-	// 			Name:        lo.FromPtr(t.Name),
-	// 			Description: lo.FromPtr(t.Description),
-	// 			Parameters:  parameters,
-	// 		})
-	// 	}
-	// }
+	if request.Body.Tools != nil {
+		for _, t := range *request.Body.Tools {
+			if t.Parameters == nil || t.Name == nil || t.Description == nil {
+				continue
+			}
+
+			parameters, err := json.Marshal(*t.Parameters)
+			if err != nil {
+				return return400Error("Invalid tool parameters")
+			}
+			tools = append(tools, llm.Tool{
+				Name:        *t.Name,
+				Description: *t.Description,
+				Parameters:  parameters,
+			})
+		}
+		s.logger.Info("CreateCompletion Tools", "tools", tools)
+	}
 
 	completionRequest := llm.CompletionRequest{
 		ModelID:     request.Body.ModelId,

@@ -9,7 +9,7 @@ stages:
 
 include:
   # - template: Security/SAST.gitlab-ci.yml
-  - template: Security/Secret-Detection.gitlab-ci.yml
+  - template: Jobs/Secret-Detection.gitlab-ci.yml
   # - template: Security/SAST-IaC.latest.gitlab-ci.yml
 
 variables:
@@ -19,7 +19,7 @@ variables:
 
 .testing_task_rules:
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "push"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: always
 
 # workflow:

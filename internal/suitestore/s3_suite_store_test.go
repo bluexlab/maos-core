@@ -65,7 +65,7 @@ func (m *MockQuerier) ReferenceConfigSuiteUpsert(ctx context.Context, source str
 	return args.Get(0).(int64), args.Error(1)
 }
 
-func TestS3SuiteStore_StartBackgroundScanner(t *testing.T) {
+func TestS3SuiteStore_SyncStore(t *testing.T) {
 	ctx := context.Background()
 	dbPool := testhelper.TestDB(ctx, t)
 	accessor := dbaccess.New(dbPool)
@@ -81,9 +81,6 @@ func TestS3SuiteStore_StartBackgroundScanner(t *testing.T) {
 		accessor,
 		600*time.Millisecond,
 	)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
 
 	// Mock ListObjectsV2 to return two pages of results
 	mockS3Client.On("ListObjectsV2", mock.Anything, &s3.ListObjectsV2Input{
@@ -104,6 +101,7 @@ func TestS3SuiteStore_StartBackgroundScanner(t *testing.T) {
 	}, mock.Anything).Return(&s3.ListObjectsV2Output{
 		Contents: []types.Object{
 			{Key: aws.String("test-prefix/object2.json"), LastModified: aws.Time(time.Now())},
+			{Key: aws.String("test-prefix/test-maos.json"), LastModified: aws.Time(time.Now())},
 		},
 		IsTruncated: aws.Bool(false),
 	}, nil).Once()
@@ -137,19 +135,79 @@ func TestS3SuiteStore_StartBackgroundScanner(t *testing.T) {
 		Body: io.NopCloser(bytes.NewReader(suite2Bytes)),
 	}, nil).Once()
 
-	store.StartBackgroundScanner(ctx)
+	suite3 := suitestore.ReferenceConfigSuite{
+		SuiteName: "suite3",
+		ConfigSuites: []suitestore.ActorConfig{
+			{ActorName: "actor3", Configs: map[string]string{"key": "value3"}},
+		},
+	}
+	suite3Bytes, _ := json.Marshal(suite3)
+	mockS3Client.On("GetObject", mock.Anything, &s3.GetObjectInput{
+		Bucket: aws.String("test-bucket"),
+		Key:    aws.String("test-prefix/test-maos.json"),
+	}, mock.Anything).Return(&s3.GetObjectOutput{
+		Body: io.NopCloser(bytes.NewReader(suite3Bytes)),
+	}, nil).Once()
 
-	time.Sleep(1 * time.Second)
-
-	err := store.StopAndWaitForScannerToStop(1 * time.Second)
+	// Call SyncStore
+	err := store.SyncSuites(ctx)
 	require.NoError(t, err)
 
 	mockS3Client.AssertExpectations(t)
+
+	// Verify that the suites were added to the database
 	suites, err := accessor.Querier().ReferenceConfigSuiteList(ctx, accessor.Source())
 	require.NoError(t, err)
-	require.Len(t, suites, 2)
+	require.Len(t, suites, 3)
 	require.Equal(t, "suite1", suites[0].Name)
 	require.Equal(t, "suite2", suites[1].Name)
+	require.Equal(t, "suite3", suites[2].Name)
+}
+
+func TestS3SuiteStore_SyncStore_IgnoreUnchangedSuite(t *testing.T) {
+	ctx := context.Background()
+	dbPool := testhelper.TestDB(ctx, t)
+	accessor := dbaccess.New(dbPool)
+	mockS3Client := new(MockS3Client)
+	now := time.Now()
+
+	store := suitestore.NewS3SuiteStore(
+		slog.Default(),
+		mockS3Client,
+		"test-bucket",
+		"test-prefix",
+		"test-maos",
+		accessor,
+		1*time.Second,
+	)
+
+	// Mock ListObjectsV2 response
+	mockS3Client.On("ListObjectsV2", mock.Anything, &s3.ListObjectsV2Input{
+		Bucket: aws.String("test-bucket"),
+		Prefix: aws.String("test-prefix"),
+	}, mock.Anything).Return(&s3.ListObjectsV2Output{
+		Contents: []types.Object{
+			{
+				Key:          aws.String("test-prefix/unchanged.json"),
+				LastModified: aws.Time(now),
+			},
+		},
+	}, nil).Once()
+
+	// Set up the store's lastUpdated map to simulate a previously synced file
+	store.SetLastUpdated("test-prefix/unchanged.json", now)
+
+	// Call SyncStore
+	err := store.SyncSuites(ctx)
+	require.NoError(t, err)
+
+	// Verify that GetObject was not called for the unchanged file
+	mockS3Client.AssertNotCalled(t, "GetObject", mock.Anything, &s3.GetObjectInput{
+		Bucket: aws.String("test-bucket"),
+		Key:    aws.String("test-prefix/unchanged.json"),
+	}, mock.Anything)
+
+	mockS3Client.AssertExpectations(t)
 }
 
 func TestS3SuiteStore_WriteSuite(t *testing.T) {

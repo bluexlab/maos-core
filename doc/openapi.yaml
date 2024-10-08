@@ -102,6 +102,9 @@ paths:
   /v1/admin/reference_config_suites:
     $ref: "./resources/admin/reference_config_suites.yaml"
 
+  /v1/admin/reference_config_suites/sync:
+    $ref: "./resources/admin/reference_config_suites_sync.yaml"
+
   /v1/admin/secrets:
     $ref: "./resources/admin/secrets.yaml"
 

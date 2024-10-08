@@ -106,7 +106,7 @@ func (a *App) Run() {
 		os.Exit(1)
 	}
 	// read SuiteStoreScanInterval
-	suiteStoreScanInterval := 60 * time.Second // default to 1 minute
+	suiteStoreScanInterval := 2 * time.Hour // default to 2 hours
 	if config.SuiteStoreScanInterval != "" {
 		suiteStoreScanInterval, err = time.ParseDuration(config.SuiteStoreScanInterval)
 		if err != nil {
@@ -115,8 +115,6 @@ func (a *App) Run() {
 		}
 	}
 	suiteStore := suitestore.NewS3SuiteStore(a.logger.WithGroup("SuiteStore"), s3Client, config.SuiteStoreBucket, config.SuiteStorePrefix, config.MaosDisplayName, accessor, suiteStoreScanInterval)
-	suiteStore.StartBackgroundScanner(ctx)
-	defer suiteStore.StopAndWaitForScannerToStop(10 * time.Second)
 
 	// Create K8s controller
 	k8sController, err := k8s.NewK8sController()

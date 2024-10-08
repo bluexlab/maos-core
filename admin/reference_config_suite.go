@@ -9,6 +9,7 @@ import (
 	"github.com/samber/lo"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
+	"gitlab.com/navyx/ai/maos/maos-core/internal/suitestore"
 )
 
 func ListReferenceConfigSuites(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminListReferenceConfigSuitesRequestObject) (api.AdminListReferenceConfigSuitesResponseObject, error) {
@@ -52,6 +53,17 @@ func ListReferenceConfigSuites(ctx context.Context, logger *slog.Logger, accesso
 	return api.AdminListReferenceConfigSuites200JSONResponse{
 		Data: lo.Values(actorSuites),
 	}, nil
+}
+
+func SyncReferenceConfigSuites(ctx context.Context, logger *slog.Logger, suitestore suitestore.SuiteStore) (api.AdminSyncReferenceConfigSuitesResponseObject, error) {
+	logger.Info("SyncReferenceConfigSuites")
+	err := suitestore.SyncSuites(ctx)
+	if err != nil {
+		return api.AdminSyncReferenceConfigSuites500JSONResponse{
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot sync reference config suites: %v", err)},
+		}, nil
+	}
+	return api.AdminSyncReferenceConfigSuites201Response{}, nil
 }
 
 func return500Error(logger *slog.Logger, logMessage string, err error) (api.AdminListReferenceConfigSuitesResponseObject, error) {

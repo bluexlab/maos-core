@@ -992,6 +992,9 @@ type ServerInterface interface {
 	// List reference config suites
 	// (GET /v1/admin/reference_config_suites)
 	AdminListReferenceConfigSuites(w http.ResponseWriter, r *http.Request)
+	// Sync reference config suites
+	// (POST /v1/admin/reference_config_suites/sync)
+	AdminSyncReferenceConfigSuites(w http.ResponseWriter, r *http.Request)
 	// List kubernetes secrets
 	// (GET /v1/admin/secrets)
 	AdminListSecrets(w http.ResponseWriter, r *http.Request)
@@ -1776,6 +1779,28 @@ func (siw *ServerInterfaceWrapper) AdminListReferenceConfigSuites(w http.Respons
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminListReferenceConfigSuites(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminSyncReferenceConfigSuites operation middleware
+func (siw *ServerInterfaceWrapper) AdminSyncReferenceConfigSuites(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminSyncReferenceConfigSuites(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2665,6 +2690,8 @@ func HandlerWithOptions(si ServerInterface, options GorillaServerOptions) http.H
 	r.HandleFunc(options.BaseURL+"/v1/admin/metrics/pods", wrapper.AdminListPodMetrics).Methods("GET")
 
 	r.HandleFunc(options.BaseURL+"/v1/admin/reference_config_suites", wrapper.AdminListReferenceConfigSuites).Methods("GET")
+
+	r.HandleFunc(options.BaseURL+"/v1/admin/reference_config_suites/sync", wrapper.AdminSyncReferenceConfigSuites).Methods("POST")
 
 	r.HandleFunc(options.BaseURL+"/v1/admin/secrets", wrapper.AdminListSecrets).Methods("GET")
 
@@ -3619,6 +3646,38 @@ func (response AdminListReferenceConfigSuites500JSONResponse) VisitAdminListRefe
 	return json.NewEncoder(w).Encode(response)
 }
 
+type AdminSyncReferenceConfigSuitesRequestObject struct {
+}
+
+type AdminSyncReferenceConfigSuitesResponseObject interface {
+	VisitAdminSyncReferenceConfigSuitesResponse(w http.ResponseWriter) error
+}
+
+type AdminSyncReferenceConfigSuites201Response struct {
+}
+
+func (response AdminSyncReferenceConfigSuites201Response) VisitAdminSyncReferenceConfigSuitesResponse(w http.ResponseWriter) error {
+	w.WriteHeader(201)
+	return nil
+}
+
+type AdminSyncReferenceConfigSuites401Response struct {
+}
+
+func (response AdminSyncReferenceConfigSuites401Response) VisitAdminSyncReferenceConfigSuitesResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type AdminSyncReferenceConfigSuites500JSONResponse struct{ N500JSONResponse }
+
+func (response AdminSyncReferenceConfigSuites500JSONResponse) VisitAdminSyncReferenceConfigSuitesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type AdminListSecretsRequestObject struct {
 }
 
@@ -4567,6 +4626,9 @@ type StrictServerInterface interface {
 	// List reference config suites
 	// (GET /v1/admin/reference_config_suites)
 	AdminListReferenceConfigSuites(ctx context.Context, request AdminListReferenceConfigSuitesRequestObject) (AdminListReferenceConfigSuitesResponseObject, error)
+	// Sync reference config suites
+	// (POST /v1/admin/reference_config_suites/sync)
+	AdminSyncReferenceConfigSuites(ctx context.Context, request AdminSyncReferenceConfigSuitesRequestObject) (AdminSyncReferenceConfigSuitesResponseObject, error)
 	// List kubernetes secrets
 	// (GET /v1/admin/secrets)
 	AdminListSecrets(ctx context.Context, request AdminListSecretsRequestObject) (AdminListSecretsResponseObject, error)
@@ -5257,6 +5319,30 @@ func (sh *strictHandler) AdminListReferenceConfigSuites(w http.ResponseWriter, r
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminListReferenceConfigSuitesResponseObject); ok {
 		if err := validResponse.VisitAdminListReferenceConfigSuitesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminSyncReferenceConfigSuites operation middleware
+func (sh *strictHandler) AdminSyncReferenceConfigSuites(w http.ResponseWriter, r *http.Request) {
+	var request AdminSyncReferenceConfigSuitesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminSyncReferenceConfigSuites(ctx, request.(AdminSyncReferenceConfigSuitesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminSyncReferenceConfigSuites")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminSyncReferenceConfigSuitesResponseObject); ok {
+		if err := validResponse.VisitAdminSyncReferenceConfigSuitesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

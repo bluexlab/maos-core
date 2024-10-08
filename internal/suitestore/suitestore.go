@@ -19,4 +19,5 @@ type ReferenceConfigSuite struct {
 type SuiteStore interface {
 	// WriteSuite writes the given config suite to store
 	WriteSuite(ctx context.Context, suite []ActorConfig) error
+	SyncSuites(ctx context.Context) error
 }

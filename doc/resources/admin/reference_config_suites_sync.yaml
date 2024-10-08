@@ -1,0 +1,12 @@
+post:
+  summary: Sync reference config suites
+  operationId: adminSyncReferenceConfigSuites
+  tags:
+    - Admin
+  responses:
+    "201":
+      description: reference config suites synced
+    "401":
+      description: Unauthorized
+    "500":
+      $ref: "../../responses/500.yaml"

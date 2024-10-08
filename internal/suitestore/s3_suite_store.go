@@ -16,6 +16,8 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess/dbsqlc"
 )
 
+const minSyncInterval = 1 * time.Minute
+
 type S3ClientInterface interface {
 	ListObjectsV2(ctx context.Context, params *s3.ListObjectsV2Input, optFns ...func(*s3.Options)) (*s3.ListObjectsV2Output, error)
 	GetObject(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error)
@@ -24,76 +26,38 @@ type S3ClientInterface interface {
 
 // S3SuiteStore implements the SuiteStore interface using AWS S3
 type S3SuiteStore struct {
-	logger       *slog.Logger
-	s3Client     S3ClientInterface
-	bucketName   string
-	keyPrefix    string
-	displayName  string
-	db           dbaccess.Accessor
-	scanInterval time.Duration
-	stopChan     chan struct{}
-	stoppedChan  chan struct{} // New field to signal when the scanner has stopped
-	lastUpdated  map[string]time.Time
+	logger      *slog.Logger
+	s3Client    S3ClientInterface
+	bucketName  string
+	keyPrefix   string
+	displayName string
+	db          dbaccess.Accessor
+	lastUpdated map[string]time.Time
+	lastSync    time.Time
 }
 
 // NewS3SuiteStore creates a new S3SuiteStore
 func NewS3SuiteStore(logger *slog.Logger, s3Client S3ClientInterface, bucketName, keyPrefix, displayName string, db dbaccess.Accessor, scanInterval time.Duration) *S3SuiteStore {
 	return &S3SuiteStore{
-		logger:       logger,
-		s3Client:     s3Client,
-		bucketName:   bucketName,
-		keyPrefix:    keyPrefix,
-		displayName:  displayName,
-		db:           db,
-		scanInterval: scanInterval,
-		stopChan:     make(chan struct{}),
-		stoppedChan:  make(chan struct{}),
-		lastUpdated:  make(map[string]time.Time),
+		logger:      logger,
+		s3Client:    s3Client,
+		bucketName:  bucketName,
+		keyPrefix:   keyPrefix,
+		displayName: displayName,
+		db:          db,
+		lastUpdated: make(map[string]time.Time),
 	}
 }
 
-// StartBackgroundScanner starts the background daemon to scan S3 and update the database
-func (s *S3SuiteStore) StartBackgroundScanner(ctx context.Context) {
-	go func() {
-		s.logger.Info("Starting reference config suite scanner", "scanInterval", s.scanInterval)
+func (s *S3SuiteStore) SyncSuites(ctx context.Context) error {
+	s.logger.Info("SyncSuites. Scanning and updating reference config suites", "bucketName", s.bucketName, "keyPrefix", s.keyPrefix, "displayName", s.displayName)
 
-		ticker := time.NewTicker(s.scanInterval)
-		defer ticker.Stop()
-		defer close(s.stoppedChan) // Signal that the scanner has stopped
-
-		for {
-			s.logger.Info("Waiting for next scan interval")
-			select {
-			case <-ticker.C:
-				if err := s.scanAndUpdateDatabase(ctx); err != nil {
-					s.logger.Error("Failed to scan and update database", "error", err)
-				}
-			case <-s.stopChan:
-				s.logger.Info("Stopping reference config suite scanner due to stop signal")
-				return
-			case <-ctx.Done():
-				s.logger.Info("Stopping reference config suite scanner due to context cancellation")
-				return
-			}
-		}
-	}()
-}
-
-// StopAndWaitForScannerToStop stops the background scanner and waits for it to fully stop
-func (s *S3SuiteStore) StopAndWaitForScannerToStop(timeout time.Duration) error {
-	close(s.stopChan)
-
-	select {
-	case <-s.stoppedChan:
-		s.logger.Info("Reference config suite scanner stopped")
+	if time.Since(s.lastSync) < minSyncInterval {
+		s.logger.Debug("Skipping sync as it was done recently", "lastSync", s.lastSync, "minSyncInterval", minSyncInterval)
 		return nil
-	case <-time.After(timeout):
-		return fmt.Errorf("timed out waiting for scanner to stop after %v", timeout)
 	}
-}
 
-func (s *S3SuiteStore) scanAndUpdateDatabase(ctx context.Context) error {
-	s.logger.Info("Scanning and updating reference config suites", "bucketName", s.bucketName, "keyPrefix", s.keyPrefix, "displayName", s.displayName)
+	s.lastSync = time.Now()
 
 	paginator := s3.NewListObjectsV2Paginator(s.s3Client, &s3.ListObjectsV2Input{
 		Bucket: aws.String(s.bucketName),
@@ -206,4 +170,9 @@ func (s *S3SuiteStore) WriteSuite(ctx context.Context, suite []ActorConfig) erro
 	}
 
 	return err
+}
+
+// SetLastUpdated sets the last updated time for a given key
+func (s *S3SuiteStore) SetLastUpdated(key string, lastUpdated time.Time) {
+	s.lastUpdated[key] = lastUpdated
 }

@@ -586,10 +586,12 @@ func publishConfigSuiteToS3(ctx context.Context, configSuiteId int64, tx pgx.Tx,
 			return err
 		}
 
-		publishingConfigs = append(publishingConfigs, suitestore.ActorConfig{
-			ActorName: config.ActorName,
-			Configs:   configContent,
-		})
+		if config.ActorConfigurable {
+			publishingConfigs = append(publishingConfigs, suitestore.ActorConfig{
+				ActorName: config.ActorName,
+				Configs:   configContent,
+			})
+		}
 	}
 
 	return suiteStore.WriteSuite(ctx, publishingConfigs)

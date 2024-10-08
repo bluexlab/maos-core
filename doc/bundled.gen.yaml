@@ -1791,6 +1791,19 @@ paths:
           description: Unauthorized
         '500':
           $ref: '#/components/responses/500'
+  /v1/admin/reference_config_suites/sync:
+    post:
+      summary: Sync reference config suites
+      operationId: adminSyncReferenceConfigSuites
+      tags:
+        - Admin
+      responses:
+        '201':
+          description: reference config suites synced
+        '401':
+          description: Unauthorized
+        '500':
+          $ref: '#/components/responses/500'
   /v1/admin/secrets:
     get:
       summary: List kubernetes secrets

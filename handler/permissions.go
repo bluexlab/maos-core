@@ -37,6 +37,7 @@ var (
 		"AdminRestartDeployment":         {"admin"},
 		"AdminListPodMetrics":            {"admin"},
 		"AdminListReferenceConfigSuites": {"admin"},
+		"AdminSyncReferenceConfigSuites": {"admin"},
 		"AdminGetSetting":                {"admin"},
 		"AdminUpdateSetting":             {"admin"},
 		"AdminListSecrets":               {"admin"},

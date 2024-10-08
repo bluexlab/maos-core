@@ -499,6 +499,14 @@ func (s *APIHandler) AdminListReferenceConfigSuites(ctx context.Context, request
 	return admin.ListReferenceConfigSuites(ctx, s.logger, s.accessor, request)
 }
 
+func (s *APIHandler) AdminSyncReferenceConfigSuites(ctx context.Context, request api.AdminSyncReferenceConfigSuitesRequestObject) (api.AdminSyncReferenceConfigSuitesResponseObject, error) {
+	token := ValidatePermissions(ctx, "AdminSyncReferenceConfigSuites")
+	if token == nil {
+		return api.AdminSyncReferenceConfigSuites401Response{}, nil
+	}
+	return admin.SyncReferenceConfigSuites(ctx, s.logger, s.suiteStore)
+}
+
 func (s *APIHandler) AdminListSecrets(ctx context.Context, request api.AdminListSecretsRequestObject) (api.AdminListSecretsResponseObject, error) {
 	token := ValidatePermissions(ctx, "AdminListSecrets")
 	if token == nil {

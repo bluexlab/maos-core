@@ -64,9 +64,15 @@ type Querier interface {
 	QueueInsert(ctx context.Context, db DBTX, arg *QueueInsertParams) (*Queue, error)
 	ReferenceConfigSuiteList(ctx context.Context, db DBTX) ([]*ReferenceConfigSuites, error)
 	ReferenceConfigSuiteUpsert(ctx context.Context, db DBTX, arg *ReferenceConfigSuiteUpsertParams) (int64, error)
+	// it sets the specific deployment status to deploying.
+	// it checks if the deployment status is in draft or reviewing before setting it to deploying
+	// it also checks if there are no other deploying deployments
+	SetDeploymentDeploying(ctx context.Context, db DBTX, arg *SetDeploymentDeployingParams) (string, error)
 	SettingGetSystem(ctx context.Context, db DBTX) (*Settings, error)
 	SettingUpdateSystem(ctx context.Context, db DBTX, value []byte) (*Settings, error)
 	TableExists(ctx context.Context, db DBTX, tableName string) (bool, error)
+	UpdateDeploymentLastError(ctx context.Context, db DBTX, arg *UpdateDeploymentLastErrorParams) error
+	UpdateDeploymentMigrationLogs(ctx context.Context, db DBTX, arg *UpdateDeploymentMigrationLogsParams) error
 }
 
 var _ Querier = (*Queries)(nil)

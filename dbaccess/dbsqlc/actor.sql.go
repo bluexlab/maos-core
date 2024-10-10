@@ -21,7 +21,7 @@ delete_actor AS (
     WHERE actors.id = $1
     AND EXISTS (SELECT 1 FROM check_actor WHERE actor_exists = true)
     AND NOT EXISTS (SELECT 1 FROM check_config WHERE config_exists = true)
-    RETURNING id, name, queue_id, created_at, metadata, updated_at, enabled, deployable, configurable, role
+    RETURNING id, name, queue_id, created_at, metadata, updated_at, enabled, deployable, configurable, role, migratable
 )
 SELECT
     CASE
@@ -54,6 +54,7 @@ SELECT
   actors.enabled,
   actors.deployable,
   actors.configurable,
+  actors.migratable,
   actors.created_at,
   COALESCE(atc.token_count, 0) AS token_count,
   CASE WHEN atc.token_count IS NULL OR atc.token_count = 0 THEN true ELSE false END AS renameable
@@ -70,6 +71,7 @@ type ActorFindByIdRow struct {
 	Enabled      bool
 	Deployable   bool
 	Configurable bool
+	Migratable   bool
 	CreatedAt    int64
 	TokenCount   int64
 	Renameable   bool
@@ -86,6 +88,7 @@ func (q *Queries) ActorFindById(ctx context.Context, db DBTX, id int64) (*ActorF
 		&i.Enabled,
 		&i.Deployable,
 		&i.Configurable,
+		&i.Migratable,
 		&i.CreatedAt,
 		&i.TokenCount,
 		&i.Renameable,
@@ -101,6 +104,7 @@ INSERT INTO actors(
     enabled,
     deployable,
     configurable,
+    migratable,
     metadata
 ) VALUES (
     $1::text,
@@ -109,8 +113,9 @@ INSERT INTO actors(
     $4::boolean,
     $5::boolean,
     $6::boolean,
-    coalesce($7::jsonb, '{}')
-) RETURNING id, name, queue_id, created_at, metadata, updated_at, enabled, deployable, configurable, role
+    $7::boolean,
+    coalesce($8::jsonb, '{}')
+) RETURNING id, name, queue_id, created_at, metadata, updated_at, enabled, deployable, configurable, role, migratable
 `
 
 type ActorInsertParams struct {
@@ -120,6 +125,7 @@ type ActorInsertParams struct {
 	Enabled      bool
 	Deployable   bool
 	Configurable bool
+	Migratable   bool
 	Metadata     []byte
 }
 
@@ -131,6 +137,7 @@ func (q *Queries) ActorInsert(ctx context.Context, db DBTX, arg *ActorInsertPara
 		arg.Enabled,
 		arg.Deployable,
 		arg.Configurable,
+		arg.Migratable,
 		arg.Metadata,
 	)
 	var i Actor
@@ -145,6 +152,7 @@ func (q *Queries) ActorInsert(ctx context.Context, db DBTX, arg *ActorInsertPara
 		&i.Deployable,
 		&i.Configurable,
 		&i.Role,
+		&i.Migratable,
 	)
 	return &i, err
 }
@@ -163,6 +171,7 @@ SELECT
   actors.enabled,
   actors.deployable,
   actors.configurable,
+  actors.migratable,
   actors.created_at,
   COUNT(*) OVER() AS total_count,
   COALESCE(atc.token_count, 0) AS token_count,
@@ -187,6 +196,7 @@ type ActorListPagenatedRow struct {
 	Enabled      bool
 	Deployable   bool
 	Configurable bool
+	Migratable   bool
 	CreatedAt    int64
 	TotalCount   int64
 	TokenCount   int64
@@ -210,6 +220,7 @@ func (q *Queries) ActorListPagenated(ctx context.Context, db DBTX, arg *ActorLis
 			&i.Enabled,
 			&i.Deployable,
 			&i.Configurable,
+			&i.Migratable,
 			&i.CreatedAt,
 			&i.TotalCount,
 			&i.TokenCount,
@@ -232,9 +243,10 @@ UPDATE actors SET
     enabled = COALESCE($3::boolean, enabled),
     deployable = COALESCE($4::boolean, deployable),
     configurable = COALESCE($5::boolean, configurable),
-    metadata = COALESCE($6::jsonb, metadata)
-WHERE id = $7
-RETURNING id, name, queue_id, created_at, metadata, updated_at, enabled, deployable, configurable, role
+    migratable = COALESCE($6::boolean, migratable),
+    metadata = COALESCE($7::jsonb, metadata)
+WHERE id = $8
+RETURNING id, name, queue_id, created_at, metadata, updated_at, enabled, deployable, configurable, role, migratable
 `
 
 type ActorUpdateParams struct {
@@ -243,6 +255,7 @@ type ActorUpdateParams struct {
 	Enabled      *bool
 	Deployable   *bool
 	Configurable *bool
+	Migratable   *bool
 	Metadata     []byte
 	ID           int64
 }
@@ -254,6 +267,7 @@ func (q *Queries) ActorUpdate(ctx context.Context, db DBTX, arg *ActorUpdatePara
 		arg.Enabled,
 		arg.Deployable,
 		arg.Configurable,
+		arg.Migratable,
 		arg.Metadata,
 		arg.ID,
 	)
@@ -269,6 +283,7 @@ func (q *Queries) ActorUpdate(ctx context.Context, db DBTX, arg *ActorUpdatePara
 		&i.Deployable,
 		&i.Configurable,
 		&i.Role,
+		&i.Migratable,
 	)
 	return &i, err
 }

@@ -63,7 +63,8 @@ SELECT DISTINCT ON (configs.actor_id)
     actors.role AS actor_role,
     actors.enabled AS actor_enabled,
     actors.configurable AS actor_configurable,
-    actors.deployable AS actor_deployable
+    actors.deployable AS actor_deployable,
+    actors.migratable AS actor_migratable
 FROM configs
 JOIN actors ON configs.actor_id = actors.id
 WHERE configs.config_suite_id = @config_suite_id::bigint

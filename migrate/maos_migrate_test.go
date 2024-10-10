@@ -73,7 +73,7 @@ func TestMigrator(t *testing.T) {
 			logger:   testhelper.Logger(t),
 		}
 
-		migrator := migrate.New(bundle.accessor, &migrate.Config{Logger: bundle.logger})
+		migrator := migrate.New(bundle.accessor, bundle.logger)
 		migrator.SetMigrations(migrationsWithtestVersionsMap)
 
 		return migrator, bundle

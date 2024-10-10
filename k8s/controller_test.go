@@ -3,6 +3,7 @@ package k8s
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/require"
@@ -958,4 +959,198 @@ func TestDeleteSecret(t *testing.T) {
 	err = controller.DeleteSecret(ctx, "non-existent-secret")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to delete secret")
+}
+
+func TestK8sController_RunMigrations_Success(t *testing.T) {
+	// Create a fake clientset
+	clientset := fake.NewSimpleClientset()
+
+	// Create a K8sController with the fake clientset
+	controller := &K8sController{
+		clientset: clientset,
+		namespace: "test-namespace",
+	}
+
+	ctx := context.Background()
+
+	// Create migration params
+	migrations := []MigrationParams{
+		{
+			Name:          "migration1",
+			Image:         "migration-image:v1",
+			EnvVars:       map[string]string{"ENV_VAR": "value"},
+			Command:       []string{"run", "migration"},
+			MemoryRequest: "64Mi",
+			MemoryLimit:   "128Mi",
+		},
+	}
+
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		// Verify that the job was created
+		jobs, err := clientset.BatchV1().Jobs("test-namespace").List(ctx, meta.ListOptions{})
+		require.NoError(t, err)
+		require.Len(t, jobs.Items, 1)
+		require.Equal(t, "maos-migration-migration1", jobs.Items[0].Name)
+
+		// Simulate job completion
+		job := &jobs.Items[0]
+		job.Status.Succeeded = 1
+		_, err = clientset.BatchV1().Jobs("test-namespace").UpdateStatus(ctx, job, meta.UpdateOptions{})
+		require.NoError(t, err)
+	}()
+
+	// Run the migrations
+	failures, err := controller.RunMigrations(ctx, migrations)
+
+	// Assert no errors and no failures
+	require.NoError(t, err)
+	require.Empty(t, failures)
+}
+
+func TestK8sController_RunMigrations_Failure(t *testing.T) {
+	// Create a fake clientset
+	clientset := fake.NewSimpleClientset()
+
+	// Create a K8sController with the fake clientset
+	controller := &K8sController{
+		clientset: clientset,
+		namespace: "test-namespace",
+	}
+
+	ctx := context.Background()
+
+	// Create migration params
+	migrations := []MigrationParams{
+		{
+			Name:          "failed-migration",
+			Image:         "migration-image:v1",
+			EnvVars:       map[string]string{"ENV_VAR": "value"},
+			Command:       []string{"run", "migration"},
+			MemoryRequest: "64Mi",
+			MemoryLimit:   "128Mi",
+		},
+	}
+
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		// Verify that the job was created
+		jobs, err := clientset.BatchV1().Jobs("test-namespace").List(ctx, meta.ListOptions{})
+		require.NoError(t, err)
+		require.Len(t, jobs.Items, 1)
+		require.Equal(t, "maos-migration-failed-migration", jobs.Items[0].Name)
+
+		// Simulate job completion
+		job := &jobs.Items[0]
+		job.Status.Failed = 1
+		_, err = clientset.BatchV1().Jobs("test-namespace").UpdateStatus(ctx, job, meta.UpdateOptions{})
+		require.NoError(t, err)
+	}()
+
+	// Run the migrations
+	failures, err := controller.RunMigrations(ctx, migrations)
+
+	// Assert errors and failures
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "migration failed")
+	require.Len(t, failures, 1)
+	require.Contains(t, failures, "maos-migration-failed-migration")
+}
+
+func TestK8sController_RunMigrations_Timeout(t *testing.T) {
+	// Create a fake clientset
+	clientset := fake.NewSimpleClientset()
+
+	// Create a K8sController with the fake clientset
+	controller := &K8sController{
+		clientset: clientset,
+		namespace: "test-namespace",
+	}
+
+	// Create a context with a short timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	// Create migration params
+	migrations := []MigrationParams{
+		{
+			Name:          "timeout-migration",
+			Image:         "migration-image:v1",
+			EnvVars:       map[string]string{"ENV_VAR": "value"},
+			Command:       []string{"run", "migration"},
+			MemoryRequest: "64Mi",
+			MemoryLimit:   "128Mi",
+		},
+	}
+
+	// Run the migrations
+	failures, err := controller.RunMigrations(ctx, migrations)
+
+	// Assert context deadline exceeded error
+	require.Error(t, err)
+	require.Equal(t, context.DeadlineExceeded, err)
+	require.Nil(t, failures)
+
+	// Verify that the job was created
+	jobs, err := clientset.BatchV1().Jobs("test-namespace").List(context.Background(), meta.ListOptions{})
+	require.NoError(t, err)
+	require.Len(t, jobs.Items, 1)
+	require.Equal(t, "maos-migration-timeout-migration", jobs.Items[0].Name)
+}
+
+func TestK8sController_RunMigrations_MultipleJobs(t *testing.T) {
+	// Create a fake clientset
+	clientset := fake.NewSimpleClientset()
+
+	// Create a K8sController with the fake clientset
+	controller := &K8sController{
+		clientset: clientset,
+		namespace: "test-namespace",
+	}
+
+	ctx := context.Background()
+
+	// Create migration params for multiple jobs
+	migrations := []MigrationParams{
+		{
+			Name:          "migration1",
+			Image:         "migration-image:v1",
+			EnvVars:       map[string]string{"ENV_VAR": "value1"},
+			Command:       []string{"run", "migration1"},
+			MemoryRequest: "64Mi",
+			MemoryLimit:   "128Mi",
+		},
+		{
+			Name:          "migration2",
+			Image:         "migration-image:v2",
+			EnvVars:       map[string]string{"ENV_VAR": "value2"},
+			Command:       []string{"run", "migration2"},
+			MemoryRequest: "128Mi",
+			MemoryLimit:   "256Mi",
+		},
+	}
+
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+
+		jobs, err := clientset.BatchV1().Jobs("test-namespace").List(ctx, meta.ListOptions{})
+		require.NoError(t, err)
+		require.Len(t, jobs.Items, 2)
+		require.Equal(t, "maos-migration-migration1", jobs.Items[0].Name)
+		require.Equal(t, "maos-migration-migration2", jobs.Items[1].Name)
+
+		// Simulate job completion
+		for _, job := range jobs.Items {
+			job.Status.Succeeded = 1
+			_, err = clientset.BatchV1().Jobs("test-namespace").UpdateStatus(ctx, &job, meta.UpdateOptions{})
+			require.NoError(t, err)
+		}
+	}()
+
+	// Run the migrations
+	failures, err := controller.RunMigrations(ctx, migrations)
+
+	// Assert no errors and no failures
+	require.NoError(t, err)
+	require.Empty(t, failures)
 }

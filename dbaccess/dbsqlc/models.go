@@ -60,6 +60,8 @@ const (
 	DeploymentStatusDraft     DeploymentStatus = "draft"
 	DeploymentStatusReviewing DeploymentStatus = "reviewing"
 	DeploymentStatusApproved  DeploymentStatus = "approved"
+	DeploymentStatusDeploying DeploymentStatus = "deploying"
+	DeploymentStatusFailed    DeploymentStatus = "failed"
 	DeploymentStatusDeployed  DeploymentStatus = "deployed"
 	DeploymentStatusRejected  DeploymentStatus = "rejected"
 	DeploymentStatusRetired   DeploymentStatus = "retired"
@@ -157,6 +159,7 @@ type Actor struct {
 	Deployable   bool
 	Configurable bool
 	Role         ActorRole
+	Migratable   bool
 }
 
 type ApiToken struct {
@@ -203,6 +206,10 @@ type Deployment struct {
 	ApprovedAt    *int64
 	FinishedBy    *string
 	FinishedAt    *int64
+	MigrationLogs []byte
+	LastError     *string
+	DeployingAt   *int64
+	DeployedAt    *int64
 }
 
 type Invocation struct {

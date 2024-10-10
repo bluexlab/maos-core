@@ -1169,6 +1169,11 @@ paths:
               $ref: '#/components/schemas/ActorCreate'
             example:
               name: actor-16888
+              role: user
+              enabled: true
+              deployable: true
+              configurable: true
+              migratable: true
       responses:
         '201':
           description: Successfully created
@@ -1258,6 +1263,8 @@ paths:
                 deployable:
                   type: boolean
                 configurable:
+                  type: boolean
+                migratable:
                   type: boolean
       responses:
         '200':
@@ -2310,6 +2317,8 @@ components:
           type: boolean
         configurable:
           type: boolean
+        migratable:
+          type: boolean
         token_count:
           type: integer
           format: int64
@@ -2325,6 +2334,7 @@ components:
         - enabled
         - deployable
         - configurable
+        - migratable
         - renameable
         - created_at
         - token_count
@@ -2352,6 +2362,8 @@ components:
           type: boolean
         configurable:
           type: boolean
+        migratable:
+          type: boolean
       required:
         - name
         - role
@@ -2374,9 +2386,11 @@ components:
             - reviewing
             - approved
             - rejected
+            - deploying
             - deployed
             - retired
             - cancelled
+            - failed
         reviewers:
           type: array
           items:
@@ -2457,9 +2471,11 @@ components:
             - reviewing
             - approved
             - rejected
+            - deploying
             - deployed
             - retired
             - cancelled
+            - failed
         reviewers:
           type: array
           items:

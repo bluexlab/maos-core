@@ -20,6 +20,7 @@ func InsertActor(t *testing.T, ctx context.Context, ds DataSource, name string) 
 		Enabled:      true,
 		Deployable:   false,
 		Configurable: false,
+		Migratable:   false,
 	})
 	if err != nil {
 		t.Fatalf("Failed to insert actor: %v", err)
@@ -27,7 +28,7 @@ func InsertActor(t *testing.T, ctx context.Context, ds DataSource, name string) 
 	return actor
 }
 
-func InsertActor2(t *testing.T, ctx context.Context, ds DataSource, name string, role string, enabled bool, deployable bool, configurable bool) *dbsqlc.Actor {
+func InsertActor2(t *testing.T, ctx context.Context, ds DataSource, name string, role string, enabled bool, deployable bool, configurable bool, migratable bool) *dbsqlc.Actor {
 	query := dbsqlc.New()
 	queue, err := query.QueueInsert(ctx, ds, &dbsqlc.QueueInsertParams{Name: name})
 	if err != nil {
@@ -40,6 +41,7 @@ func InsertActor2(t *testing.T, ctx context.Context, ds DataSource, name string,
 		Enabled:      enabled,
 		Deployable:   deployable,
 		Configurable: configurable,
+		Migratable:   migratable,
 	})
 	if err != nil {
 		t.Fatalf("Failed to insert actor: %v", err)

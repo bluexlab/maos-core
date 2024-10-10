@@ -35,7 +35,7 @@ func TestUpdateConfigEndpoint(t *testing.T) {
 		err := json.Unmarshal([]byte(resBody), &response)
 		require.NoError(t, err)
 
-		expectedBody := fmt.Sprintf(`{"data":{"id":%d,"actor_id":%d,"content":{"key":"newValue"},"min_actor_version":"2.0.0","created_by":"testuser"}}`, config.ID, response.Data.ActorId)
+		expectedBody := fmt.Sprintf(`{"data":{"id":%d,"actor_id":%d,"content":{"key":"newValue"},"created_by":"testuser"}}`, config.ID, response.Data.ActorId)
 		var expectedResponse api.AdminUpdateConfig200JSONResponse
 		err = json.Unmarshal([]byte(expectedBody), &expectedResponse)
 		require.NoError(t, err)
@@ -43,7 +43,6 @@ func TestUpdateConfigEndpoint(t *testing.T) {
 		require.Equal(t, expectedResponse.Data.Id, response.Data.Id)
 		require.Equal(t, expectedResponse.Data.ActorId, response.Data.ActorId)
 		require.Equal(t, expectedResponse.Data.Content, response.Data.Content)
-		require.Equal(t, expectedResponse.Data.MinActorVersion, response.Data.MinActorVersion)
 		require.Equal(t, expectedResponse.Data.CreatedBy, response.Data.CreatedBy)
 		require.NotZero(t, response.Data.CreatedAt)
 	})

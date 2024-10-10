@@ -12,13 +12,14 @@ WITH deactivate_others AS (
     updated_at = EXTRACT(EPOCH FROM NOW()),
     updated_by = @updated_by::text
   WHERE active = true AND id <> @id::bigint
+  RETURNING id
 )
 UPDATE config_suites
 SET active = true,
   deployed_at = EXTRACT(EPOCH FROM NOW()),
   updated_at = EXTRACT(EPOCH FROM NOW()),
   updated_by = @updated_by::text
-WHERE id = @id::bigint
+WHERE id = @id::bigint AND id NOT IN (SELECT id FROM deactivate_others)
 RETURNING id;
 
 -- name: ReferenceConfigSuiteList :many

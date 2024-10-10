@@ -44,30 +44,23 @@ func UpdateConfig(
 		}, nil
 	}
 
-	err = ValidateKubeConfig(*request.Body.Content, string(actor.Role))
-	if err != nil {
-		logger.Error("Invalid kube config", "error", err)
-		return api.AdminUpdateConfig400JSONResponse{
-			N400JSONResponse: api.N400JSONResponse{Error: fmt.Sprintf("Invalid kube config: %v", err)},
-		}, nil
-	}
-
-	minActorVersion := util.DeserializeActorVersion(request.Body.MinActorVersion)
-	if minActorVersion == nil && request.Body.MinActorVersion != nil {
-		logger.Error("Invalid actor version", "version", request.Body.MinActorVersion)
-		return api.AdminUpdateConfig400JSONResponse{
-			N400JSONResponse: api.N400JSONResponse{Error: "Invalid actor version"},
-		}, nil
+	if actor.Deployable {
+		err = ValidateKubeConfig(*request.Body.Content, string(actor.Role), actor.Migratable)
+		if err != nil {
+			logger.Error("Invalid kube config", "error", err)
+			return api.AdminUpdateConfig400JSONResponse{
+				N400JSONResponse: api.N400JSONResponse{Error: fmt.Sprintf("Invalid kube config: %v", err)},
+			}, nil
+		}
 	}
 
 	updatedConfig, err := accessor.Querier().ConfigUpdateInactiveContentByCreator(
 		ctx,
 		accessor.Source(),
 		&dbsqlc.ConfigUpdateInactiveContentByCreatorParams{
-			ID:              request.Id,
-			Updater:         request.Body.User,
-			Content:         contentJSON,
-			MinActorVersion: minActorVersion,
+			ID:      request.Id,
+			Updater: request.Body.User,
+			Content: contentJSON,
 		})
 
 	if err != nil {

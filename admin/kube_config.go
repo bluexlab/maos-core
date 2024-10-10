@@ -9,7 +9,7 @@ import (
 var KubeConfigsWithDefault = map[string]string{
 	"KUBE_DOCKER_IMAGE":   "",
 	"KUBE_REPLICAS":       "1",
-	"KUBE_CPU_REQUEST":    "500m",
+	"KUBE_CPU_REQUEST":    "10m",
 	"KUBE_CPU_LIMIT":      "500m",
 	"KUBE_MEMORY_REQUEST": "100Mi",
 	"KUBE_MEMORY_LIMIT":   "100Mi",
@@ -18,7 +18,7 @@ var KubeConfigsWithDefault = map[string]string{
 var KubeConfigsWithDefaultForService = map[string]string{
 	"KUBE_DOCKER_IMAGE":   "",
 	"KUBE_REPLICAS":       "1",
-	"KUBE_CPU_REQUEST":    "500m",
+	"KUBE_CPU_REQUEST":    "10m",
 	"KUBE_CPU_LIMIT":      "500m",
 	"KUBE_MEMORY_REQUEST": "100Mi",
 	"KUBE_MEMORY_LIMIT":   "100Mi",
@@ -28,7 +28,7 @@ var KubeConfigsWithDefaultForService = map[string]string{
 var KubeConfigsWithDefaultForPortal = map[string]string{
 	"KUBE_DOCKER_IMAGE":       "",
 	"KUBE_REPLICAS":           "1",
-	"KUBE_CPU_REQUEST":        "500m",
+	"KUBE_CPU_REQUEST":        "10m",
 	"KUBE_CPU_LIMIT":          "500m",
 	"KUBE_MEMORY_REQUEST":     "100Mi",
 	"KUBE_MEMORY_LIMIT":       "100Mi",
@@ -37,7 +37,15 @@ var KubeConfigsWithDefaultForPortal = map[string]string{
 	"KUBE_INGRESS_BODY_LIMIT": "11m",
 }
 
-func InsertMissingKubeConfigsWithDefault(content map[string]string, role string) {
+var KubeConfigsWithDefaultForMigratable = map[string]string{
+	"KUBE_MIGRATE_DOCKER_IMAGE":      "",
+	"KUBE_MIGRATE_PULL_IMAGE_SECRET": "",
+	"KUBE_MIGRATE_COMMAND":           "",
+	"KUBE_MIGRATE_MEMORY_REQUEST":    "100Mi",
+	"KUBE_MIGRATE_MEMORY_LIMIT":      "100Mi",
+}
+
+func InsertMissingKubeConfigsWithDefault(content map[string]string, role string, migratable bool) {
 	defaultConfig := KubeConfigsWithDefault
 	switch role {
 	case "portal":
@@ -51,12 +59,19 @@ func InsertMissingKubeConfigsWithDefault(content map[string]string, role string)
 			content[kubeConfig] = defaultValue
 		}
 	}
+	if migratable {
+		for kubeConfig, defaultValue := range KubeConfigsWithDefaultForMigratable {
+			if _, found := content[kubeConfig]; !found {
+				content[kubeConfig] = defaultValue
+			}
+		}
+	}
 }
 
-func ValidateKubeConfig(content map[string]string, role string) error {
+func ValidateKubeConfig(content map[string]string, role string, migratable bool) error {
 	for kubeConfig, value := range content {
 		switch kubeConfig {
-		case "KUBE_DOCKER_IMAGE":
+		case "KUBE_DOCKER_IMAGE", "KUBE_MIGRATE_DOCKER_IMAGE":
 			if value != "" && !isValidDockerImage(value) {
 				return fmt.Errorf("invalid docker image: %s", value)
 			}
@@ -69,7 +84,7 @@ func ValidateKubeConfig(content map[string]string, role string) error {
 			if value != "" && !isValidCPUResourceQuantity(value) {
 				return fmt.Errorf("invalid %s: %s", kubeConfig, value)
 			}
-		case "KUBE_MEMORY_REQUEST", "KUBE_MEMORY_LIMIT":
+		case "KUBE_MEMORY_REQUEST", "KUBE_MEMORY_LIMIT", "KUBE_MIGRATE_MEMORY_REQUEST", "KUBE_MIGRATE_MEMORY_LIMIT":
 			if value != "" && !isValidMemoryResourceQuantity(value) {
 				return fmt.Errorf("invalid %s: %s", kubeConfig, value)
 			}
@@ -99,6 +114,23 @@ func ValidateKubeConfig(content map[string]string, role string) error {
 				if !regexp.MustCompile(`^[0-9]+[kKmMgG]$`).MatchString(value) {
 					return fmt.Errorf("invalid ingress body limit: %s, must be in format like '10m' or '1G'", value)
 				}
+			}
+		}
+
+		requiredConfigs := []string{"KUBE_DOCKER_IMAGE", "KUBE_MEMORY_REQUEST", "KUBE_MEMORY_LIMIT", "KUBE_CPU_REQUEST", "KUBE_CPU_LIMIT"}
+		if role == "service" {
+			requiredConfigs = append(requiredConfigs, "KUBE_SERVICE_PORT")
+		}
+		if role == "portal" {
+			requiredConfigs = append(requiredConfigs, "KUBE_INGRESS_HOST", "KUBE_INGRESS_BODY_LIMIT")
+		}
+		if migratable {
+			requiredConfigs = append(requiredConfigs, "KUBE_MIGRATE_DOCKER_IMAGE", "KUBE_MIGRATE_MEMORY_REQUEST", "KUBE_MIGRATE_MEMORY_LIMIT")
+		}
+
+		for _, requiredConfig := range requiredConfigs {
+			if content[requiredConfig] == "" {
+				return fmt.Errorf("missing required config: %s", requiredConfig)
 			}
 		}
 	}

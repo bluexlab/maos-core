@@ -12,7 +12,7 @@ import (
 const deploymentDelete = `-- name: DeploymentDelete :one
 DELETE FROM deployments
 WHERE id = $1::bigint AND status = 'draft'
-RETURNING id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at
+RETURNING id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at, migration_logs, last_error, deploying_at, deployed_at
 `
 
 func (q *Queries) DeploymentDelete(ctx context.Context, db DBTX, id int64) (*Deployment, error) {
@@ -31,12 +31,16 @@ func (q *Queries) DeploymentDelete(ctx context.Context, db DBTX, id int64) (*Dep
 		&i.ApprovedAt,
 		&i.FinishedBy,
 		&i.FinishedAt,
+		&i.MigrationLogs,
+		&i.LastError,
+		&i.DeployingAt,
+		&i.DeployedAt,
 	)
 	return &i, err
 }
 
 const deploymentGetById = `-- name: DeploymentGetById :one
-SELECT id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at
+SELECT id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at, migration_logs, last_error, deploying_at, deployed_at
 FROM deployments
 WHERE id = $1::bigint
 LIMIT 1
@@ -58,6 +62,10 @@ func (q *Queries) DeploymentGetById(ctx context.Context, db DBTX, id int64) (*De
 		&i.ApprovedAt,
 		&i.FinishedBy,
 		&i.FinishedAt,
+		&i.MigrationLogs,
+		&i.LastError,
+		&i.DeployingAt,
+		&i.DeployedAt,
 	)
 	return &i, err
 }
@@ -75,7 +83,7 @@ VALUES (
   COALESCE($3::text[], '{}'),
   $4::text
 )
-RETURNING id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at
+RETURNING id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at, migration_logs, last_error, deploying_at, deployed_at
 `
 
 type DeploymentInsertParams struct {
@@ -106,6 +114,10 @@ func (q *Queries) DeploymentInsert(ctx context.Context, db DBTX, arg *Deployment
 		&i.ApprovedAt,
 		&i.FinishedBy,
 		&i.FinishedAt,
+		&i.MigrationLogs,
+		&i.LastError,
+		&i.DeployingAt,
+		&i.DeployedAt,
 	)
 	return &i, err
 }
@@ -131,7 +143,7 @@ inserted_deployment AS (
     $1::text,
     (SELECT id FROM inserted_config_suite)
   )
-  RETURNING id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at
+  RETURNING id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at, migration_logs, last_error, deploying_at, deployed_at
 ),
 actor_configs AS (
   INSERT INTO configs (actor_id, config_suite_id, created_by, min_actor_version, content)
@@ -149,7 +161,7 @@ actor_configs AS (
     )
   FROM actors
 )
-SELECT id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at FROM inserted_deployment
+SELECT id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at, migration_logs, last_error, deploying_at, deployed_at FROM inserted_deployment
 `
 
 type DeploymentInsertWithConfigSuiteParams struct {
@@ -171,6 +183,10 @@ type DeploymentInsertWithConfigSuiteRow struct {
 	ApprovedAt    *int64
 	FinishedBy    *string
 	FinishedAt    *int64
+	MigrationLogs []byte
+	LastError     *string
+	DeployingAt   *int64
+	DeployedAt    *int64
 }
 
 // Create a new deployment with an associated config suite.
@@ -195,6 +211,10 @@ func (q *Queries) DeploymentInsertWithConfigSuite(ctx context.Context, db DBTX, 
 		&i.ApprovedAt,
 		&i.FinishedBy,
 		&i.FinishedAt,
+		&i.MigrationLogs,
+		&i.LastError,
+		&i.DeployingAt,
+		&i.DeployedAt,
 	)
 	return &i, err
 }
@@ -288,30 +308,31 @@ func (q *Queries) DeploymentListPaginated(ctx context.Context, db DBTX, arg *Dep
 }
 
 const deploymentPublish = `-- name: DeploymentPublish :one
-WITH current_deployed AS (
+WITH deactivate_others AS (
   UPDATE deployments
   SET status = 'retired',
     finished_at = EXTRACT(EPOCH FROM NOW()),
-    finished_by = $1::text
+    finished_by = $2::text
   WHERE status = 'deployed'
   RETURNING id
 )
 UPDATE deployments
 SET status = 'deployed',
-approved_at = EXTRACT(EPOCH FROM NOW()),
-approved_by = $1::text
-WHERE id = $2::bigint AND (status = 'reviewing' OR status = 'draft')
-RETURNING id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at
+  deployed_at = EXTRACT(EPOCH FROM NOW())
+WHERE id = $1::bigint
+  AND id NOT IN (SELECT id FROM deactivate_others)
+  AND status = 'deploying'
+RETURNING id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at, migration_logs, last_error, deploying_at, deployed_at
 `
 
 type DeploymentPublishParams struct {
-	ApprovedBy string
 	ID         int64
+	ApprovedBy string
 }
 
 // it sets current deployed deployment status to retired and the new deployment status to deployed
 func (q *Queries) DeploymentPublish(ctx context.Context, db DBTX, arg *DeploymentPublishParams) (*Deployment, error) {
-	row := db.QueryRow(ctx, deploymentPublish, arg.ApprovedBy, arg.ID)
+	row := db.QueryRow(ctx, deploymentPublish, arg.ID, arg.ApprovedBy)
 	var i Deployment
 	err := row.Scan(
 		&i.ID,
@@ -326,6 +347,10 @@ func (q *Queries) DeploymentPublish(ctx context.Context, db DBTX, arg *Deploymen
 		&i.ApprovedAt,
 		&i.FinishedBy,
 		&i.FinishedAt,
+		&i.MigrationLogs,
+		&i.LastError,
+		&i.DeployingAt,
+		&i.DeployedAt,
 	)
 	return &i, err
 }
@@ -339,7 +364,7 @@ SET status = 'rejected',
 WHERE id = $3::bigint
   AND status = 'reviewing'
   AND $1::text = ANY(reviewers)
-RETURNING id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at
+RETURNING id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at, migration_logs, last_error, deploying_at, deployed_at
 `
 
 type DeploymentRejectParams struct {
@@ -366,6 +391,10 @@ func (q *Queries) DeploymentReject(ctx context.Context, db DBTX, arg *Deployment
 		&i.ApprovedAt,
 		&i.FinishedBy,
 		&i.FinishedAt,
+		&i.MigrationLogs,
+		&i.LastError,
+		&i.DeployingAt,
+		&i.DeployedAt,
 	)
 	return &i, err
 }
@@ -374,7 +403,7 @@ const deploymentSubmitForReview = `-- name: DeploymentSubmitForReview :one
 UPDATE deployments
 SET status = 'reviewing'
 WHERE id = $1::bigint AND status = 'draft'
-RETURNING id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at
+RETURNING id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at, migration_logs, last_error, deploying_at, deployed_at
 `
 
 func (q *Queries) DeploymentSubmitForReview(ctx context.Context, db DBTX, id int64) (*Deployment, error) {
@@ -393,6 +422,10 @@ func (q *Queries) DeploymentSubmitForReview(ctx context.Context, db DBTX, id int
 		&i.ApprovedAt,
 		&i.FinishedBy,
 		&i.FinishedAt,
+		&i.MigrationLogs,
+		&i.LastError,
+		&i.DeployingAt,
+		&i.DeployedAt,
 	)
 	return &i, err
 }
@@ -403,7 +436,7 @@ SET
   name = COALESCE($1::text, name),
   reviewers = COALESCE($2::text[], reviewers)
 WHERE id = $3::bigint AND status = 'draft'
-RETURNING id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at
+RETURNING id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at, migration_logs, last_error, deploying_at, deployed_at
 `
 
 type DeploymentUpdateParams struct {
@@ -428,6 +461,93 @@ func (q *Queries) DeploymentUpdate(ctx context.Context, db DBTX, arg *Deployment
 		&i.ApprovedAt,
 		&i.FinishedBy,
 		&i.FinishedAt,
+		&i.MigrationLogs,
+		&i.LastError,
+		&i.DeployingAt,
+		&i.DeployedAt,
 	)
 	return &i, err
+}
+
+const setDeploymentDeploying = `-- name: SetDeploymentDeploying :one
+WITH deployment_info AS (
+  SELECT d.status,
+         EXISTS (
+           SELECT 1 FROM deployments WHERE status = 'deploying'
+         ) AS others_deploying
+  FROM deployments d
+  WHERE d.id = $1::bigint
+),
+update_result AS (
+  UPDATE deployments
+  SET status = 'deploying',
+    deploying_at = EXTRACT(EPOCH FROM NOW()),
+    approved_at = EXTRACT(EPOCH FROM NOW()),
+    approved_by = $2::text
+  FROM deployment_info
+  WHERE deployments.id = $1::bigint
+    AND deployment_info.status IN ('reviewing', 'draft')
+    AND NOT deployment_info.others_deploying
+  RETURNING deployment_info.status, others_deploying, id, name, deployments.status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at, migration_logs, last_error, deploying_at, deployed_at
+)
+SELECT
+  CASE
+    WHEN d.status NOT IN ('reviewing', 'draft') THEN
+      'deployment must be in reviewing or draft status'::text
+    WHEN d.others_deploying THEN
+      'others are deploying'::text
+    ELSE
+      ''::text
+  END AS result
+FROM deployment_info AS d
+UNION ALL
+SELECT 'deployment not found' AS result
+WHERE NOT EXISTS (SELECT 1 FROM deployment_info)
+`
+
+type SetDeploymentDeployingParams struct {
+	ID         int64
+	ApprovedBy string
+}
+
+// it sets the specific deployment status to deploying.
+// it checks if the deployment status is in draft or reviewing before setting it to deploying
+// it also checks if there are no other deploying deployments
+func (q *Queries) SetDeploymentDeploying(ctx context.Context, db DBTX, arg *SetDeploymentDeployingParams) (string, error) {
+	row := db.QueryRow(ctx, setDeploymentDeploying, arg.ID, arg.ApprovedBy)
+	var result string
+	err := row.Scan(&result)
+	return result, err
+}
+
+const updateDeploymentLastError = `-- name: UpdateDeploymentLastError :exec
+UPDATE deployments
+SET last_error = $1::text, status = 'failed'
+WHERE id = $2::bigint
+`
+
+type UpdateDeploymentLastErrorParams struct {
+	LastError string
+	ID        int64
+}
+
+func (q *Queries) UpdateDeploymentLastError(ctx context.Context, db DBTX, arg *UpdateDeploymentLastErrorParams) error {
+	_, err := db.Exec(ctx, updateDeploymentLastError, arg.LastError, arg.ID)
+	return err
+}
+
+const updateDeploymentMigrationLogs = `-- name: UpdateDeploymentMigrationLogs :exec
+UPDATE deployments
+SET migration_logs = $1::jsonb
+WHERE id = $2::bigint
+`
+
+type UpdateDeploymentMigrationLogsParams struct {
+	MigrationLogs []byte
+	ID            int64
+}
+
+func (q *Queries) UpdateDeploymentMigrationLogs(ctx context.Context, db DBTX, arg *UpdateDeploymentMigrationLogsParams) error {
+	_, err := db.Exec(ctx, updateDeploymentMigrationLogs, arg.MigrationLogs, arg.ID)
+	return err
 }

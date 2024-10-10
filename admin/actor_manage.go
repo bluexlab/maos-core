@@ -42,6 +42,7 @@ func ListActors(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acce
 				Enabled:      row.Enabled,
 				Deployable:   row.Deployable,
 				Configurable: row.Configurable,
+				Migratable:   row.Migratable,
 			}
 		},
 	)
@@ -58,6 +59,17 @@ func CreateActor(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acc
 	if request.Body.Name == "" {
 		return api.AdminCreateActor400JSONResponse{
 			N400JSONResponse: api.N400JSONResponse{Error: "Missing required field: name"},
+		}, nil
+	}
+
+	if lo.FromPtrOr(request.Body.Migratable, false) && (!lo.FromPtrOr(request.Body.Deployable, false) || !lo.FromPtrOr(request.Body.Configurable, false)) {
+		return api.AdminCreateActor400JSONResponse{
+			N400JSONResponse: api.N400JSONResponse{Error: "Migratable actors must also be deployable and configurable"},
+		}, nil
+	}
+	if lo.FromPtrOr(request.Body.Deployable, false) && !lo.FromPtrOr(request.Body.Configurable, false) {
+		return api.AdminCreateActor400JSONResponse{
+			N400JSONResponse: api.N400JSONResponse{Error: "Deployable actors must also be configurable"},
 		}, nil
 	}
 
@@ -79,6 +91,7 @@ func CreateActor(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acc
 		Enabled:      lo.FromPtrOr(request.Body.Enabled, true),
 		Deployable:   lo.FromPtrOr(request.Body.Deployable, false),
 		Configurable: lo.FromPtrOr(request.Body.Configurable, false),
+		Migratable:   lo.FromPtrOr(request.Body.Migratable, false),
 	})
 	if err != nil {
 
@@ -130,12 +143,24 @@ func GetActor(ctx context.Context, logger *slog.Logger, accessor dbaccess.Access
 			Enabled:      actor.Enabled,
 			Deployable:   actor.Deployable,
 			Configurable: actor.Configurable,
+			Migratable:   actor.Migratable,
 		},
 	}, nil
 }
 
 func UpdateActor(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminUpdateActorRequestObject) (api.AdminUpdateActorResponseObject, error) {
 	logger.Info("UpdateActor", "actorId", request.Id, "name", lo.FromPtrOr(request.Body.Name, "<nil>"))
+
+	if lo.FromPtrOr(request.Body.Migratable, false) && (!lo.FromPtrOr(request.Body.Deployable, false) || !lo.FromPtrOr(request.Body.Configurable, false)) {
+		return api.AdminUpdateActor400JSONResponse{
+			N400JSONResponse: api.N400JSONResponse{Error: "Migratable actors must also be deployable and configurable"},
+		}, nil
+	}
+	if lo.FromPtrOr(request.Body.Deployable, false) && !lo.FromPtrOr(request.Body.Configurable, false) {
+		return api.AdminUpdateActor400JSONResponse{
+			N400JSONResponse: api.N400JSONResponse{Error: "Deployable actors must also be configurable"},
+		}, nil
+	}
 
 	actor, err := accessor.Querier().ActorUpdate(ctx, accessor.Source(), &dbsqlc.ActorUpdateParams{
 		ID:           int64(request.Id),
@@ -144,6 +169,7 @@ func UpdateActor(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acc
 		Enabled:      request.Body.Enabled,
 		Deployable:   request.Body.Deployable,
 		Configurable: request.Body.Configurable,
+		Migratable:   request.Body.Migratable,
 	})
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -164,6 +190,7 @@ func UpdateActor(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acc
 			Enabled:      actor.Enabled,
 			Deployable:   actor.Deployable,
 			Configurable: actor.Configurable,
+			Migratable:   actor.Migratable,
 			CreatedAt:    actor.CreatedAt,
 		},
 	}, nil

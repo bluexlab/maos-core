@@ -129,7 +129,7 @@ func GetDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.A
 
 		// insert kubernetes config
 		if row.ActorDeployable {
-			InsertMissingKubeConfigsWithDefault(content, string(row.ActorRole))
+			InsertMissingKubeConfigsWithDefault(content, string(row.ActorRole), row.ActorMigratable)
 		}
 
 		return api.Config{
@@ -341,102 +341,25 @@ func PublishDeployment(
 		}, nil
 	}
 
-	tx, err := accessor.Source().Begin(ctx)
-	if err != nil {
-		logger.Error("Cannot start transaction", "error", err)
-		return api.AdminPublishDeployment500JSONResponse{
-			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot publish deployment. Cannot start transaction: %v", err)},
-		}, nil
-	}
-	defer tx.Rollback(ctx)
-
-	// Query deployment and check status
-	deployment, err := accessor.Querier().DeploymentGetById(ctx, tx, int64(request.Id))
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			return api.AdminPublishDeployment404Response{}, nil
-		}
-		logger.Error("Cannot get deployment", "error", err)
-		return api.AdminPublishDeployment500JSONResponse{
-			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot publish deployment. Cannot get deployment: %v", err)},
-		}, nil
-	}
-
-	if deployment.Status != "draft" && deployment.Status != "reviewing" {
-		return api.AdminPublishDeployment400JSONResponse{
-			N400JSONResponse: api.N400JSONResponse{Error: "Deployment must be in draft or reviewing status to be published"},
-		}, nil
-	}
-
-	if deployment.ConfigSuiteID == nil {
-		logger.Error("Cannot publish deployment", "error", "Deployment has no config suite", "id", deployment.ID)
-		return api.AdminPublishDeployment500JSONResponse{
-			N500JSONResponse: api.N500JSONResponse{Error: "Cannot publish deployment. Deployment has no config suite"},
-		}, nil
-	}
-
-	// Activate config suite
-	suiteId, err := accessor.Querier().ConfigSuiteActivate(ctx, tx, &dbsqlc.ConfigSuiteActivateParams{
-		ID:        *deployment.ConfigSuiteID,
-		UpdatedBy: request.Body.User,
-	})
-	if err != nil {
-		logger.Error("Cannot activate config suite", "error", err)
-		return api.AdminPublishDeployment500JSONResponse{
-			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot publish deployment. Cannot activate config suite: %v", err)},
-		}, nil
-	}
-
-	// Update deployment status to deployed
-	_, err = accessor.Querier().DeploymentPublish(ctx, tx, &dbsqlc.DeploymentPublishParams{
+	errMessage, err := accessor.Querier().SetDeploymentDeploying(ctx, accessor.Source(), &dbsqlc.SetDeploymentDeployingParams{
 		ID:         int64(request.Id),
 		ApprovedBy: request.Body.User,
 	})
 	if err != nil {
-		logger.Error("Cannot publish deployment", "error", err)
+		logger.Error("Cannot set deployment to deploying", "error", err)
 		return api.AdminPublishDeployment500JSONResponse{
-			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot publish deployment: %v", err)},
+			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot publish deployment. Cannot set deployment to deploying: %v", err)},
+		}, nil
+	}
+	if errMessage != "" {
+		logger.Error("Cannot set deployment to deploying", "error", errMessage)
+		return api.AdminPublishDeployment400JSONResponse{
+			N400JSONResponse: api.N400JSONResponse{Error: fmt.Sprintf("Cannot publish deployment. Cannot set deployment to deploying: %s", errMessage)},
 		}, nil
 	}
 
-	// publish config suite to S3
-	err = publishConfigSuiteToS3(ctx, suiteId, tx, accessor, suiteStore)
-	if err != nil {
-		logger.Error("Cannot serialize config suite", "error", err)
-		return api.AdminPublishDeployment500JSONResponse{
-			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot serialize config suite: %v", err)},
-		}, nil
-	}
-
-	// update kubernetes actor deployments
-	configs, err := accessor.Querier().ConfigListBySuiteIdGroupByActor(ctx, tx, *deployment.ConfigSuiteID)
-	if err != nil {
-		logger.Error("Cannot get configs", "error", err)
-		return api.AdminPublishDeployment500JSONResponse{
-			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot get configs: %v", err)},
-		}, nil
-	}
-
-	// rotate actor api keys
-	// it generates new api keys for each actor
-	// and set the old ones to expire after 15 minutes
-	apiTokens, err := rotateActorApiKeys(ctx, accessor, tx, configs, request.Body.User)
-	if err != nil {
-		logger.Error("Cannot rotate actor api keys", "error", err)
-		return api.AdminPublishDeployment500JSONResponse{
-			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot rotate actor api keys: %v", err)},
-		}, nil
-	}
-
-	err = updateKubernetesDeployments(ctx, controller, deployment, configs, apiTokens)
-	if err != nil {
-		logger.Error("Cannot update kubernetes deployments", "error", err)
-		return api.AdminPublishDeployment500JSONResponse{
-			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot update kubernetes deployments: %v", err)},
-		}, nil
-	}
-
-	tx.Commit(ctx)
+	// run deployment migrations and update deployment in background
+	go runDeploymentMigrationsAndUpdateDeployment(logger, controller, suiteStore, accessor, int64(request.Id), request.Body.User)
 
 	return api.AdminPublishDeployment201Response{}, nil
 }
@@ -595,6 +518,193 @@ func publishConfigSuiteToS3(ctx context.Context, configSuiteId int64, tx pgx.Tx,
 	}
 
 	return suiteStore.WriteSuite(ctx, publishingConfigs)
+}
+
+func runDeploymentMigrationsAndUpdateDeployment(
+	logger *slog.Logger,
+	controller k8s.Controller,
+	suiteStore suitestore.SuiteStore,
+	accessor dbaccess.Accessor,
+	deploymentId int64,
+	user string,
+) {
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	err := doRunDeploymentMigrationsAndUpdateDeployment(ctx, logger, controller, suiteStore, accessor, deploymentId, user)
+	if err != nil {
+		logger.Error("Cannot run deployment migrations", "error", err)
+		// store error to deployment
+		err = accessor.Querier().UpdateDeploymentLastError(ctx, accessor.Source(), &dbsqlc.UpdateDeploymentLastErrorParams{
+			ID:        deploymentId,
+			LastError: err.Error(),
+		})
+		if err != nil {
+			logger.Error("Cannot update deployment last error", "error", err)
+		}
+	}
+}
+
+func doRunDeploymentMigrationsAndUpdateDeployment(
+	ctx context.Context,
+	logger *slog.Logger,
+	controller k8s.Controller,
+	suiteStore suitestore.SuiteStore,
+	accessor dbaccess.Accessor,
+	deploymentId int64,
+	user string,
+) error {
+	deployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), deploymentId)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return fmt.Errorf("deployment not found")
+		}
+		logger.Error("Cannot get deployment", "error", err)
+		return fmt.Errorf("Cannot get deployment: %v", err)
+	}
+
+	configs, err := accessor.Querier().ConfigListBySuiteIdGroupByActor(ctx, accessor.Source(), *deployment.ConfigSuiteID)
+	if err != nil {
+		logger.Error("Cannot get configs", "error", err)
+		return fmt.Errorf("Cannot get configs: %v", err)
+	}
+
+	// run migrations
+	err = runDeploymentMigrations(ctx, logger, controller, accessor, deploymentId, configs)
+	if err != nil {
+		logger.Error("Cannot run deployment migrations", "error", err)
+		return fmt.Errorf("Cannot run deployment migrations: %v", err)
+	}
+
+	// migration finished, update deployment status to deployed
+	tx, err := accessor.Source().Begin(ctx)
+	if err != nil {
+		logger.Error("Cannot start transaction", "error", err)
+		return fmt.Errorf("Cannot publish deployment. Cannot start transaction: %v", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// Query deployment again and check status
+	deployment, err = accessor.Querier().DeploymentGetById(ctx, tx, deploymentId)
+	if err != nil {
+		logger.Error("Cannot get deployment", "error", err)
+		return fmt.Errorf("Cannot get deployment: %v", err)
+	}
+
+	if deployment.Status != "deploying" {
+		return fmt.Errorf("deployment must be in deploying status to be deployed")
+	}
+
+	if deployment.ConfigSuiteID == nil {
+		logger.Error("Cannot publish deployment", "error", "Deployment has no config suite", "id", deployment.ID)
+		return fmt.Errorf("Cannot publish deployment. Deployment has no config suite")
+	}
+
+	// Activate config suite
+	suiteId, err := accessor.Querier().ConfigSuiteActivate(ctx, tx, &dbsqlc.ConfigSuiteActivateParams{
+		ID:        *deployment.ConfigSuiteID,
+		UpdatedBy: user,
+	})
+	if err != nil {
+		logger.Error("Cannot activate config suite", "error", err)
+		return fmt.Errorf("Cannot activate config suite: %v", err)
+	}
+
+	// Update deployment status to deployed
+	_, err = accessor.Querier().DeploymentPublish(ctx, tx, &dbsqlc.DeploymentPublishParams{
+		ID:         int64(deploymentId),
+		ApprovedBy: user,
+	})
+	if err != nil {
+		logger.Error("Cannot publish deployment", "error", err)
+		return fmt.Errorf("Cannot publish deployment: %v", err)
+	}
+
+	// publish config suite to S3
+	err = publishConfigSuiteToS3(ctx, suiteId, tx, accessor, suiteStore)
+	if err != nil {
+		logger.Error("Cannot publish config suite to S3", "error", err)
+		return fmt.Errorf("Cannot publish config suite to S3: %v", err)
+	}
+
+	// rotate actor api keys
+	// it generates new api keys for each actor
+	// and set the old ones to expire after 15 minutes
+	apiTokens, err := rotateActorApiKeys(ctx, accessor, tx, configs, user)
+	if err != nil {
+		logger.Error("Cannot rotate actor api keys", "error", err)
+		return fmt.Errorf("Cannot rotate actor api keys: %v", err)
+	}
+
+	err = updateKubernetesDeployments(ctx, controller, deployment, configs, apiTokens)
+	if err != nil {
+		logger.Error("Cannot update kubernetes deployments", "error", err)
+		return fmt.Errorf("Cannot update kubernetes deployments: %v", err)
+	}
+
+	return tx.Commit(ctx)
+}
+
+func runDeploymentMigrations(
+	ctx context.Context,
+	logger *slog.Logger,
+	controller k8s.Controller,
+	accessor dbaccess.Accessor,
+	deploymentId int64,
+	configs []*dbsqlc.ConfigListBySuiteIdGroupByActorRow,
+) error {
+	migrationParams := make([]k8s.MigrationParams, 0)
+	for _, config := range configs {
+		if !config.ActorMigratable {
+			continue
+		}
+
+		var content map[string]string
+		err := json.Unmarshal(config.Content, &content)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal config content: %v", err)
+		}
+
+		if content["KUBE_MIGRATE_DOCKER_IMAGE"] == "" {
+			return fmt.Errorf("KUBE_MIGRATE_DOCKER_IMAGE is blank")
+		}
+		command, err := util.TokenizeCommand(content["KUBE_MIGRATE_COMMAND"])
+		if err != nil {
+			return fmt.Errorf("failed to tokenize KUBE_MIGRATE_COMMAND: %v", err)
+		}
+
+		migrationParams = append(migrationParams, k8s.MigrationParams{
+			Name:             "maos-" + config.ActorName,
+			Image:            content["KUBE_MIGRATE_DOCKER_IMAGE"],
+			ImagePullSecrets: content["KUBE_MIGRATE_PULL_IMAGE_SECRET"],
+			EnvVars:          filterNonKubeConfigs(content),
+			Command:          command,
+			MemoryRequest:    content["KUBE_MIGRATE_MEMORY_REQUEST"],
+			MemoryLimit:      content["KUBE_MIGRATE_MEMORY_LIMIT"],
+		})
+	}
+
+	migrationLogs, err := controller.RunMigrations(ctx, migrationParams)
+	if err != nil {
+		logger.Error("failed to run migrations", "error", err)
+		return fmt.Errorf("failed to run migrations: %v", err)
+	}
+
+	logsBytes, err := json.Marshal(migrationLogs)
+	if err != nil {
+		logger.Error("failed to marshal migration logs", "error", err)
+	} else {
+		// write migration logs to database
+		err = accessor.Querier().UpdateDeploymentMigrationLogs(ctx, accessor.Source(), &dbsqlc.UpdateDeploymentMigrationLogsParams{
+			ID:            deploymentId,
+			MigrationLogs: logsBytes,
+		})
+		if err != nil {
+			logger.Error("failed to write migration logs to database", "error", err)
+		}
+	}
+
+	return nil
 }
 
 func updateKubernetesDeployments(

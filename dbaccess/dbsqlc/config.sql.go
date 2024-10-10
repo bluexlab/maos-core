@@ -228,7 +228,8 @@ SELECT DISTINCT ON (configs.actor_id)
     actors.role AS actor_role,
     actors.enabled AS actor_enabled,
     actors.configurable AS actor_configurable,
-    actors.deployable AS actor_deployable
+    actors.deployable AS actor_deployable,
+    actors.migratable AS actor_migratable
 FROM configs
 JOIN actors ON configs.actor_id = actors.id
 WHERE configs.config_suite_id = $1::bigint
@@ -249,6 +250,7 @@ type ConfigListBySuiteIdGroupByActorRow struct {
 	ActorEnabled      bool
 	ActorConfigurable bool
 	ActorDeployable   bool
+	ActorMigratable   bool
 }
 
 func (q *Queries) ConfigListBySuiteIdGroupByActor(ctx context.Context, db DBTX, configSuiteID int64) ([]*ConfigListBySuiteIdGroupByActorRow, error) {
@@ -274,6 +276,7 @@ func (q *Queries) ConfigListBySuiteIdGroupByActor(ctx context.Context, db DBTX, 
 			&i.ActorEnabled,
 			&i.ActorConfigurable,
 			&i.ActorDeployable,
+			&i.ActorMigratable,
 		); err != nil {
 			return nil, err
 		}
@@ -356,7 +359,7 @@ func (q *Queries) ConfigUpdateInactiveContentByCreator(ctx context.Context, db D
 }
 
 const getActorByConfigId = `-- name: GetActorByConfigId :one
-SELECT actors.id, actors.name, actors.queue_id, actors.created_at, actors.metadata, actors.updated_at, actors.enabled, actors.deployable, actors.configurable, actors.role
+SELECT actors.id, actors.name, actors.queue_id, actors.created_at, actors.metadata, actors.updated_at, actors.enabled, actors.deployable, actors.configurable, actors.role, actors.migratable
 FROM configs
 JOIN actors ON configs.actor_id = actors.id
 WHERE configs.id = $1::bigint
@@ -378,6 +381,7 @@ func (q *Queries) GetActorByConfigId(ctx context.Context, db DBTX, id int64) (*A
 		&i.Deployable,
 		&i.Configurable,
 		&i.Role,
+		&i.Migratable,
 	)
 	return &i, err
 }

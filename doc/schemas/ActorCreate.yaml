@@ -16,6 +16,8 @@ properties:
     type: boolean
   configurable:
     type: boolean
+  migratable:
+    type: boolean
 required:
   - name
   - role

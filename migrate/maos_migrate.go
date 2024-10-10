@@ -56,12 +56,7 @@ type Migrator struct {
 	migrations map[int]*Migration // allows us to inject test migrations
 }
 
-func New(accessor dbaccess.Accessor, config *Config) *Migrator {
-	if config == nil {
-		config = &Config{}
-	}
-
-	logger := config.Logger
+func New(accessor dbaccess.Accessor, logger *slog.Logger) *Migrator {
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 			Level: slog.LevelWarn,

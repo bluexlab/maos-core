@@ -57,7 +57,6 @@ func TestUpdateConfig(t *testing.T) {
 		require.Equal(t, config.ID, jsonResponse.Data.Id)
 		require.Equal(t, config.ActorId, jsonResponse.Data.ActorId)
 		require.Equal(t, updatedContent, jsonResponse.Data.Content)
-		require.Equal(t, minActorVersion, *jsonResponse.Data.MinActorVersion)
 		require.Equal(t, user, jsonResponse.Data.CreatedBy)
 		require.Equal(t, actor.Name, jsonResponse.Data.ActorName)
 		require.NotZero(t, jsonResponse.Data.CreatedAt)
@@ -201,14 +200,12 @@ func TestUpdateConfig(t *testing.T) {
 
 		updatedContent := map[string]string{"key": "newValue"}
 		user := "reviewer1"
-		minActorVersion := "2.0.0"
 
 		request := api.AdminUpdateConfigRequestObject{
 			Id: config.ID,
 			Body: &api.AdminUpdateConfigJSONRequestBody{
-				Content:         &updatedContent,
-				MinActorVersion: &minActorVersion,
-				User:            user,
+				Content: &updatedContent,
+				User:    user,
 			},
 		}
 
@@ -221,7 +218,6 @@ func TestUpdateConfig(t *testing.T) {
 		require.Equal(t, config.ID, jsonResponse.Data.Id)
 		require.Equal(t, config.ActorId, jsonResponse.Data.ActorId)
 		require.Equal(t, updatedContent, jsonResponse.Data.Content)
-		require.Equal(t, minActorVersion, *jsonResponse.Data.MinActorVersion)
 		require.NotNil(t, jsonResponse.Data.UpdatedBy)
 		require.Equal(t, user, *jsonResponse.Data.UpdatedBy)
 		require.NotZero(t, jsonResponse.Data.UpdatedAt)
@@ -233,7 +229,7 @@ func TestUpdateConfig(t *testing.T) {
 		defer dbPool.Close()
 
 		user := "testuser"
-		actor := fixture.InsertActor(t, ctx, dbPool, "TestActor")
+		actor := fixture.InsertActor2(t, ctx, dbPool, "TestActor", "agent", true, true, true, false)
 		configSuite := fixture.InsertConfigSuite(t, ctx, dbPool)
 		initialContent := map[string]string{
 			"KUBE_REPLICAS": "1",

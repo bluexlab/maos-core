@@ -102,9 +102,47 @@ SET status = 'reviewing'
 WHERE id = @id::bigint AND status = 'draft'
 RETURNING *;
 
+-- name: SetDeploymentDeploying :one
+-- it sets the specific deployment status to deploying.
+-- it checks if the deployment status is in draft or reviewing before setting it to deploying
+-- it also checks if there are no other deploying deployments
+WITH deployment_info AS (
+  SELECT d.status,
+         EXISTS (
+           SELECT 1 FROM deployments WHERE status = 'deploying'
+         ) AS others_deploying
+  FROM deployments d
+  WHERE d.id = @id::bigint
+),
+update_result AS (
+  UPDATE deployments
+  SET status = 'deploying',
+    deploying_at = EXTRACT(EPOCH FROM NOW()),
+    approved_at = EXTRACT(EPOCH FROM NOW()),
+    approved_by = @approved_by::text
+  FROM deployment_info
+  WHERE deployments.id = @id::bigint
+    AND deployment_info.status IN ('reviewing', 'draft')
+    AND NOT deployment_info.others_deploying
+  RETURNING *
+)
+SELECT
+  CASE
+    WHEN d.status NOT IN ('reviewing', 'draft') THEN
+      'deployment must be in reviewing or draft status'::text
+    WHEN d.others_deploying THEN
+      'others are deploying'::text
+    ELSE
+      ''::text
+  END AS result
+FROM deployment_info AS d
+UNION ALL
+SELECT 'deployment not found' AS result
+WHERE NOT EXISTS (SELECT 1 FROM deployment_info);
+
 -- name: DeploymentPublish :one
 -- it sets current deployed deployment status to retired and the new deployment status to deployed
-WITH current_deployed AS (
+WITH deactivate_others AS (
   UPDATE deployments
   SET status = 'retired',
     finished_at = EXTRACT(EPOCH FROM NOW()),
@@ -114,9 +152,10 @@ WITH current_deployed AS (
 )
 UPDATE deployments
 SET status = 'deployed',
-approved_at = EXTRACT(EPOCH FROM NOW()),
-approved_by = @approved_by::text
-WHERE id = @id::bigint AND (status = 'reviewing' OR status = 'draft')
+  deployed_at = EXTRACT(EPOCH FROM NOW())
+WHERE id = @id::bigint
+  AND id NOT IN (SELECT id FROM deactivate_others)
+  AND status = 'deploying'
 RETURNING *;
 
 -- name: DeploymentReject :one
@@ -131,6 +170,16 @@ WHERE id = @id::bigint
   AND status = 'reviewing'
   AND @rejected_by::text = ANY(reviewers)
 RETURNING *;
+
+-- name: UpdateDeploymentMigrationLogs :exec
+UPDATE deployments
+SET migration_logs = @migration_logs::jsonb
+WHERE id = @id::bigint;
+
+-- name: UpdateDeploymentLastError :exec
+UPDATE deployments
+SET last_error = @last_error::text, status = 'failed'
+WHERE id = @id::bigint;
 
 -- name: DeploymentDelete :one
 DELETE FROM deployments

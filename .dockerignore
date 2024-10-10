@@ -2,6 +2,7 @@
 .gitignore
 .env*
 Dockerfile
+.dockerignore
 
 vendor/
 bin/
@@ -10,3 +11,6 @@ go.work
 .vscode
 coverage.html
 coverage.out
+.mise.toml
+k8s.yaml
+logs/

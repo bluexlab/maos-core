@@ -19,6 +19,8 @@ properties:
     type: boolean
   configurable:
     type: boolean
+  migratable:
+    type: boolean
   token_count:
     type: integer
     format: int64
@@ -35,6 +37,7 @@ required:
   - enabled
   - deployable
   - configurable
+  - migratable
   - renameable
   - created_at
   - token_count

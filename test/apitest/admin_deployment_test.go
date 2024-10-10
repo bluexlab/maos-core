@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -585,6 +586,8 @@ func TestAdminPublishDeploymentEndpoint(t *testing.T) {
 		actor := fixture.InsertActor(t, ctx, accessor.Source(), "admin")
 		fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", actor.ID, 0, []string{"admin"})
 
+		mockK8sController.On("RunMigrations", mock.Anything, []k8s.MigrationParams{}).Return(nil, nil)
+
 		mockK8sController.On("UpdateDeploymentSet", mock.Anything, []k8s.DeploymentParams{}).Return(nil)
 		deployment, err := accessor.Querier().DeploymentInsertWithConfigSuite(ctx, accessor.Source(), &dbsqlc.DeploymentInsertWithConfigSuiteParams{
 			CreatedBy: "test-user",
@@ -600,7 +603,15 @@ func TestAdminPublishDeploymentEndpoint(t *testing.T) {
 		// Verify the deployment status was actually updated in the database
 		updatedDeployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), deployment.ID)
 		require.NoError(t, err)
-		require.EqualValues(t, api.DeploymentStatusDeployed, updatedDeployment.Status)
+		require.EqualValues(t, api.DeploymentStatusDeploying, updatedDeployment.Status)
+
+		require.Eventually(t, func() bool {
+			updatedDeployment, err = accessor.Querier().DeploymentGetById(ctx, accessor.Source(), deployment.ID)
+			require.NoError(t, err)
+			return updatedDeployment.Status == "deployed" || updatedDeployment.Status == "failed"
+		}, 1*time.Second, 50*time.Millisecond)
+
+		require.EqualValues(t, "deployed", updatedDeployment.Status)
 
 		// Verify the associated config suite was activated
 		configSuite, err := accessor.Querier().ConfigSuiteGetById(ctx, accessor.Source(), *updatedDeployment.ConfigSuiteID)
@@ -635,7 +646,7 @@ func TestAdminPublishDeploymentEndpoint(t *testing.T) {
 		fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", actor.ID, 0, []string{"admin"})
 
 		resp, _ := PostHttp(t, fmt.Sprintf("%s/v1/admin/deployments/%d/publish", server.URL, 999), `{"user":"admin"}`, "admin-token")
-		require.Equal(t, http.StatusNotFound, resp.StatusCode)
+		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	})
 
 	t.Run("Non-admin token", func(t *testing.T) {

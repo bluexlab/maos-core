@@ -124,7 +124,8 @@ func migrateUp(logger *slog.Logger, dryRun bool, step int) {
 
 	accessor := dbaccess.New(pool)
 
-	if err := runMigration(ctx, accessor, migrate.DirectionUp, step, dryRun); err != nil {
+	_, err := migrate.New(accessor, logger).Migrate(ctx, migrate.DirectionUp, &migrate.MigrateOpts{MaxSteps: step, DryRun: dryRun})
+	if err != nil {
 		logger.Error("Failed to migrate database", "error", err.Error())
 		os.Exit(2)
 	}
@@ -141,15 +142,11 @@ func migrateDown(logger *slog.Logger, dryRun bool, step int) {
 
 	accessor := dbaccess.New(pool)
 
-	if err := runMigration(ctx, accessor, migrate.DirectionDown, step, dryRun); err != nil {
+	_, err := migrate.New(accessor, logger).Migrate(ctx, migrate.DirectionDown, &migrate.MigrateOpts{MaxSteps: step, DryRun: dryRun})
+	if err != nil {
 		logger.Error("Failed to migrate database", "error", err.Error())
 		os.Exit(2)
 	}
 
 	logger.Info("maos-core Database migrated")
-}
-
-func runMigration(ctx context.Context, accessor dbaccess.Accessor, direction migrate.Direction, step int, dryRun bool) error {
-	_, err := migrate.New(accessor, nil).Migrate(ctx, direction, &migrate.MigrateOpts{MaxSteps: step, DryRun: dryRun})
-	return err
 }

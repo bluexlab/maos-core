@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -21,6 +22,8 @@ import (
 type mockK8sController struct {
 	k8s.Controller
 	updatedDeploymentSets [][]k8s.DeploymentParams
+	migrationParams       [][]k8s.MigrationParams
+	migrationResults      map[string][]string
 }
 
 func (m *mockK8sController) UpdateDeploymentSet(ctx context.Context, deploymentSet []k8s.DeploymentParams) error {
@@ -30,6 +33,11 @@ func (m *mockK8sController) UpdateDeploymentSet(ctx context.Context, deploymentS
 
 func (m *mockK8sController) TriggerRollingRestart(ctx context.Context, deploymentName string) error {
 	return nil
+}
+
+func (m *mockK8sController) RunMigrations(ctx context.Context, migrations []k8s.MigrationParams) (map[string][]string, error) {
+	m.migrationParams = append(m.migrationParams, migrations)
+	return m.migrationResults, nil
 }
 
 func TestListDeploymentsWithDB(t *testing.T) {
@@ -346,8 +354,8 @@ func TestGetDeployment(t *testing.T) {
 		accessor := dbaccess.New(dbPool)
 
 		// Create two actors
-		actor1 := fixture.InsertActor2(t, ctx, dbPool, "actor1", "agent", true, true, true)
-		actor2 := fixture.InsertActor2(t, ctx, dbPool, "actor2", "agent", true, false, true)
+		actor1 := fixture.InsertActor2(t, ctx, dbPool, "actor1", "agent", true, true, true, false)
+		actor2 := fixture.InsertActor2(t, ctx, dbPool, "actor2", "agent", true, false, true, false)
 
 		// Create a config suite
 		createResponse, err := admin.CreateDeployment(ctx, logger, accessor, api.AdminCreateDeploymentRequestObject{
@@ -429,7 +437,7 @@ func TestGetDeployment(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		accessor := dbaccess.New(dbPool)
 
-		actor := fixture.InsertActor2(t, ctx, dbPool, "actor-kube", "agent", true, true, true)
+		actor := fixture.InsertActor2(t, ctx, dbPool, "actor-kube", "agent", true, true, true, false)
 
 		// Create a config suite
 		createResponse, err := admin.CreateDeployment(ctx, logger, accessor, api.AdminCreateDeploymentRequestObject{
@@ -1127,15 +1135,29 @@ func TestPublishDeployment(t *testing.T) {
 	ctx := context.Background()
 	logger := testhelper.Logger(t)
 
-	setupDeploymentTest := func(t *testing.T, status string) (*pgxpool.Pool, dbaccess.Accessor, *dbsqlc.Deployment, *dbsqlc.Actor, *dbsqlc.Actor, *testhelper.MockSuiteStore) {
+	setupDeploymentTest := func(t *testing.T, status string, withMigrations bool) (*pgxpool.Pool, dbaccess.Accessor, *dbsqlc.Deployment, *dbsqlc.Actor, *dbsqlc.Actor, *testhelper.MockSuiteStore) {
 		t.Helper()
 		dbPool := testhelper.TestDB(ctx, t)
 		accessor := dbaccess.New(dbPool)
 		suiteStore := testhelper.NewMockSuiteStore()
 
 		// Create two actors
-		actor1 := fixture.InsertActor2(t, ctx, dbPool, "actor1", "agent", true, true, true)
-		actor2 := fixture.InsertActor2(t, ctx, dbPool, "actor2", "agent", true, false, true)
+		actor1 := fixture.InsertActor2(t, ctx, dbPool, "actor1", "agent", true, true, true, withMigrations)
+		actor2 := fixture.InsertActor2(t, ctx, dbPool, "actor2", "agent", true, false, true, withMigrations)
+
+		// Create a existing deployed deployment and a config suite
+		if status != "deployed" {
+			existingDeployment, err := accessor.Querier().DeploymentInsertWithConfigSuite(ctx, accessor.Source(), &dbsqlc.DeploymentInsertWithConfigSuiteParams{
+				CreatedBy: "test-user",
+				Name:      "existing-deployed-deployment",
+				Reviewers: []string{"reviewer1", "reviewer2"},
+			})
+			require.NoError(t, err)
+			require.NotNil(t, existingDeployment)
+			// update deployment status
+			_, err = dbPool.Exec(ctx, "UPDATE deployments SET status = $1 WHERE id = $2", "deployed", existingDeployment.ID)
+			require.NoError(t, err)
+		}
 
 		// Create a deployment and a config suite
 		createdDeployment, err := accessor.Querier().DeploymentInsertWithConfigSuite(ctx, accessor.Source(), &dbsqlc.DeploymentInsertWithConfigSuiteParams{
@@ -1151,20 +1173,34 @@ func TestPublishDeployment(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create configs for each actor
-		config1 := fixture.InsertConfig2(t, ctx, dbPool, actor1.ID, createdDeployment.ConfigSuiteID, "test-user", map[string]string{
+		actor1EnvVars := map[string]string{
 			"key":                 "value1",
 			"KUBE_DOCKER_IMAGE":   "actor1-image:latest",
 			"KUBE_REPLICAS":       "2",
 			"KUBE_MEMORY_REQUEST": "256Mi",
 			"KUBE_MEMORY_LIMIT":   "512Mi",
-		})
-		config2 := fixture.InsertConfig2(t, ctx, dbPool, actor2.ID, createdDeployment.ConfigSuiteID, "test-user", map[string]string{
+		}
+		actor2EnvVars := map[string]string{
 			"key":                 "value2",
 			"KUBE_DOCKER_IMAGE":   "actor2-image:latest",
 			"KUBE_REPLICAS":       "3",
 			"KUBE_MEMORY_REQUEST": "256Mi",
 			"KUBE_MEMORY_LIMIT":   "512Mi",
-		})
+		}
+
+		if withMigrations {
+			actor1EnvVars["KUBE_MIGRATE_DOCKER_IMAGE"] = "actor1-image:latest"
+			actor1EnvVars["KUBE_MIGRATE_COMMAND"] = "migrate.sh up"
+			actor1EnvVars["KUBE_MIGRATE_MEMORY_REQUEST"] = "266Mi"
+			actor1EnvVars["KUBE_MIGRATE_MEMORY_LIMIT"] = "522Mi"
+			actor2EnvVars["KUBE_MIGRATE_DOCKER_IMAGE"] = "actor2-image:latest"
+			actor2EnvVars["KUBE_MIGRATE_COMMAND"] = "migrate.sh up"
+			actor2EnvVars["KUBE_MIGRATE_MEMORY_REQUEST"] = "268Mi"
+			actor2EnvVars["KUBE_MIGRATE_MEMORY_LIMIT"] = "532Mi"
+		}
+
+		config1 := fixture.InsertConfig2(t, ctx, dbPool, actor1.ID, createdDeployment.ConfigSuiteID, "test-user", actor1EnvVars)
+		config2 := fixture.InsertConfig2(t, ctx, dbPool, actor2.ID, createdDeployment.ConfigSuiteID, "test-user", actor2EnvVars)
 		require.NotNil(t, config1)
 		require.NotNil(t, config2)
 
@@ -1182,7 +1218,7 @@ func TestPublishDeployment(t *testing.T) {
 
 	t.Run("Successfully publish reviewing deployment", func(t *testing.T) {
 		t.Parallel()
-		_, accessor, createdDeployment, _, _, suiteStore := setupDeploymentTest(t, "reviewing")
+		_, accessor, createdDeployment, _, _, suiteStore := setupDeploymentTest(t, "reviewing", false)
 
 		// Publish the deployment
 		publishRequest := api.AdminPublishDeploymentRequestObject{
@@ -1197,6 +1233,15 @@ func TestPublishDeployment(t *testing.T) {
 		// Verify that the status has changed to 'deployed'
 		dbDeployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), int64(createdDeployment.ID))
 		require.NoError(t, err)
+		require.EqualValues(t, "deploying", dbDeployment.Status)
+
+		// wait for deploying to finish
+		require.Eventually(t, func() bool {
+			dbDeployment, err = accessor.Querier().DeploymentGetById(ctx, accessor.Source(), int64(createdDeployment.ID))
+			require.NoError(t, err)
+			return dbDeployment.Status == "deployed" || dbDeployment.Status == "failed"
+		}, 1*time.Second, 50*time.Millisecond)
+
 		require.EqualValues(t, "deployed", dbDeployment.Status)
 
 		// verify config suites was activated
@@ -1245,7 +1290,7 @@ func TestPublishDeployment(t *testing.T) {
 
 	t.Run("Successfully publish draft deployment", func(t *testing.T) {
 		t.Parallel()
-		_, accessor, createdDeployment, _, _, suiteStore := setupDeploymentTest(t, "draft")
+		_, accessor, createdDeployment, _, _, suiteStore := setupDeploymentTest(t, "draft", false)
 
 		// Publish the deployment
 		publishRequest := api.AdminPublishDeploymentRequestObject{
@@ -1260,12 +1305,103 @@ func TestPublishDeployment(t *testing.T) {
 		// Verify that the status has changed to 'deployed'
 		dbDeployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), int64(createdDeployment.ID))
 		require.NoError(t, err)
+		require.EqualValues(t, "deploying", dbDeployment.Status)
+
+		// Verify that the deploying_at field is set
+		require.NotNil(t, dbDeployment.DeployingAt)
+
+		require.Eventually(t, func() bool {
+			dbDeployment, err = accessor.Querier().DeploymentGetById(ctx, accessor.Source(), int64(createdDeployment.ID))
+			require.NoError(t, err)
+			return dbDeployment.Status == "deployed" || dbDeployment.Status == "failed"
+		}, 1*time.Second, 50*time.Millisecond)
+
 		require.EqualValues(t, "deployed", dbDeployment.Status)
+
+		// verify config suites was activated
+		dbSuite, err := accessor.Querier().ConfigSuiteGetById(ctx, accessor.Source(), *dbDeployment.ConfigSuiteID)
+		require.NoError(t, err)
+		require.EqualValues(t, true, dbSuite.Active)
+		require.NotNil(t, dbSuite.DeployedAt)
+		require.Equal(t, "admin", *dbSuite.UpdatedBy)
+
+		// Verify that UpdateDeploymentSet was called
+		require.Len(t, mockController.updatedDeploymentSets, 1)
+		updatedSet := mockController.updatedDeploymentSets[0]
+		require.Len(t, updatedSet, 1) // We expect 1 actor config
+
+		// Verify that the suite was published to the suite store
+		publishedSuites, err := suiteStore.ReadSuites(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, publishedSuites)
+		require.Len(t, publishedSuites, 1) // We expect 2 actor configs
+	})
+
+	t.Run("Successfully publish and update k8s deployment", func(t *testing.T) {
+		t.Parallel()
+		_, accessor, createdDeployment, _, _, suiteStore := setupDeploymentTest(t, "reviewing", true)
+		mockController := &mockK8sController{}
+
+		// Publish the deployment
+		publishRequest := api.AdminPublishDeploymentRequestObject{
+			Id:   createdDeployment.ID,
+			Body: &api.AdminPublishDeploymentJSONRequestBody{User: "admin"},
+		}
+		publishResponse, err := admin.PublishDeployment(ctx, logger, accessor, suiteStore, mockController, publishRequest)
+		require.NoError(t, err)
+		require.IsType(t, api.AdminPublishDeployment201Response{}, publishResponse)
+
+		// Verify that the status has changed to 'deployed'
+		dbDeployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), int64(createdDeployment.ID))
+		require.NoError(t, err)
+		require.EqualValues(t, "deploying", dbDeployment.Status)
+
+		require.Eventually(t, func() bool {
+			dbDeployment, err = accessor.Querier().DeploymentGetById(ctx, accessor.Source(), int64(createdDeployment.ID))
+			require.NoError(t, err)
+			return dbDeployment.Status == "deployed" || dbDeployment.Status == "failed"
+		}, 1*time.Second, 50*time.Millisecond)
+
+		require.EqualValues(t, "deployed", dbDeployment.Status)
+
+		// verify migrations
+		require.EqualValues(t, 1, len(mockController.migrationParams))
+		require.EqualValues(t, k8s.MigrationParams{
+			Name:          "maos-actor1",
+			Image:         "actor1-image:latest",
+			Command:       []string{"migrate.sh", "up"},
+			EnvVars:       map[string]string{"key": "value1"},
+			MemoryRequest: "266Mi",
+			MemoryLimit:   "522Mi",
+		}, mockController.migrationParams[0][0])
+		require.EqualValues(t, k8s.MigrationParams{
+			Name:          "maos-actor2",
+			Image:         "actor2-image:latest",
+			Command:       []string{"migrate.sh", "up"},
+			EnvVars:       map[string]string{"key": "value2"},
+			MemoryRequest: "268Mi",
+			MemoryLimit:   "532Mi",
+		}, mockController.migrationParams[0][1])
+
+		// Verify that UpdateDeploymentSet was called
+		require.Len(t, mockController.updatedDeploymentSets, 1)
+		updatedSet := mockController.updatedDeploymentSets[0]
+		require.Len(t, updatedSet, 1) // We expect 1 actor config
+
+		// Verify the content of the updated deployment set
+		deployment := updatedSet[0]
+		require.Equal(t, "maos-actor1", deployment.Name)
+		require.Equal(t, map[string]string{"key": "value1"}, deployment.EnvVars)
+		require.NotEmpty(t, deployment.APIKey)
+		require.Equal(t, "actor1-image:latest", deployment.Image)
+		require.Equal(t, int32(2), deployment.Replicas)
+		require.Equal(t, "256Mi", deployment.MemoryRequest)
+		require.Equal(t, "512Mi", deployment.MemoryLimit)
 	})
 
 	t.Run("Attempt to publish already deployed deployment", func(t *testing.T) {
 		t.Parallel()
-		_, accessor, createdDeployment, _, _, suiteStore := setupDeploymentTest(t, "deployed")
+		_, accessor, createdDeployment, _, _, suiteStore := setupDeploymentTest(t, "deployed", false)
 
 		// Attempt to publish the already deployed deployment
 		publishRequest := api.AdminPublishDeploymentRequestObject{
@@ -1285,7 +1421,7 @@ func TestPublishDeployment(t *testing.T) {
 
 	t.Run("Database error", func(t *testing.T) {
 		t.Parallel()
-		dbPool, accessor, createdDeployment, _, _, suiteStore := setupDeploymentTest(t, "reviewing")
+		dbPool, accessor, createdDeployment, _, _, suiteStore := setupDeploymentTest(t, "reviewing", false)
 
 		// Close the database pool to simulate a database error
 		dbPool.Close()
@@ -1302,41 +1438,6 @@ func TestPublishDeployment(t *testing.T) {
 
 		errorResponse := publishResponse.(api.AdminPublishDeployment500JSONResponse)
 		require.Contains(t, errorResponse.Error, "Cannot publish deployment")
-	})
-
-	t.Run("Successfully publish and update k8s deployment", func(t *testing.T) {
-		t.Parallel()
-		_, accessor, createdDeployment, _, _, suiteStore := setupDeploymentTest(t, "reviewing")
-		mockController := &mockK8sController{}
-
-		// Publish the deployment
-		publishRequest := api.AdminPublishDeploymentRequestObject{
-			Id:   createdDeployment.ID,
-			Body: &api.AdminPublishDeploymentJSONRequestBody{User: "admin"},
-		}
-		publishResponse, err := admin.PublishDeployment(ctx, logger, accessor, suiteStore, mockController, publishRequest)
-		require.NoError(t, err)
-		require.IsType(t, api.AdminPublishDeployment201Response{}, publishResponse)
-
-		// Verify that the status has changed to 'deployed'
-		dbDeployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), int64(createdDeployment.ID))
-		require.NoError(t, err)
-		require.EqualValues(t, "deployed", dbDeployment.Status)
-
-		// Verify that UpdateDeploymentSet was called
-		require.Len(t, mockController.updatedDeploymentSets, 1)
-		updatedSet := mockController.updatedDeploymentSets[0]
-		require.Len(t, updatedSet, 1) // We expect 1 actor config
-
-		// Verify the content of the updated deployment set
-		deployment := updatedSet[0]
-		require.Equal(t, "maos-actor1", deployment.Name)
-		require.Equal(t, map[string]string{"key": "value1"}, deployment.EnvVars)
-		require.NotEmpty(t, deployment.APIKey)
-		require.Equal(t, "actor1-image:latest", deployment.Image)
-		require.Equal(t, int32(2), deployment.Replicas)
-		require.Equal(t, "256Mi", deployment.MemoryRequest)
-		require.Equal(t, "512Mi", deployment.MemoryLimit)
 	})
 }
 
@@ -1460,8 +1561,8 @@ func TestRestartDeployment(t *testing.T) {
 		accessor := dbaccess.New(dbPool)
 
 		// Create two actors
-		actor1 := fixture.InsertActor2(t, ctx, dbPool, "actor1", "agent", true, true, true)
-		actor2 := fixture.InsertActor2(t, ctx, dbPool, "actor2", "agent", true, false, true)
+		actor1 := fixture.InsertActor2(t, ctx, dbPool, "actor1", "agent", true, true, true, false)
+		actor2 := fixture.InsertActor2(t, ctx, dbPool, "actor2", "agent", true, false, true, false)
 
 		// Create a deployment
 		createdDeployment, err := accessor.Querier().DeploymentInsertWithConfigSuite(ctx, accessor.Source(), &dbsqlc.DeploymentInsertWithConfigSuiteParams{

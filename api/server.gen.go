@@ -85,7 +85,9 @@ const (
 	DeploymentStatusApproved  DeploymentStatus = "approved"
 	DeploymentStatusCancelled DeploymentStatus = "cancelled"
 	DeploymentStatusDeployed  DeploymentStatus = "deployed"
+	DeploymentStatusDeploying DeploymentStatus = "deploying"
 	DeploymentStatusDraft     DeploymentStatus = "draft"
+	DeploymentStatusFailed    DeploymentStatus = "failed"
 	DeploymentStatusRejected  DeploymentStatus = "rejected"
 	DeploymentStatusRetired   DeploymentStatus = "retired"
 	DeploymentStatusReviewing DeploymentStatus = "reviewing"
@@ -96,7 +98,9 @@ const (
 	DeploymentDetailStatusApproved  DeploymentDetailStatus = "approved"
 	DeploymentDetailStatusCancelled DeploymentDetailStatus = "cancelled"
 	DeploymentDetailStatusDeployed  DeploymentDetailStatus = "deployed"
+	DeploymentDetailStatusDeploying DeploymentDetailStatus = "deploying"
 	DeploymentDetailStatusDraft     DeploymentDetailStatus = "draft"
+	DeploymentDetailStatusFailed    DeploymentDetailStatus = "failed"
 	DeploymentDetailStatusRejected  DeploymentDetailStatus = "rejected"
 	DeploymentDetailStatusRetired   DeploymentDetailStatus = "retired"
 	DeploymentDetailStatusReviewing DeploymentDetailStatus = "reviewing"
@@ -161,6 +165,7 @@ type Actor struct {
 	Deployable   bool      `json:"deployable"`
 	Enabled      bool      `json:"enabled"`
 	Id           int64     `json:"id"`
+	Migratable   bool      `json:"migratable"`
 	Name         string    `json:"name"`
 	Renameable   bool      `json:"renameable"`
 	Role         ActorRole `json:"role"`
@@ -175,6 +180,7 @@ type ActorCreate struct {
 	Configurable *bool           `json:"configurable,omitempty"`
 	Deployable   *bool           `json:"deployable,omitempty"`
 	Enabled      *bool           `json:"enabled,omitempty"`
+	Migratable   *bool           `json:"migratable,omitempty"`
 	Name         string          `json:"name"`
 	Role         ActorCreateRole `json:"role"`
 }
@@ -497,6 +503,7 @@ type AdminUpdateActorJSONBody struct {
 	Configurable *bool                         `json:"configurable,omitempty"`
 	Deployable   *bool                         `json:"deployable,omitempty"`
 	Enabled      *bool                         `json:"enabled,omitempty"`
+	Migratable   *bool                         `json:"migratable,omitempty"`
 	Name         *string                       `json:"name,omitempty"`
 	Role         *AdminUpdateActorJSONBodyRole `json:"role,omitempty"`
 }

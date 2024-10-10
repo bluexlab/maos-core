@@ -227,9 +227,10 @@ func TestCreateActorWithDB(t *testing.T) {
 
 		request := api.AdminCreateActorRequestObject{
 			Body: &api.AdminCreateActorJSONRequestBody{
-				Name:       "TestActor",
-				Role:       api.ActorCreateRole("agent"),
-				Deployable: lo.ToPtr(true),
+				Name:         "TestActor",
+				Role:         api.ActorCreateRole("agent"),
+				Configurable: lo.ToPtr(true),
+				Deployable:   lo.ToPtr(true),
 			},
 		}
 
@@ -245,8 +246,9 @@ func TestCreateActorWithDB(t *testing.T) {
 
 		// Check new fields
 		assert.True(t, jsonResponse.Enabled)
+		assert.True(t, jsonResponse.Configurable)
 		assert.True(t, jsonResponse.Deployable)
-		assert.False(t, jsonResponse.Configurable)
+		assert.False(t, jsonResponse.Migratable)
 		assert.True(t, jsonResponse.Renameable)
 
 		// Verify the actor was created in the database
@@ -258,7 +260,8 @@ func TestCreateActorWithDB(t *testing.T) {
 		assert.Equal(t, jsonResponse.CreatedAt, actor.CreatedAt)
 		assert.Equal(t, jsonResponse.Enabled, actor.Enabled)
 		assert.Equal(t, jsonResponse.Deployable, actor.Deployable)
-		assert.False(t, jsonResponse.Configurable)
+		assert.Equal(t, jsonResponse.Configurable, actor.Configurable)
+		assert.False(t, jsonResponse.Migratable)
 
 		// Verify the queue was created in the database
 		queue, err := accessor.Querier().QueueFindById(ctx, accessor.Source(), actor.QueueID)
@@ -305,6 +308,46 @@ func TestCreateActorWithDB(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminCreateActor500JSONResponse{}, response)
+	})
+
+	// Add new test cases after the existing ones
+	t.Run("Invalid deployable value", func(t *testing.T) {
+		dbPool := testhelper.TestDB(ctx, t)
+		defer dbPool.Close()
+		accessor := dbaccess.New(dbPool)
+
+		request := api.AdminCreateActorRequestObject{
+			Body: &api.AdminCreateActorJSONRequestBody{
+				Name:       "TestActor",
+				Role:       api.ActorCreateRole("agent"),
+				Deployable: lo.ToPtr(false),
+				Migratable: lo.ToPtr(true),
+			},
+		}
+
+		response, err := admin.CreateActor(ctx, logger, accessor, request)
+		assert.NoError(t, err)
+		assert.IsType(t, api.AdminCreateActor400JSONResponse{}, response)
+	})
+
+	t.Run("Invalid configurable value", func(t *testing.T) {
+		dbPool := testhelper.TestDB(ctx, t)
+		defer dbPool.Close()
+		accessor := dbaccess.New(dbPool)
+
+		request := api.AdminCreateActorRequestObject{
+			Body: &api.AdminCreateActorJSONRequestBody{
+				Name:         "TestActor",
+				Role:         api.ActorCreateRole("agent"),
+				Deployable:   lo.ToPtr(true),
+				Configurable: lo.ToPtr(false),
+			},
+		}
+
+		response, err := admin.CreateActor(ctx, logger, accessor, request)
+
+		assert.NoError(t, err)
+		assert.IsType(t, api.AdminCreateActor400JSONResponse{}, response)
 	})
 }
 

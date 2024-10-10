@@ -108,7 +108,7 @@ func migrateUp(logger *slog.Logger) {
 	defer pool.Close()
 
 	accessor := dbaccess.New(pool)
-	if _, err := migrate.New(accessor, nil).Migrate(ctx, migrate.DirectionUp, &migrate.MigrateOpts{}); err != nil {
+	if _, err := migrate.New(accessor, logger).Migrate(ctx, migrate.DirectionUp, &migrate.MigrateOpts{}); err != nil {
 		logger.Error("Failed to migrate database", "error", err.Error())
 		os.Exit(2)
 	}

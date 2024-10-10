@@ -71,6 +71,8 @@ patch:
               type: boolean
             configurable:
               type: boolean
+            migratable:
+              type: boolean
   responses:
     "200":
       description: Successful response

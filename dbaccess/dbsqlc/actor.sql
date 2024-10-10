@@ -12,6 +12,7 @@ SELECT
   actors.enabled,
   actors.deployable,
   actors.configurable,
+  actors.migratable,
   actors.created_at,
   COUNT(*) OVER() AS total_count,
   COALESCE(atc.token_count, 0) AS token_count,
@@ -37,6 +38,7 @@ SELECT
   actors.enabled,
   actors.deployable,
   actors.configurable,
+  actors.migratable,
   actors.created_at,
   COALESCE(atc.token_count, 0) AS token_count,
   CASE WHEN atc.token_count IS NULL OR atc.token_count = 0 THEN true ELSE false END AS renameable
@@ -52,6 +54,7 @@ INSERT INTO actors(
     enabled,
     deployable,
     configurable,
+    migratable,
     metadata
 ) VALUES (
     @name::text,
@@ -60,6 +63,7 @@ INSERT INTO actors(
     @enabled::boolean,
     @deployable::boolean,
     @configurable::boolean,
+    @migratable::boolean,
     coalesce(@metadata::jsonb, '{}')
 ) RETURNING *;
 
@@ -70,6 +74,7 @@ UPDATE actors SET
     enabled = COALESCE(sqlc.narg('enabled')::boolean, enabled),
     deployable = COALESCE(sqlc.narg('deployable')::boolean, deployable),
     configurable = COALESCE(sqlc.narg('configurable')::boolean, configurable),
+    migratable = COALESCE(sqlc.narg('migratable')::boolean, migratable),
     metadata = COALESCE(sqlc.narg('metadata')::jsonb, metadata)
 WHERE id = @id
 RETURNING *;

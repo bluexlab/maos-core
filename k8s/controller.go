@@ -8,8 +8,12 @@ import (
 	"strings"
 	"time"
 
+	"bytes"
+	"io"
+
 	"github.com/samber/lo"
 	apps "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	core "k8s.io/api/core/v1"
 	networking "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -23,21 +27,40 @@ import (
 	metrics "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
-// DeploymentParams defines the parameters for a deployment
+// MigrationParams defines the parameters for a Kubernetes migration
+type MigrationParams struct {
+	Name             string            // Name of the migration
+	Image            string            // Name with tag of the Docker image to use
+	ImagePullSecrets string            // Name of the secret containing image pull credentials
+	EnvVars          map[string]string // Environment variables to pass to the container for the migration
+	Command          []string          // Command to run for the migration
+	MemoryRequest    string            // Memory request for the container
+	MemoryLimit      string            // Memory limit for the container
+}
+
+// DeploymentParams defines the parameters for a Kubernetes deployment
 type DeploymentParams struct {
-	Name          string
-	Replicas      int32
-	Labels        map[string]string
-	Image         string
-	EnvVars       map[string]string
-	APIKey        string
-	MemoryRequest string
-	MemoryLimit   string
-	HasService    bool
-	ServicePort   int32
-	HasIngress    bool
-	IngressHost   string
-	BodyLimit     string
+	Name             string            // Name of the deployment
+	Replicas         int32             // Number of replicas to create
+	Labels           map[string]string // Labels to apply to the deployment
+	Image            string            // Name with tag of the Docker image to use
+	ImagePullSecrets string            // Name of the secret containing image pull credentials
+	EnvVars          map[string]string // Environment variables to pass to the container
+	APIKey           string            // API key to use for the deployment
+	MemoryRequest    string            // Memory request for the container
+	MemoryLimit      string            // Memory limit for the container
+	CPURequest       string            // CPU request for the container
+	CPULimit         string            // CPU limit for the container
+	Command          []string          // Command to run the deployment
+
+	// Service-related fields
+	HasService  bool  // Whether to create a service for the deployment
+	ServicePort int32 // Port for the service
+
+	// Ingress-related fields
+	HasIngress  bool   // Whether to create an ingress for the deployment
+	IngressHost string // Host for the ingress
+	BodyLimit   string // Body size limit for the ingress
 }
 
 type Secret struct {
@@ -59,6 +82,7 @@ type Controller interface {
 	UpdateSecret(ctx context.Context, secretName string, secretData map[string]string) error
 	DeleteSecret(ctx context.Context, secretName string) error
 	ListRunningPodsWithMetrics(ctx context.Context) ([]PodWithMetrics, error)
+	RunMigrations(ctx context.Context, migrations []MigrationParams) (map[string][]string, error)
 }
 
 // K8sController implements the Controller interface
@@ -237,6 +261,171 @@ func (c *K8sController) DeleteSecret(ctx context.Context, secretName string) err
 		return fmt.Errorf("failed to delete secret: %v", err)
 	}
 	return nil
+}
+
+func (c *K8sController) RunMigrations(ctx context.Context, migrations []MigrationParams) (map[string][]string, error) {
+	slog.Info("Running migrations", "count", len(migrations))
+
+	jobs := make(map[string]*batchv1.Job)
+	for _, migration := range migrations {
+		job, err := c.createMigrationJob(ctx, migration)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create migration job: %v", err)
+		}
+		jobs[job.Name] = job
+	}
+
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	failures := make(map[string][]string)
+
+	for len(jobs) > 0 {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-ticker.C:
+			for jobName := range jobs {
+				slog.Info("Checking job status", "job", jobName)
+				updatedJob, err := c.clientset.BatchV1().Jobs(c.namespace).Get(ctx, jobName, meta.GetOptions{})
+				if err != nil {
+					slog.Error("Failed to get job status", "job", jobName, "error", err)
+					continue
+				}
+
+				if updatedJob.Status.Succeeded > 0 {
+					slog.Info("Migration job completed successfully", "job", jobName)
+					delete(jobs, jobName)
+				} else if updatedJob.Status.Failed > 0 {
+					slog.Error("Migration job failed", "job", jobName)
+					logs, err := c.collectAndPrintJobLogs(ctx, jobName)
+					if err != nil {
+						slog.Error("Failed to collect job logs", "job", jobName, "error", err)
+					}
+					failures[jobName] = logs
+					delete(jobs, jobName)
+				}
+			}
+		}
+	}
+
+	if len(failures) > 0 {
+		return failures, fmt.Errorf("migration failed")
+	}
+
+	return nil, nil
+}
+
+func (c *K8sController) createMigrationJob(ctx context.Context, migration MigrationParams) (*batchv1.Job, error) {
+	jobName := fmt.Sprintf("maos-migration-%s", migration.Name)
+	slog.Info("Creating migration job", "name", jobName)
+
+	// Try to delete the job if it already exists
+	err := c.clientset.BatchV1().Jobs(c.namespace).Delete(ctx, jobName, meta.DeleteOptions{})
+	if err != nil && !errors.IsNotFound(err) {
+		slog.Error("Failed to delete existing migration job", "job", jobName, "error", err)
+		return nil, fmt.Errorf("failed to delete existing migration job %s: %v", jobName, err)
+	}
+
+	job := &batchv1.Job{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      jobName,
+			Namespace: c.namespace,
+			Labels: map[string]string{
+				"created-by": "maos",
+				"type":       "migration",
+			},
+		},
+		Spec: batchv1.JobSpec{
+			Template: core.PodTemplateSpec{
+				ObjectMeta: meta.ObjectMeta{
+					Labels: map[string]string{
+						"created-by": "maos",
+						"type":       "migration",
+					},
+				},
+				Spec: core.PodSpec{
+					RestartPolicy: core.RestartPolicyOnFailure,
+					Containers: []core.Container{
+						{
+							Name:            "migration",
+							Image:           migration.Image,
+							ImagePullPolicy: core.PullAlways,
+							Env:             c.createMigrationEnvVars(migration),
+							Command:         migration.Command,
+							Resources: core.ResourceRequirements{
+								Requests: core.ResourceList{
+									core.ResourceMemory: resource.MustParse(migration.MemoryRequest),
+								},
+								Limits: core.ResourceList{
+									core.ResourceMemory: resource.MustParse(migration.MemoryLimit),
+								},
+							},
+						},
+					},
+				},
+			},
+			BackoffLimit: lo.ToPtr(int32(3)),
+		},
+	}
+
+	if migration.ImagePullSecrets != "" {
+		job.Spec.Template.Spec.ImagePullSecrets = []core.LocalObjectReference{
+			{Name: migration.ImagePullSecrets},
+		}
+	}
+
+	createdJob, err := c.clientset.BatchV1().Jobs(c.namespace).Create(ctx, job, meta.CreateOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create migration job: %v", err)
+	}
+
+	return createdJob, nil
+}
+
+func (c *K8sController) createMigrationEnvVars(migration MigrationParams) []core.EnvVar {
+	var envVars []core.EnvVar
+	for key, value := range migration.EnvVars {
+		if strings.HasPrefix(value, "[[SECRET]]") {
+			secretName, secretKey := parseSecretValue(value, key)
+			envVars = append(envVars, createSecretEnvVar(key, secretName, secretKey))
+		} else {
+			envVars = append(envVars, core.EnvVar{Name: key, Value: value})
+		}
+	}
+	return envVars
+}
+
+func (c *K8sController) collectAndPrintJobLogs(ctx context.Context, jobName string) ([]string, error) {
+	pods, err := c.clientset.CoreV1().Pods(c.namespace).List(ctx, meta.ListOptions{
+		LabelSelector: fmt.Sprintf("job-name=%s", jobName),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list pods for job %s: %v", jobName, err)
+	}
+
+	logs := make([]string, 0)
+
+	for _, pod := range pods.Items {
+		req := c.clientset.CoreV1().Pods(c.namespace).GetLogs(pod.Name, &core.PodLogOptions{})
+		podLogs, err := req.Stream(ctx)
+		if err != nil {
+			slog.Error("Failed to get pod logs", "pod", pod.Name, "error", err)
+			continue
+		}
+		defer podLogs.Close()
+
+		buf := new(bytes.Buffer)
+		_, err = io.Copy(buf, podLogs)
+		if err != nil {
+			slog.Error("Failed to read pod logs", "pod", pod.Name, "error", err)
+			continue
+		}
+
+		logs = append(logs, fmt.Sprintf("Pod %s logs:\n%s", pod.Name, buf.String()))
+	}
+
+	return logs, nil
 }
 
 func (c *K8sController) processDeployment(ctx context.Context, params DeploymentParams, existingDeployments map[string]*apps.Deployment) error {
@@ -522,7 +711,8 @@ func (c *K8sController) createOrUpdateApiKey(ctx context.Context, params Deploym
 func (c *K8sController) createDeploymentStruct(params DeploymentParams, sa *core.ServiceAccount) *apps.Deployment {
 	memoryRequest, _ := resource.ParseQuantity(params.MemoryRequest)
 	memoryLimit, _ := resource.ParseQuantity(params.MemoryLimit)
-
+	cpuRequest, _ := resource.ParseQuantity(params.CPURequest)
+	cpuLimit, _ := resource.ParseQuantity(params.CPULimit)
 	envVars := c.createEnvVars(params)
 
 	if params.Labels == nil {
@@ -531,6 +721,15 @@ func (c *K8sController) createDeploymentStruct(params DeploymentParams, sa *core
 	}
 
 	params.Labels["created-by"] = "maos"
+
+	var imagePullSecrets []core.LocalObjectReference
+	if params.ImagePullSecrets != "" {
+		imagePullSecrets = []core.LocalObjectReference{
+			{
+				Name: params.ImagePullSecrets,
+			},
+		}
+	}
 
 	return &apps.Deployment{
 		ObjectMeta: meta.ObjectMeta{
@@ -558,13 +757,16 @@ func (c *K8sController) createDeploymentStruct(params DeploymentParams, sa *core
 							Resources: core.ResourceRequirements{
 								Requests: core.ResourceList{
 									core.ResourceMemory: memoryRequest,
+									core.ResourceCPU:    cpuRequest,
 								},
 								Limits: core.ResourceList{
 									core.ResourceMemory: memoryLimit,
+									core.ResourceCPU:    cpuLimit,
 								},
 							},
 						},
 					},
+					ImagePullSecrets: imagePullSecrets,
 				},
 			},
 		},

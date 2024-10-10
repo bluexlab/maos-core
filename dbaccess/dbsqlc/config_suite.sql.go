@@ -16,13 +16,14 @@ WITH deactivate_others AS (
     updated_at = EXTRACT(EPOCH FROM NOW()),
     updated_by = $1::text
   WHERE active = true AND id <> $2::bigint
+  RETURNING id
 )
 UPDATE config_suites
 SET active = true,
   deployed_at = EXTRACT(EPOCH FROM NOW()),
   updated_at = EXTRACT(EPOCH FROM NOW()),
   updated_by = $1::text
-WHERE id = $2::bigint
+WHERE id = $2::bigint AND id NOT IN (SELECT id FROM deactivate_others)
 RETURNING id
 `
 

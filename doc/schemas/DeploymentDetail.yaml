@@ -12,9 +12,11 @@ properties:
       - reviewing
       - approved
       - rejected
+      - deploying
       - deployed
       - retired
       - cancelled
+      - failed
   reviewers:
     type: array
     items:

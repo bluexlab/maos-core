@@ -59,6 +59,11 @@ post:
           $ref: "../../schemas/ActorCreate.yaml"
         example:
           name: "actor-16888"
+          role: "user"
+          enabled: true
+          deployable: true
+          configurable: true
+          migratable: true
   responses:
     "201":
       description: Successfully created

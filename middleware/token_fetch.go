@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 
+	"github.com/jackc/pgx/v5"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess/dbsqlc"
 )
@@ -45,6 +46,9 @@ func NewDatabaseApiTokenFetch(dataSource dbaccess.DataSource, bootstrapApiToken 
 
 		token, err := querier.ApiTokenFindByID(ctx, dataSource, apiToken)
 		if err != nil {
+			if err == pgx.ErrNoRows {
+				return nil, nil
+			}
 			return nil, err
 		}
 		return &Token{

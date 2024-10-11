@@ -643,6 +643,98 @@ func TestCreateDeployment(t *testing.T) {
 		require.Nil(t, config3.MinActorVersion)
 	})
 
+	t.Run("Create deployment with existing configs and active config suite", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+		dbPool := testhelper.TestDB(ctx, t)
+		logger := testhelper.Logger(t)
+
+		// Create 3 actors
+		actor1 := fixture.InsertActor(t, ctx, dbPool, "actor1")
+		actor2 := fixture.InsertActor(t, ctx, dbPool, "actor2")
+		actor3 := fixture.InsertActor(t, ctx, dbPool, "actor3")
+
+		// Create active config suite
+		suite := fixture.InsertConfigSuite(t, ctx, dbPool)
+		_, err := querier.ConfigSuiteActivate(ctx, dbPool, &dbsqlc.ConfigSuiteActivateParams{
+			UpdatedBy: "test-user",
+			ID:        suite.ID,
+		})
+		require.NoError(t, err)
+
+		// Create existing active configs for actor1 and actor2
+		_, err = querier.ConfigInsert(ctx, dbPool, &dbsqlc.ConfigInsertParams{
+			ActorId:       actor1.ID,
+			ConfigSuiteID: &suite.ID,
+			Content:       []byte(`{"key": "active-value1"}`),
+			CreatedBy:     "test-user",
+		})
+		require.NoError(t, err)
+		_, err = querier.ConfigInsert(ctx, dbPool, &dbsqlc.ConfigInsertParams{
+			ActorId:       actor2.ID,
+			ConfigSuiteID: &suite.ID,
+			Content:       []byte(`{"key": "active-value2"}`),
+			CreatedBy:     "test-user",
+		})
+		require.NoError(t, err)
+
+		// Create non-active configs for actor1 and actor2
+		existingContent1 := []byte(`{"key": "value1"}`)
+		existingContent2 := []byte(`{"key": "value2"}`)
+		_, err = querier.ConfigInsert(ctx, dbPool, &dbsqlc.ConfigInsertParams{
+			ActorId:         actor1.ID,
+			Content:         existingContent1,
+			MinActorVersion: []int32{1, 0, 0},
+			CreatedBy:       "test-user",
+		})
+		require.NoError(t, err)
+		_, err = querier.ConfigInsert(ctx, dbPool, &dbsqlc.ConfigInsertParams{
+			ActorId:   actor2.ID,
+			Content:   existingContent2,
+			CreatedBy: "test-user",
+		})
+		require.NoError(t, err)
+
+		// Create a new deployment
+		request := api.AdminCreateDeploymentRequestObject{
+			Body: &api.AdminCreateDeploymentJSONRequestBody{
+				Name: "test-deployment",
+				User: "test-user",
+			},
+		}
+
+		response, err := admin.CreateDeployment(ctx, logger, dbPool, request)
+		require.NoError(t, err)
+		require.IsType(t, api.AdminCreateDeployment201JSONResponse{}, response)
+
+		createdDeployment := response.(api.AdminCreateDeployment201JSONResponse)
+		require.NotEmpty(t, createdDeployment.Data.Id)
+		require.NotEmpty(t, createdDeployment.Data.ConfigSuiteId)
+
+		// Check if configs were created for all actors
+		config1, err := querier.ConfigFindByActorIdAndSuiteId(ctx, dbPool, &dbsqlc.ConfigFindByActorIdAndSuiteIdParams{
+			ActorId:       actor1.ID,
+			ConfigSuiteID: *createdDeployment.Data.ConfigSuiteId,
+		})
+		require.NoError(t, err)
+		require.Equal(t, []byte(`{"key": "active-value1"}`), config1.Content)
+
+		config2, err := querier.ConfigFindByActorIdAndSuiteId(ctx, dbPool, &dbsqlc.ConfigFindByActorIdAndSuiteIdParams{
+			ActorId:       actor2.ID,
+			ConfigSuiteID: *createdDeployment.Data.ConfigSuiteId,
+		})
+		require.NoError(t, err)
+		require.Equal(t, []byte(`{"key": "active-value2"}`), config2.Content)
+
+		config3, err := querier.ConfigFindByActorIdAndSuiteId(ctx, dbPool, &dbsqlc.ConfigFindByActorIdAndSuiteIdParams{
+			ActorId:       actor3.ID,
+			ConfigSuiteID: *createdDeployment.Data.ConfigSuiteId,
+		})
+		require.NoError(t, err)
+		require.NotNil(t, config3)
+		require.Equal(t, []byte("{}"), config3.Content) // New config should have empty JSON object
+	})
+
 	t.Run("Database error", func(t *testing.T) {
 		t.Parallel()
 		dbPool := testhelper.TestDB(ctx, t)

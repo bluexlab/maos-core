@@ -17,14 +17,9 @@ variables:
   REPOSITORY_NAME: maos-core
   MASTER_REPO_NAMESPACE: "navyx/ai/maos"
 
-.testing_task_rules:
+workflow:
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      when: always
-
-# workflow:
-#   rules:
-#     - if: "$CI_COMMIT_BRANCH =~ /^./ && $CI_PIPELINE_SOURCE =~ /push|merge_request_event/"
+    - if: "$CI_COMMIT_BRANCH =~ /^./ && $CI_PIPELINE_SOURCE =~ /push|merge_request_event/"
 
 .base_db:
   image: golang:1.22.2-alpine3.19
@@ -48,8 +43,6 @@ unittest:
   script:
     - go mod download
     - go test ./...
-  rules:
-    - !reference [.testing_task_rules, rules]
 
 depscan:
   stage: test
@@ -63,8 +56,6 @@ depscan:
     paths:
       - $CI_PROJECT_DIR/reports/
     when: always
-  rules:
-    - !reference [.testing_task_rules, rules]
 
 build_image:
   stage: package

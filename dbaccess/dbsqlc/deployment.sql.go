@@ -145,6 +145,9 @@ inserted_deployment AS (
   )
   RETURNING id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at, migration_logs, last_error, deploying_at, deployed_at
 ),
+active_config_suites AS (
+  SELECT id FROM config_suites WHERE active = TRUE
+),
 actor_configs AS (
   INSERT INTO configs (actor_id, config_suite_id, created_by, min_actor_version, content)
   SELECT
@@ -156,7 +159,15 @@ actor_configs AS (
       NULL
     ),
     COALESCE(
-      (SELECT content FROM configs WHERE actor_id = actors.id ORDER BY created_at DESC LIMIT 1),
+      (SELECT content FROM configs
+        WHERE actor_id = actors.id
+          AND config_suite_id IN (SELECT id FROM active_config_suites)
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1),
+      (SELECT content FROM configs
+        WHERE actor_id = actors.id
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1),
       '{}'::jsonb
     )
   FROM actors
@@ -191,8 +202,9 @@ type DeploymentInsertWithConfigSuiteRow struct {
 
 // Create a new deployment with an associated config suite.
 // For each actor:
-//  1. If the actor has an existing config, duplicate its latest config.
-//  2. If the actor has no existing config, create a new config with default values.
+//  1. If there is an active config suite, duplicate the config from the active config suite.
+//  2. If there is no active config suite, duplicate the latest config from the actor.
+//  3. If the actor has no existing config, create a new config with default values.
 //
 // Associate all these new configs with the newly created deployment and config suite.
 func (q *Queries) DeploymentInsertWithConfigSuite(ctx context.Context, db DBTX, arg *DeploymentInsertWithConfigSuiteParams) (*DeploymentInsertWithConfigSuiteRow, error) {

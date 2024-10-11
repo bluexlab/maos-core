@@ -37,8 +37,9 @@ type Querier interface {
 	DeploymentInsert(ctx context.Context, db DBTX, arg *DeploymentInsertParams) (*Deployment, error)
 	// Create a new deployment with an associated config suite.
 	// For each actor:
-	//   1. If the actor has an existing config, duplicate its latest config.
-	//   2. If the actor has no existing config, create a new config with default values.
+	//   1. If there is an active config suite, duplicate the config from the active config suite.
+	//   2. If there is no active config suite, duplicate the latest config from the actor.
+	//   3. If the actor has no existing config, create a new config with default values.
 	// Associate all these new configs with the newly created deployment and config suite.
 	DeploymentInsertWithConfigSuite(ctx context.Context, db DBTX, arg *DeploymentInsertWithConfigSuiteParams) (*DeploymentInsertWithConfigSuiteRow, error)
 	DeploymentListPaginated(ctx context.Context, db DBTX, arg *DeploymentListPaginatedParams) ([]*DeploymentListPaginatedRow, error)

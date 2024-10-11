@@ -76,10 +76,19 @@ func (a *App) Run() {
 	// Init Mux router and API handler
 	router := mux.NewRouter()
 
+	tokenCacheTTL := 10 * time.Second
+	if config.TokenCacheTTL != "" {
+		tokenCacheTTL, err = time.ParseDuration(config.TokenCacheTTL)
+		if err != nil {
+			a.logger.Error("Failed to parse TokenCacheTTL", "err", err)
+			os.Exit(1)
+		}
+	}
+
 	// Init auth middleware and token cache
 	middleware, cacheCloser := middleware.NewBearerAuthMiddleware(
 		middleware.NewDatabaseApiTokenFetch(pool, bootstrapApiToken),
-		10*time.Second,
+		tokenCacheTTL,
 	)
 	defer cacheCloser()
 

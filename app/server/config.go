@@ -8,6 +8,7 @@ type Config struct {
 	DatabaseUser     string `envconfig:"DATABASE_USER" validate:"omitempty"`
 	DatabasePassword string `envconfig:"DATABASE_PASSWORD" validate:"omitempty"`
 	DatabaseName     string `envconfig:"DATABASE_NAME" validate:"omitempty"`
+	TokenCacheTTL    string `envconfig:"TOKEN_CACHE_TTL" validate:"omitempty"`
 
 	// AWS credentials
 	AWSAccessKeyID         string `envconfig:"AWS_ACCESS_KEY_ID" validate:"required"`

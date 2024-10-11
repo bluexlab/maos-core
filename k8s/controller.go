@@ -805,6 +805,7 @@ func (c *K8sController) createServiceStruct(params DeploymentParams) *core.Servi
 			Selector: params.Labels,
 			Ports: lo.Map(servicePorts, func(port int32, _ int) core.ServicePort {
 				return core.ServicePort{
+					Name:       lo.Ternary(len(servicePorts) > 1, fmt.Sprintf("port-%d", port), ""),
 					Port:       port,
 					TargetPort: intstr.FromInt(int(port)),
 					Protocol:   core.ProtocolTCP,

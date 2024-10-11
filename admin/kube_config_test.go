@@ -133,7 +133,7 @@ func TestValidateKubeConfig(t *testing.T) {
 			"KUBE_MEMORY_REQUEST": "50Mi",
 			"KUBE_CPU_LIMIT":      "250m",
 			"KUBE_MEMORY_LIMIT":   "50Mi",
-			"KUBE_SERVICE_PORT":   "3000",
+			"KUBE_SERVICE_PORT":   "3000,3001",
 		}
 
 		err := ValidateKubeConfig(content, "service", false)

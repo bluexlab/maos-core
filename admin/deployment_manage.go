@@ -751,11 +751,15 @@ func updateKubernetesDeployments(
 		}
 
 		hasService := config.ActorRole == "portal" || config.ActorRole == "service"
-		servicePort := int64(0)
+		servicePorts := []int32{}
 		if hasService {
-			servicePort, err = strconv.ParseInt(content["KUBE_SERVICE_PORT"], 10, 32)
-			if err != nil {
-				return fmt.Errorf("failed to parse KUBE_SERVICE_PORT: %v", err)
+			portStrings := strings.Split(content["KUBE_SERVICE_PORT"], ",")
+			for _, portStr := range portStrings {
+				port, err := strconv.ParseInt(strings.TrimSpace(portStr), 10, 32)
+				if err != nil {
+					return fmt.Errorf("failed to parse KUBE_SERVICE_PORT: %v", err)
+				}
+				servicePorts = append(servicePorts, int32(port))
 			}
 		}
 		hasIngress := config.ActorRole == "portal"
@@ -771,7 +775,7 @@ func updateKubernetesDeployments(
 			MemoryRequest: content["KUBE_MEMORY_REQUEST"],
 			MemoryLimit:   content["KUBE_MEMORY_LIMIT"],
 			HasService:    hasService,
-			ServicePort:   int32(servicePort),
+			ServicePorts:  servicePorts,
 			HasIngress:    hasIngress,
 			IngressHost:   content["KUBE_INGRESS_HOST"],
 			BodyLimit:     content["KUBE_INGRESS_BODY_LIMIT"],

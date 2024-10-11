@@ -211,7 +211,7 @@ func TestK8sController_UpdateDeploymentSet_HasService_WithEmptyCluster(t *testin
 			MemoryRequest: "64Mi",
 			MemoryLimit:   "128Mi",
 			HasService:    true, // Set hasService to true
-			ServicePort:   8080,
+			ServicePorts:  []int32{8080},
 			BodyLimit:     "1Mi", // Set bodyLimit
 		},
 	}
@@ -301,7 +301,7 @@ func TestK8sController_UpdateDeploymentSet_HasService(t *testing.T) {
 			MemoryRequest: "64Mi",
 			MemoryLimit:   "128Mi",
 			HasService:    true, // Set hasService to true
-			ServicePort:   8080,
+			ServicePorts:  []int32{8080, 8081},
 			BodyLimit:     "1Mi", // Set bodyLimit
 		},
 	}
@@ -322,6 +322,9 @@ func TestK8sController_UpdateDeploymentSet_HasService(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, updatedService)
 	require.Equal(t, int32(8080), updatedService.Spec.Ports[0].Port)
+	require.Equal(t, int32(8080), updatedService.Spec.Ports[0].TargetPort.IntVal)
+	require.Equal(t, int32(8081), updatedService.Spec.Ports[1].Port)
+	require.Equal(t, int32(8081), updatedService.Spec.Ports[1].TargetPort.IntVal)
 }
 
 // TestK8sController_UpdateDeploymentSet_HasServiceAndIngress tests the scenario where both hasService and hasIngress are true
@@ -347,11 +350,11 @@ func TestK8sController_UpdateDeploymentSet_HasServiceAndIngress_WithEmptyCluster
 			APIKey:        "test-api-key",
 			MemoryRequest: "64Mi",
 			MemoryLimit:   "128Mi",
-			HasService:    true,          // Set hasService to true
-			ServicePort:   8080,          // Set service port
-			HasIngress:    true,          // Set hasIngress to true
-			IngressHost:   "example.com", // Set ingress host
-			BodyLimit:     "1Mi",         // Set bodyLimit
+			HasService:    true,
+			ServicePorts:  []int32{8080, 8081},
+			HasIngress:    true,
+			IngressHost:   "example.com",
+			BodyLimit:     "1Mi",
 		},
 	}
 
@@ -479,11 +482,11 @@ func TestK8sController_UpdateDeploymentSet_HasServiceAndIngress(t *testing.T) {
 			APIKey:        "test-api-key",
 			MemoryRequest: "64Mi",
 			MemoryLimit:   "128Mi",
-			HasService:    true,          // Set hasService to true
-			ServicePort:   8080,          // Set service port
-			HasIngress:    true,          // Set hasIngress to true
-			IngressHost:   "example.com", // Set ingress host
-			BodyLimit:     "1Mi",         // Set bodyLimit
+			HasService:    true,
+			ServicePorts:  []int32{8080, 8081},
+			HasIngress:    true,
+			IngressHost:   "example.com",
+			BodyLimit:     "1Mi",
 		},
 	}
 
@@ -504,6 +507,9 @@ func TestK8sController_UpdateDeploymentSet_HasServiceAndIngress(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, newService)
 	require.Equal(t, int32(8080), newService.Spec.Ports[0].Port)
+	require.Equal(t, int32(8080), newService.Spec.Ports[0].TargetPort.IntVal)
+	require.Equal(t, int32(8081), newService.Spec.Ports[1].Port)
+	require.Equal(t, int32(8081), newService.Spec.Ports[1].TargetPort.IntVal)
 
 	// Verify the new ingress was updated
 	newIngress, err := clientset.NetworkingV1().Ingresses("test-namespace").Get(ctx, "existing-deployment", meta.GetOptions{})

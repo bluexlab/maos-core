@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 )
 
 var KubeConfigsWithDefault = map[string]string{
@@ -90,9 +91,12 @@ func ValidateKubeConfig(content map[string]string, role string, migratable bool)
 			}
 		case "KUBE_SERVICE_PORT":
 			if role == "portal" || role == "service" {
-				port, err := strconv.Atoi(value)
-				if err != nil || port < 1 || port > 65535 {
-					return fmt.Errorf("invalid service port: %s, must be a number between 1 and 65535", value)
+				ports := strings.Split(value, ",")
+				for _, portStr := range ports {
+					port, err := strconv.Atoi(strings.TrimSpace(portStr))
+					if err != nil || port < 1 || port > 65535 {
+						return fmt.Errorf("invalid service port: %s, must be a number between 1 and 65535", portStr)
+					}
 				}
 			}
 		case "KUBE_INGRESS_HOST":

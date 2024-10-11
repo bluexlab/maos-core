@@ -56,8 +56,8 @@ type DeploymentParams struct {
 	Command          []string          // Command to run the deployment
 
 	// Service-related fields
-	HasService  bool  // Whether to create a service for the deployment
-	ServicePort int32 // Port for the service
+	HasService   bool    // Whether to create a service for the deployment
+	ServicePorts []int32 // Ports for the service
 
 	// Ingress-related fields
 	HasIngress  bool   // Whether to create an ingress for the deployment
@@ -793,7 +793,7 @@ func (c *K8sController) createDeploymentStruct(params DeploymentParams, sa *core
 
 func (c *K8sController) createServiceStruct(params DeploymentParams) *core.Service {
 	serviceName := params.Name
-	servicePort := params.ServicePort
+	servicePorts := params.ServicePorts
 
 	return &core.Service{
 		ObjectMeta: meta.ObjectMeta{
@@ -803,13 +803,13 @@ func (c *K8sController) createServiceStruct(params DeploymentParams) *core.Servi
 		},
 		Spec: core.ServiceSpec{
 			Selector: params.Labels,
-			Ports: []core.ServicePort{
-				{
-					Port:       servicePort,
-					TargetPort: intstr.FromInt(int(servicePort)),
+			Ports: lo.Map(servicePorts, func(port int32, _ int) core.ServicePort {
+				return core.ServicePort{
+					Port:       port,
+					TargetPort: intstr.FromInt(int(port)),
 					Protocol:   core.ProtocolTCP,
-				},
-			},
+				}
+			}),
 			Type: core.ServiceTypeClusterIP,
 		},
 	}
@@ -841,7 +841,7 @@ func (c *K8sController) createIngressStruct(params DeploymentParams) *networking
 										Service: &networking.IngressServiceBackend{
 											Name: params.Name,
 											Port: networking.ServiceBackendPort{
-												Number: params.ServicePort,
+												Number: params.ServicePorts[0],
 											},
 										},
 									},

@@ -4,10 +4,12 @@ import (
 	"context"
 
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
+	"gitlab.com/navyx/ai/maos/maos-core/dbaccess/dbsqlc"
 )
 
 var (
 	bootstrapping = true
+	querier       = dbsqlc.New()
 )
 
 // NewDatabaseApiTokenFetch creates a TokenFetcher that retrieves tokens from the database.
@@ -22,10 +24,10 @@ var (
 //
 // Returns:
 //   - A TokenFetcher instance that fetches tokens from the database.
-func NewDatabaseApiTokenFetch(accessor dbaccess.Accessor, bootstrapApiToken string) TokenFetcher {
+func NewDatabaseApiTokenFetch(dataSource dbaccess.DataSource, bootstrapApiToken string) TokenFetcher {
 	return func(ctx context.Context, apiToken string) (*Token, error) {
 		if bootstrapping {
-			count, err := accessor.Querier().ApiTokenCount(ctx, accessor.Source())
+			count, err := querier.ApiTokenCount(ctx, dataSource)
 			if err != nil {
 				return nil, err
 			}
@@ -41,7 +43,7 @@ func NewDatabaseApiTokenFetch(accessor dbaccess.Accessor, bootstrapApiToken stri
 			bootstrapping = count == 0
 		}
 
-		token, err := accessor.Querier().ApiTokenFindByID(ctx, accessor.Source(), apiToken)
+		token, err := querier.ApiTokenFindByID(ctx, dataSource, apiToken)
 		if err != nil {
 			return nil, err
 		}

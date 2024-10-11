@@ -18,9 +18,13 @@ type Listener interface {
 	WaitForNotification(ctx context.Context) (*Notification, error)
 }
 
+type Acquirable interface {
+	Acquire(ctx context.Context) (*pgxpool.Conn, error)
+}
+
 type PgListener struct {
 	conn   *pgxpool.Conn
-	dbPool *pgxpool.Pool
+	dbPool Acquirable
 	prefix string
 	mu     sync.Mutex
 }
@@ -30,7 +34,7 @@ type Notification struct {
 	Topic   string
 }
 
-func NewPgListener(dbPool *pgxpool.Pool) *PgListener {
+func NewPgListener(dbPool Acquirable) *PgListener {
 	return &PgListener{
 		dbPool: dbPool,
 	}

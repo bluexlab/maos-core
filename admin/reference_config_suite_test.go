@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"gitlab.com/navyx/ai/maos/maos-core/admin"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
-	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 	"gitlab.com/navyx/ai/maos/maos-core/internal/testhelper"
 )
 
@@ -19,7 +18,6 @@ func TestListReferenceConfigSuites(t *testing.T) {
 	t.Run("Successful listing", func(t *testing.T) {
 		t.Parallel()
 		dbPool := testhelper.TestDB(ctx, t)
-		accessor := dbaccess.New(dbPool)
 
 		// Insert test data
 		testSuites := []struct {
@@ -31,12 +29,12 @@ func TestListReferenceConfigSuites(t *testing.T) {
 		}
 
 		for _, suite := range testSuites {
-			_, err := accessor.Source().Exec(ctx, "INSERT INTO reference_config_suites (name, config_suites) VALUES ($1, $2)", suite.name, suite.content)
+			_, err := dbPool.Exec(ctx, "INSERT INTO reference_config_suites (name, config_suites) VALUES ($1, $2)", suite.name, suite.content)
 			require.NoError(t, err)
 		}
 
 		request := api.AdminListReferenceConfigSuitesRequestObject{}
-		response, err := admin.ListReferenceConfigSuites(ctx, logger, accessor, request)
+		response, err := admin.ListReferenceConfigSuites(ctx, logger, dbPool, request)
 
 		require.NoError(t, err)
 		require.IsType(t, api.AdminListReferenceConfigSuites200JSONResponse{}, response)
@@ -79,10 +77,9 @@ func TestListReferenceConfigSuites(t *testing.T) {
 	t.Run("Empty list", func(t *testing.T) {
 		t.Parallel()
 		dbPool := testhelper.TestDB(ctx, t)
-		accessor := dbaccess.New(dbPool)
 
 		request := api.AdminListReferenceConfigSuitesRequestObject{}
-		response, err := admin.ListReferenceConfigSuites(ctx, logger, accessor, request)
+		response, err := admin.ListReferenceConfigSuites(ctx, logger, dbPool, request)
 
 		require.NoError(t, err)
 		require.IsType(t, api.AdminListReferenceConfigSuites200JSONResponse{}, response)
@@ -95,13 +92,12 @@ func TestListReferenceConfigSuites(t *testing.T) {
 	t.Run("Database error", func(t *testing.T) {
 		t.Parallel()
 		dbPool := testhelper.TestDB(ctx, t)
-		accessor := dbaccess.New(dbPool)
 
 		// Close the database pool to simulate a database error
 		dbPool.Close()
 
 		request := api.AdminListReferenceConfigSuitesRequestObject{}
-		response, err := admin.ListReferenceConfigSuites(ctx, logger, accessor, request)
+		response, err := admin.ListReferenceConfigSuites(ctx, logger, dbPool, request)
 
 		require.NoError(t, err)
 		require.IsType(t, api.AdminListReferenceConfigSuites500JSONResponse{}, response)

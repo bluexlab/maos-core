@@ -9,7 +9,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
-	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 	"gitlab.com/navyx/ai/maos/maos-core/migrate"
 )
 
@@ -122,9 +121,7 @@ func migrateUp(logger *slog.Logger, dryRun bool, step int) {
 	pool := connectToDatabase(ctx, logger)
 	defer pool.Close()
 
-	accessor := dbaccess.New(pool)
-
-	_, err := migrate.New(accessor, logger).Migrate(ctx, migrate.DirectionUp, &migrate.MigrateOpts{MaxSteps: step, DryRun: dryRun})
+	_, err := migrate.New(pool, logger).Migrate(ctx, migrate.DirectionUp, &migrate.MigrateOpts{MaxSteps: step, DryRun: dryRun})
 	if err != nil {
 		logger.Error("Failed to migrate database", "error", err.Error())
 		os.Exit(2)
@@ -140,9 +137,7 @@ func migrateDown(logger *slog.Logger, dryRun bool, step int) {
 	pool := connectToDatabase(ctx, logger)
 	defer pool.Close()
 
-	accessor := dbaccess.New(pool)
-
-	_, err := migrate.New(accessor, logger).Migrate(ctx, migrate.DirectionDown, &migrate.MigrateOpts{MaxSteps: step, DryRun: dryRun})
+	_, err := migrate.New(pool, logger).Migrate(ctx, migrate.DirectionDown, &migrate.MigrateOpts{MaxSteps: step, DryRun: dryRun})
 	if err != nil {
 		logger.Error("Failed to migrate database", "error", err.Error())
 		os.Exit(2)

@@ -18,14 +18,14 @@ func TestUpdateConfigEndpoint(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("Valid update", func(t *testing.T) {
-		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+		server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
-		actor := fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
-		fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", actor.ID, 0, []string{"admin"})
+		actor := fixture.InsertActor(t, ctx, ds, "actor1")
+		fixture.InsertToken(t, ctx, ds, "admin-token", actor.ID, 0, []string{"admin"})
 
-		setupActor := fixture.InsertActor(t, ctx, accessor.Source(), "TestActor")
-		configSuite := fixture.InsertConfigSuite(t, ctx, accessor.Source())
-		config := fixture.InsertConfig2(t, ctx, accessor.Source(), setupActor.ID, &configSuite.ID, "testuser", map[string]string{"key": "value"})
+		setupActor := fixture.InsertActor(t, ctx, ds, "TestActor")
+		configSuite := fixture.InsertConfigSuite(t, ctx, ds)
+		config := fixture.InsertConfig2(t, ctx, ds, setupActor.ID, &configSuite.ID, "testuser", map[string]string{"key": "value"})
 
 		body := `{"content":{"key":"newValue"},"min_actor_version":"2.0.0","user":"testuser"}`
 		resp, resBody := PatchHttp(t, fmt.Sprintf("%s/v1/admin/configs/%d", server.URL, config.ID), body, "admin-token")
@@ -48,10 +48,10 @@ func TestUpdateConfigEndpoint(t *testing.T) {
 	})
 
 	t.Run("Config not found", func(t *testing.T) {
-		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+		server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
-		actor := fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
-		fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", actor.ID, 0, []string{"admin"})
+		actor := fixture.InsertActor(t, ctx, ds, "actor1")
+		fixture.InsertToken(t, ctx, ds, "admin-token", actor.ID, 0, []string{"admin"})
 
 		body := `{"content":{"key":"value"},"user":"testuser"}`
 		resp, resBody := PatchHttp(t, fmt.Sprintf("%s/v1/admin/configs/%d", server.URL, 999999), body, "admin-token")
@@ -60,16 +60,16 @@ func TestUpdateConfigEndpoint(t *testing.T) {
 	})
 
 	t.Run("Config suite deployed", func(t *testing.T) {
-		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+		server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
-		actor := fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
-		fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", actor.ID, 0, []string{"admin"})
+		actor := fixture.InsertActor(t, ctx, ds, "actor1")
+		fixture.InsertToken(t, ctx, ds, "admin-token", actor.ID, 0, []string{"admin"})
 
-		setupActor := fixture.InsertActor(t, ctx, accessor.Source(), "TestActor")
-		configSuite := fixture.InsertConfigSuite(t, ctx, accessor.Source())
-		_, err := accessor.Source().Exec(ctx, "UPDATE config_suites SET deployed_at = 16888 WHERE id = $1", configSuite.ID)
+		setupActor := fixture.InsertActor(t, ctx, ds, "TestActor")
+		configSuite := fixture.InsertConfigSuite(t, ctx, ds)
+		_, err := ds.Exec(ctx, "UPDATE config_suites SET deployed_at = 16888 WHERE id = $1", configSuite.ID)
 		require.NoError(t, err)
-		config := fixture.InsertConfig2(t, ctx, accessor.Source(), setupActor.ID, &configSuite.ID, "testuser", map[string]string{"key": "value"})
+		config := fixture.InsertConfig2(t, ctx, ds, setupActor.ID, &configSuite.ID, "testuser", map[string]string{"key": "value"})
 
 		body := `{"content":{"key":"newValue"},"user":"testuser"}`
 		resp, resBody := PatchHttp(t, fmt.Sprintf("%s/v1/admin/configs/%d", server.URL, config.ID), body, "admin-token")
@@ -78,10 +78,10 @@ func TestUpdateConfigEndpoint(t *testing.T) {
 	})
 
 	t.Run("Invalid token", func(t *testing.T) {
-		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+		server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
-		actor := fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
-		fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", actor.ID, 0, []string{"admin"})
+		actor := fixture.InsertActor(t, ctx, ds, "actor1")
+		fixture.InsertToken(t, ctx, ds, "admin-token", actor.ID, 0, []string{"admin"})
 
 		body := `{"content":{"key":"value"},"user":"testuser"}`
 		resp, _ := PatchHttp(t, fmt.Sprintf("%s/v1/admin/configs/%d", server.URL, 1), body, "invalid-token")

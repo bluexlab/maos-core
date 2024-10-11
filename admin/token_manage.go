@@ -14,12 +14,12 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/util"
 )
 
-func ListApiTokens(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminListApiTokensRequestObject) (api.AdminListApiTokensResponseObject, error) {
+func ListApiTokens(ctx context.Context, logger *slog.Logger, ds dbaccess.DataSource, request api.AdminListApiTokensRequestObject) (api.AdminListApiTokensResponseObject, error) {
 	logger.Info("ListApiTokens", "page", request.Params.Page, "pageSize", request.Params.PageSize, "actorId", request.Params.ActorId, "createdBy", request.Params.CreatedBy)
 
 	page, _ := lo.Coalesce[*int](request.Params.Page, &defaultPage)
 	pageSize, _ := lo.Coalesce[*int](request.Params.PageSize, &defaultPageSize)
-	res, err := accessor.Querier().ApiTokenListByPage(ctx, accessor.Source(), &dbsqlc.ApiTokenListByPageParams{
+	res, err := querier.ApiTokenListByPage(ctx, ds, &dbsqlc.ApiTokenListByPageParams{
 		ActorId:  request.Params.ActorId,
 		Page:     max(int64(*page), 1),
 		PageSize: util.Clamp(int64(*pageSize), 1, 1000),
@@ -48,7 +48,7 @@ func ListApiTokens(ctx context.Context, logger *slog.Logger, accessor dbaccess.A
 	return response, nil
 }
 
-func CreateApiToken(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminCreateApiTokenRequestObject) (api.AdminCreateApiTokenResponseObject, error) {
+func CreateApiToken(ctx context.Context, logger *slog.Logger, ds dbaccess.DataSource, request api.AdminCreateApiTokenRequestObject) (api.AdminCreateApiTokenResponseObject, error) {
 	logger.Info("CreateApiToken", "actorId", request.Body.ActorId, "createdBy", request.Body.CreatedBy, "expireAt", request.Body.ExpireAt)
 
 	if request.Body.ActorId == 0 ||
@@ -67,7 +67,7 @@ func CreateApiToken(ctx context.Context, logger *slog.Logger, accessor dbaccess.
 		ExpireAt:    request.Body.ExpireAt,
 	}
 
-	apiToken, err := accessor.Querier().ApiTokenInsert(ctx, accessor.Source(), &params)
+	apiToken, err := querier.ApiTokenInsert(ctx, ds, &params)
 	if err != nil {
 		return api.AdminCreateApiToken500JSONResponse{
 			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot insert API tokens: %s", err.Error())},
@@ -84,10 +84,10 @@ func CreateApiToken(ctx context.Context, logger *slog.Logger, accessor dbaccess.
 	}, nil
 }
 
-func DeleteApiToken(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminDeleteApiTokenRequestObject) (api.AdminDeleteApiTokenResponseObject, error) {
+func DeleteApiToken(ctx context.Context, logger *slog.Logger, ds dbaccess.DataSource, request api.AdminDeleteApiTokenRequestObject) (api.AdminDeleteApiTokenResponseObject, error) {
 	logger.Info("DeleteApiToken", "id", request.Id)
 
-	err := accessor.Querier().ApiTokenDelete(ctx, accessor.Source(), request.Id)
+	err := querier.ApiTokenDelete(ctx, ds, request.Id)
 	if err != nil {
 		return api.AdminDeleteApiToken500JSONResponse{
 			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot delete API token: %s", err.Error())},

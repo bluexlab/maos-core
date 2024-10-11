@@ -20,6 +20,8 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/internal/testhelper"
 )
 
+var querier = dbsqlc.New()
+
 func TestNotifier(t *testing.T) {
 	t.Parallel()
 
@@ -32,7 +34,6 @@ func TestNotifier(t *testing.T) {
 
 	type testBundle struct {
 		dbPool           *pgxpool.Pool
-		accessor         dbaccess.Accessor
 		statusUpdateChan <-chan startstop.Status
 	}
 
@@ -53,7 +54,6 @@ func TestNotifier(t *testing.T) {
 
 		return notifier, &testBundle{
 			dbPool:           dbPool,
-			accessor:         dbaccess.New(dbPool),
 			statusUpdateChan: statusUpdateChan,
 		}
 	}
@@ -152,7 +152,7 @@ func TestNotifier(t *testing.T) {
 		sub, err := notifier.Listen(ctx, testTopic1, topicAndPayloadNotifyFunc(notifyChan))
 		require.NoError(t, err)
 
-		sendNotification(ctx, t, bundle.accessor, testTopic1, "msg1")
+		sendNotification(ctx, t, bundle.dbPool, testTopic1, "msg1")
 
 		require.Equal(t, TopicAndPayload{testTopic1, "msg1"}, testhelper.WaitOrTimeout(t, notifyChan))
 
@@ -160,7 +160,7 @@ func TestNotifier(t *testing.T) {
 
 		require.Empty(t, notifier.subscriptions)
 
-		sendNotification(ctx, t, bundle.accessor, testTopic1, "msg2")
+		sendNotification(ctx, t, bundle.dbPool, testTopic1, "msg2")
 
 		time.Sleep(notificationWaitLeeway)
 
@@ -178,7 +178,7 @@ func TestNotifier(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { sub.Unlisten(ctx) })
 
-		sendNotification(ctx, t, bundle.accessor, testTopic1, "msg1")
+		sendNotification(ctx, t, bundle.dbPool, testTopic1, "msg1")
 
 		time.Sleep(notificationWaitLeeway)
 
@@ -266,7 +266,7 @@ func TestNotifier(t *testing.T) {
 
 		start(t, notifier)
 
-		sendNotification(ctx, t, bundle.accessor, testTopic1, "msg1")
+		sendNotification(ctx, t, bundle.dbPool, testTopic1, "msg1")
 
 		require.Equal(t, TopicAndPayload{testTopic1, "msg1"}, testhelper.WaitOrTimeout(t, notifyChan))
 	})
@@ -285,7 +285,7 @@ func TestNotifier(t *testing.T) {
 		sub2, err := notifier.Listen(ctx, testTopic1, topicAndPayloadNotifyFunc(notifyChan2))
 		require.NoError(t, err)
 
-		sendNotification(ctx, t, bundle.accessor, testTopic1, "msg1")
+		sendNotification(ctx, t, bundle.dbPool, testTopic1, "msg1")
 
 		require.Equal(t, TopicAndPayload{testTopic1, "msg1"}, testhelper.WaitOrTimeout(t, notifyChan1))
 		require.Equal(t, TopicAndPayload{testTopic1, "msg1"}, testhelper.WaitOrTimeout(t, notifyChan2))
@@ -295,7 +295,7 @@ func TestNotifier(t *testing.T) {
 
 		require.Empty(t, notifier.subscriptions)
 
-		sendNotification(ctx, t, bundle.accessor, testTopic1, "msg2")
+		sendNotification(ctx, t, bundle.dbPool, testTopic1, "msg2")
 
 		time.Sleep(notificationWaitLeeway)
 
@@ -317,8 +317,8 @@ func TestNotifier(t *testing.T) {
 		sub2, err := notifier.Listen(ctx, testTopic2, topicAndPayloadNotifyFunc(notifyChan2))
 		require.NoError(t, err)
 
-		sendNotification(ctx, t, bundle.accessor, testTopic1, "msg1_1")
-		sendNotification(ctx, t, bundle.accessor, testTopic2, "msg1_2")
+		sendNotification(ctx, t, bundle.dbPool, testTopic1, "msg1_1")
+		sendNotification(ctx, t, bundle.dbPool, testTopic2, "msg1_2")
 
 		require.Equal(t, TopicAndPayload{testTopic1, "msg1_1"}, testhelper.WaitOrTimeout(t, notifyChan1))
 		require.Equal(t, TopicAndPayload{testTopic2, "msg1_2"}, testhelper.WaitOrTimeout(t, notifyChan2))
@@ -328,8 +328,8 @@ func TestNotifier(t *testing.T) {
 
 		require.Empty(t, notifier.subscriptions)
 
-		sendNotification(ctx, t, bundle.accessor, testTopic1, "msg2_1")
-		sendNotification(ctx, t, bundle.accessor, testTopic2, "msg2_2")
+		sendNotification(ctx, t, bundle.dbPool, testTopic1, "msg2_1")
+		sendNotification(ctx, t, bundle.dbPool, testTopic2, "msg2_2")
 
 		time.Sleep(notificationWaitLeeway)
 
@@ -349,8 +349,8 @@ func TestNotifier(t *testing.T) {
 		sub1, err := notifier.Listen(ctx, testTopic1, topicAndPayloadNotifyFunc(notifyChan1))
 		require.NoError(t, err)
 
-		sendNotification(ctx, t, bundle.accessor, testTopic1, "msg1_1")
-		sendNotification(ctx, t, bundle.accessor, testTopic2, "msg1_2")
+		sendNotification(ctx, t, bundle.dbPool, testTopic1, "msg1_1")
+		sendNotification(ctx, t, bundle.dbPool, testTopic2, "msg1_2")
 
 		time.Sleep(notificationWaitLeeway)
 
@@ -361,8 +361,8 @@ func TestNotifier(t *testing.T) {
 		sub2, err := notifier.Listen(ctx, testTopic2, topicAndPayloadNotifyFunc(notifyChan2))
 		require.NoError(t, err)
 
-		sendNotification(ctx, t, bundle.accessor, testTopic1, "msg2_1")
-		sendNotification(ctx, t, bundle.accessor, testTopic2, "msg2_2")
+		sendNotification(ctx, t, bundle.dbPool, testTopic1, "msg2_1")
+		sendNotification(ctx, t, bundle.dbPool, testTopic2, "msg2_2")
 
 		// Now both subscriptions are active.
 		require.Equal(t, TopicAndPayload{testTopic1, "msg2_1"}, testhelper.WaitOrTimeout(t, notifyChan1))
@@ -370,8 +370,8 @@ func TestNotifier(t *testing.T) {
 
 		sub1.Unlisten(ctx)
 
-		sendNotification(ctx, t, bundle.accessor, testTopic1, "msg3_1")
-		sendNotification(ctx, t, bundle.accessor, testTopic2, "msg3_2")
+		sendNotification(ctx, t, bundle.dbPool, testTopic1, "msg3_1")
+		sendNotification(ctx, t, bundle.dbPool, testTopic2, "msg3_2")
 
 		time.Sleep(notificationWaitLeeway)
 
@@ -383,8 +383,8 @@ func TestNotifier(t *testing.T) {
 
 		require.Empty(t, notifier.subscriptions)
 
-		sendNotification(ctx, t, bundle.accessor, testTopic1, "msg4_1")
-		sendNotification(ctx, t, bundle.accessor, testTopic2, "msg4_2")
+		sendNotification(ctx, t, bundle.dbPool, testTopic1, "msg4_1")
+		sendNotification(ctx, t, bundle.dbPool, testTopic2, "msg4_2")
 
 		time.Sleep(notificationWaitLeeway)
 
@@ -422,7 +422,7 @@ func TestNotifier(t *testing.T) {
 			defer ticker.Stop()
 
 			for messageNum := 0; ; messageNum++ {
-				sendNotification(ctx, t, bundle.accessor, testTopic1, "msg"+strconv.Itoa(messageNum))
+				sendNotification(ctx, t, bundle.dbPool, testTopic1, "msg"+strconv.Itoa(messageNum))
 
 				select {
 				case <-ctx.Done():
@@ -493,7 +493,7 @@ func TestNotifier(t *testing.T) {
 			go func() {
 				sub, err := notifier.Listen(ctx, invokeTopic, func(topic NotificationTopic, payload string) {
 					t.Log("invoke notify", topic, payload)
-					sendNotification(ctx, t, bundle.accessor, responseTopic, "res-"+payload)
+					sendNotification(ctx, t, bundle.dbPool, responseTopic, "res-"+payload)
 				})
 				defer sub.Unlisten(ctx)
 
@@ -531,7 +531,7 @@ func TestNotifier(t *testing.T) {
 					return
 				}
 
-				sendNotification(ctx, t, bundle.accessor, invokeTopic, payload)
+				sendNotification(ctx, t, bundle.dbPool, invokeTopic, payload)
 
 				select {
 				case <-ctx.Done():
@@ -658,7 +658,7 @@ func TestNotifier(t *testing.T) {
 		// sending the notification below.
 		notifier.testSignals.ListeningBegin.WaitOrTimeout()
 
-		sendNotification(ctx, t, bundle.accessor, testTopic1, "msg1")
+		sendNotification(ctx, t, bundle.dbPool, testTopic1, "msg1")
 
 		// Subscription should still work.
 		require.Equal(t, TopicAndPayload{testTopic1, "msg1"}, testhelper.WaitOrTimeout(t, notifyChan))
@@ -706,9 +706,9 @@ func topicAndPayloadNotifyFunc(notifyChan chan TopicAndPayload) NotifyFunc {
 	}
 }
 
-func sendNotification(ctx context.Context, t *testing.T, accessor dbaccess.Accessor, topic string, payload string) {
+func sendNotification(ctx context.Context, t *testing.T, ds dbaccess.DataSource, topic string, payload string) {
 	t.Helper()
 
 	t.Logf("Sending notification on %q: %s", topic, payload)
-	require.NoError(t, accessor.Querier().PgNotifyOne(ctx, accessor.Source(), &dbsqlc.PgNotifyOneParams{Payload: payload, Topic: topic}))
+	require.NoError(t, querier.PgNotifyOne(ctx, ds, &dbsqlc.PgNotifyOneParams{Payload: payload, Topic: topic}))
 }

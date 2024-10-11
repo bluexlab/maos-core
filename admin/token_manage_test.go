@@ -15,7 +15,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
-	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess/dbsqlc"
 	"gitlab.com/navyx/ai/maos/maos-core/internal/fixture"
 	"gitlab.com/navyx/ai/maos/maos-core/internal/testhelper"
@@ -30,8 +29,6 @@ func TestListApiTokensWithDB(t *testing.T) {
 	t.Run("Successful listing", func(t *testing.T) {
 		ctx := context.Background()
 		dbPool := testhelper.TestDB(ctx, t)
-		defer dbPool.Close()
-		accessor := dbaccess.New(dbPool)
 		actor1 := fixture.InsertActor(t, ctx, dbPool, "actor1")
 		actor2 := fixture.InsertActor(t, ctx, dbPool, "actor2")
 		fixture.InsertToken(t, ctx, dbPool, "token001", actor1.ID, expireAt, []string{"invocation:read", "invocation:create"})
@@ -45,7 +42,7 @@ func TestListApiTokensWithDB(t *testing.T) {
 		}
 
 		logger := slog.Default()
-		response, err := ListApiTokens(ctx, logger, accessor, request)
+		response, err := ListApiTokens(ctx, logger, dbPool, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminListApiTokens200JSONResponse{}, response)
@@ -97,9 +94,8 @@ func TestListApiTokensWithDB(t *testing.T) {
 			return token
 		})
 
-		accessor := dbaccess.New(dbPool)
 		logger := slog.Default()
-		response, err := ListApiTokens(ctx, logger, accessor, request)
+		response, err := ListApiTokens(ctx, logger, dbPool, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminListApiTokens200JSONResponse{}, response)
@@ -124,11 +120,11 @@ func TestListApiTokensWithDB(t *testing.T) {
 		defer dbPool.Close()
 		request := api.AdminListApiTokensRequestObject{}
 
-		accessor := dbaccess.New(dbPool)
+		// Close the database pool to simulate a database error
 		dbPool.Close()
 
 		logger := slog.Default()
-		response, err := ListApiTokens(ctx, logger, accessor, request)
+		response, err := ListApiTokens(ctx, logger, dbPool, request)
 
 		assert.NoError(t, err)
 		assert.EqualValues(t,
@@ -148,8 +144,6 @@ func TestCreateApiTokenWithDB(t *testing.T) {
 	// Test case 1: Successful API token creation
 	t.Run("Successful API token creation", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
-		defer dbPool.Close()
-		accessor := dbaccess.New(dbPool)
 		actor1 := fixture.InsertActor(t, ctx, dbPool, "actor1")
 
 		request := api.AdminCreateApiTokenRequestObject{
@@ -169,7 +163,7 @@ func TestCreateApiTokenWithDB(t *testing.T) {
 		}
 
 		logger := slog.Default()
-		response, err := CreateApiToken(ctx, logger, accessor, request)
+		response, err := CreateApiToken(ctx, logger, dbPool, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminCreateApiToken201JSONResponse{}, response)
@@ -184,7 +178,7 @@ func TestCreateApiTokenWithDB(t *testing.T) {
 		)
 		assert.Equal(t, expectedApiToken.ExpireAt, jsonResponse.ExpireAt)
 
-		apiToken, err := accessor.Querier().ApiTokenFindByID(ctx, accessor.Source(), jsonResponse.Id)
+		apiToken, err := querier.ApiTokenFindByID(ctx, dbPool, jsonResponse.Id)
 		assert.NoError(t, err)
 		assert.Equal(t, expectedApiToken.ActorId, apiToken.ActorId)
 		assert.Equal(t, expectedApiToken.CreatedBy, apiToken.CreatedBy)
@@ -195,8 +189,6 @@ func TestCreateApiTokenWithDB(t *testing.T) {
 	// Test case 2: Database error
 	t.Run("Database error", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
-		defer dbPool.Close()
-		accessor := dbaccess.New(dbPool)
 		actor1 := fixture.InsertActor(t, ctx, dbPool, "actor1")
 		request := api.AdminCreateApiTokenRequestObject{
 			Body: &api.AdminCreateApiTokenJSONRequestBody{
@@ -209,7 +201,7 @@ func TestCreateApiTokenWithDB(t *testing.T) {
 
 		dbPool.Close()
 		logger := slog.Default()
-		response, err := CreateApiToken(ctx, logger, accessor, request)
+		response, err := CreateApiToken(ctx, logger, dbPool, request)
 
 		assert.NoError(t, err)
 		assert.EqualValues(t,
@@ -228,8 +220,6 @@ func TestDeleteApiToken(t *testing.T) {
 	// Test case 1: Successful deletion
 	t.Run("Successful deletion", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
-		defer dbPool.Close()
-		accessor := dbaccess.New(dbPool)
 		actor := fixture.InsertActor(t, ctx, dbPool, "actor1")
 		token := fixture.InsertToken(t, ctx, dbPool, "token001", actor.ID, time.Now().Add(24*time.Hour).Unix(), []string{"read"})
 
@@ -238,13 +228,13 @@ func TestDeleteApiToken(t *testing.T) {
 		}
 
 		logger := slog.Default()
-		response, err := DeleteApiToken(ctx, logger, accessor, request)
+		response, err := DeleteApiToken(ctx, logger, dbPool, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminDeleteApiToken204Response{}, response)
 
 		// Verify token is deleted
-		_, err = accessor.Querier().ApiTokenFindByID(ctx, accessor.Source(), token.ID)
+		_, err = querier.ApiTokenFindByID(ctx, dbPool, token.ID)
 		assert.Error(t, err)
 		assert.True(t, errors.Is(err, pgx.ErrNoRows))
 	})
@@ -252,15 +242,13 @@ func TestDeleteApiToken(t *testing.T) {
 	// Test case 2: Token not found
 	t.Run("Token not found", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
-		defer dbPool.Close()
-		accessor := dbaccess.New(dbPool)
 
 		request := api.AdminDeleteApiTokenRequestObject{
 			Id: "non-existent-token",
 		}
 
 		logger := slog.Default()
-		response, err := DeleteApiToken(ctx, logger, accessor, request)
+		response, err := DeleteApiToken(ctx, logger, dbPool, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminDeleteApiToken204Response{}, response)
@@ -269,7 +257,6 @@ func TestDeleteApiToken(t *testing.T) {
 	// Test case 3: Database error
 	t.Run("Database error", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
-		accessor := dbaccess.New(dbPool)
 		actor := fixture.InsertActor(t, ctx, dbPool, "actor1")
 		token := fixture.InsertToken(t, ctx, dbPool, "token001", actor.ID, time.Now().Add(24*time.Hour).Unix(), []string{"read"})
 
@@ -279,7 +266,7 @@ func TestDeleteApiToken(t *testing.T) {
 
 		dbPool.Close()
 		logger := slog.Default()
-		response, err := DeleteApiToken(ctx, logger, accessor, request)
+		response, err := DeleteApiToken(ctx, logger, dbPool, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminDeleteApiToken500JSONResponse{}, response)

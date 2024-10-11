@@ -18,12 +18,12 @@ func TestAdminListActorEndpoint(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+	server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
-	actor1 := fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
-	actor2 := fixture.InsertActor(t, ctx, accessor.Source(), "actor2")
-	fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", actor1.ID, 0, []string{"admin"})
-	fixture.InsertToken(t, ctx, accessor.Source(), "actor-token", actor2.ID, 0, []string{"user"})
+	actor1 := fixture.InsertActor(t, ctx, ds, "actor1")
+	actor2 := fixture.InsertActor(t, ctx, ds, "actor2")
+	fixture.InsertToken(t, ctx, ds, "admin-token", actor1.ID, 0, []string{"admin"})
+	fixture.InsertToken(t, ctx, ds, "actor-token", actor2.ID, 0, []string{"user"})
 
 	t.Run("Valid admin token", func(t *testing.T) {
 		resp, resBody := GetHttp(t, server.URL+"/v1/admin/actors", "admin-token")
@@ -70,12 +70,12 @@ func TestAdminCreateActorEndpoint(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+	server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
-	actor1 := fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
-	actor2 := fixture.InsertActor(t, ctx, accessor.Source(), "actor2")
-	fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", actor1.ID, 0, []string{"admin"})
-	fixture.InsertToken(t, ctx, accessor.Source(), "actor-token", actor2.ID, 0, []string{"user"})
+	actor1 := fixture.InsertActor(t, ctx, ds, "actor1")
+	actor2 := fixture.InsertActor(t, ctx, ds, "actor2")
+	fixture.InsertToken(t, ctx, ds, "admin-token", actor1.ID, 0, []string{"admin"})
+	fixture.InsertToken(t, ctx, ds, "actor-token", actor2.ID, 0, []string{"user"})
 
 	t.Run("Valid admin token", func(t *testing.T) {
 		resp, resBody := PostHttp(t, server.URL+"/v1/admin/actors", `{"name":"new_actor","role":"portal"}`, "admin-token")
@@ -91,14 +91,14 @@ func TestAdminCreateActorEndpoint(t *testing.T) {
 		require.NotZero(t, response.CreatedAt)
 
 		// Verify the actor was actually created in the database
-		createdActor, err := accessor.Querier().ActorFindById(ctx, accessor.Source(), response.Id)
+		createdActor, err := querier.ActorFindById(ctx, ds, response.Id)
 		require.NoError(t, err)
 		require.NotNil(t, createdActor)
 		require.Equal(t, "new_actor", createdActor.Name)
 		require.EqualValues(t, "portal", createdActor.Role)
 
 		// Verify the associated queue was created
-		queue, err := accessor.Querier().QueueFindById(ctx, accessor.Source(), createdActor.QueueID)
+		queue, err := querier.QueueFindById(ctx, ds, createdActor.QueueID)
 		require.NoError(t, err)
 		require.NotNil(t, queue)
 		require.Equal(t, "new_actor", queue.Name)
@@ -138,12 +138,12 @@ func TestAdminGetActorEndpoint(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+	server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
-	actor1 := fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
-	actor2 := fixture.InsertActor(t, ctx, accessor.Source(), "actor2")
-	fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", actor1.ID, 0, []string{"admin"})
-	fixture.InsertToken(t, ctx, accessor.Source(), "actor-token", actor2.ID, 0, []string{"user"})
+	actor1 := fixture.InsertActor(t, ctx, ds, "actor1")
+	actor2 := fixture.InsertActor(t, ctx, ds, "actor2")
+	fixture.InsertToken(t, ctx, ds, "admin-token", actor1.ID, 0, []string{"admin"})
+	fixture.InsertToken(t, ctx, ds, "actor-token", actor2.ID, 0, []string{"user"})
 
 	t.Run("Valid admin token and existing actor", func(t *testing.T) {
 		resp, resBody := GetHttp(t, fmt.Sprintf("%s/v1/admin/actors/%d", server.URL, actor1.ID), "admin-token")
@@ -177,12 +177,12 @@ func TestAdminGetActorEndpoint(t *testing.T) {
 func TestAdminUpdateActorEndpoint(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+	server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
-	actor1 := fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
-	actor2 := fixture.InsertActor(t, ctx, accessor.Source(), "actor2")
-	fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", actor1.ID, 0, []string{"admin"})
-	fixture.InsertToken(t, ctx, accessor.Source(), "actor-token", actor2.ID, 0, []string{"user"})
+	actor1 := fixture.InsertActor(t, ctx, ds, "actor1")
+	actor2 := fixture.InsertActor(t, ctx, ds, "actor2")
+	fixture.InsertToken(t, ctx, ds, "admin-token", actor1.ID, 0, []string{"admin"})
+	fixture.InsertToken(t, ctx, ds, "actor-token", actor2.ID, 0, []string{"user"})
 
 	t.Run("Valid admin token and existing actor", func(t *testing.T) {
 		resp, resBody := PatchHttp(t, fmt.Sprintf("%s/v1/admin/actors/%d", server.URL, actor1.ID), `{"name":"updated_actor","role":"portal"}`, "admin-token")
@@ -198,7 +198,7 @@ func TestAdminUpdateActorEndpoint(t *testing.T) {
 		require.NotZero(t, response.Data.CreatedAt)
 
 		// Verify the actor was actually updated in the database
-		updatedActor, err := accessor.Querier().ActorFindById(ctx, accessor.Source(), actor1.ID)
+		updatedActor, err := querier.ActorFindById(ctx, ds, actor1.ID)
 		require.NoError(t, err)
 		require.NotNil(t, updatedActor)
 		require.Equal(t, "updated_actor", updatedActor.Name)
@@ -234,18 +234,18 @@ func TestAdminDeleteActorEndpoint(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+	server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
-	actor1 := fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
-	adminActor := fixture.InsertActor(t, ctx, accessor.Source(), "actor2")
-	fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", adminActor.ID, 0, []string{"admin"})
+	actor1 := fixture.InsertActor(t, ctx, ds, "actor1")
+	adminActor := fixture.InsertActor(t, ctx, ds, "actor2")
+	fixture.InsertToken(t, ctx, ds, "admin-token", adminActor.ID, 0, []string{"admin"})
 
 	t.Run("Valid admin token and existing actor", func(t *testing.T) {
 		resp, _ := DeleteHttp(t, fmt.Sprintf("%s/v1/admin/actors/%d", server.URL, actor1.ID), "admin-token")
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
 		// Verify the actor was actually deleted from the database
-		_, err := accessor.Querier().ActorFindById(ctx, accessor.Source(), actor1.ID)
+		_, err := querier.ActorFindById(ctx, ds, actor1.ID)
 		require.Error(t, err)
 		require.IsType(t, sql.ErrNoRows, err)
 	})
@@ -266,8 +266,8 @@ func TestAdminDeleteActorEndpoint(t *testing.T) {
 	})
 
 	t.Run("Actor with associated configs", func(t *testing.T) {
-		actorWithConfig := fixture.InsertActor(t, ctx, accessor.Source(), "actor_with_config")
-		fixture.InsertConfig(t, ctx, accessor.Source(), actorWithConfig.ID, map[string]string{"key": "value"})
+		actorWithConfig := fixture.InsertActor(t, ctx, ds, "actor_with_config")
+		fixture.InsertConfig(t, ctx, ds, actorWithConfig.ID, map[string]string{"key": "value"})
 
 		resp, _ := DeleteHttp(t, fmt.Sprintf("%s/v1/admin/actors/%d", server.URL, actorWithConfig.ID), "admin-token")
 		require.Equal(t, http.StatusConflict, resp.StatusCode)

@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
-	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess/dbsqlc"
 	"gitlab.com/navyx/ai/maos/maos-core/internal/fixture"
 	"gitlab.com/navyx/ai/maos/maos-core/internal/testhelper"
@@ -17,6 +16,7 @@ import (
 )
 
 var json = jsoniter.ConfigCompatibleWithStandardLibrary
+var querier = dbsqlc.New()
 
 func TestInsertInvocation(t *testing.T) {
 	t.Parallel()
@@ -26,9 +26,7 @@ func TestInsertInvocation(t *testing.T) {
 	// Test case 1: Successful invocation insertion
 	t.Run("Successful invocation insertion", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
-		defer dbPool.Close()
-		accessor := dbaccess.New(dbPool)
-		manager := invocation.NewManager(testhelper.Logger(t), accessor)
+		manager := invocation.NewManager(testhelper.Logger(t), dbPool)
 
 		actor := fixture.InsertActor(t, ctx, dbPool, "actor1")
 
@@ -53,7 +51,7 @@ func TestInsertInvocation(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Verify the invocation was created in the database
-		invocation, err := accessor.Querier().InvocationFindById(ctx, accessor.Source(), id)
+		invocation, err := querier.InvocationFindById(ctx, dbPool, id)
 		assert.NoError(t, err)
 		assert.NotNil(t, invocation)
 		assert.Equal(t, dbsqlc.InvocationState("available"), invocation.State)
@@ -78,9 +76,7 @@ func TestInsertInvocation(t *testing.T) {
 	// Test case 2: Invalid payload (for JSON marshalling error)
 	t.Run("Invalid payload", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
-		defer dbPool.Close()
-		accessor := dbaccess.New(dbPool)
-		manager := invocation.NewManager(testhelper.Logger(t), accessor)
+		manager := invocation.NewManager(testhelper.Logger(t), dbPool)
 
 		callerActorID := int64(1)
 
@@ -105,9 +101,7 @@ func TestInsertInvocation(t *testing.T) {
 	// Test case 3: Invalid actor name
 	t.Run("Invalid actor name", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
-		defer dbPool.Close()
-		accessor := dbaccess.New(dbPool)
-		manager := invocation.NewManager(testhelper.Logger(t), accessor)
+		manager := invocation.NewManager(testhelper.Logger(t), dbPool)
 
 		actor := fixture.InsertActor(t, ctx, dbPool, "actor1")
 
@@ -127,10 +121,8 @@ func TestInsertInvocation(t *testing.T) {
 	// Test case 4: Database error
 	t.Run("Database error", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
-		defer dbPool.Close()
 
-		accessor := dbaccess.New(dbPool)
-		manager := invocation.NewManager(testhelper.Logger(t), accessor)
+		manager := invocation.NewManager(testhelper.Logger(t), dbPool)
 
 		callerActorID := int64(1)
 

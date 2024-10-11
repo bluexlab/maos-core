@@ -12,9 +12,9 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/internal/suitestore"
 )
 
-func ListReferenceConfigSuites(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminListReferenceConfigSuitesRequestObject) (api.AdminListReferenceConfigSuitesResponseObject, error) {
+func ListReferenceConfigSuites(ctx context.Context, logger *slog.Logger, ds dbaccess.DataSource, request api.AdminListReferenceConfigSuitesRequestObject) (api.AdminListReferenceConfigSuitesResponseObject, error) {
 	logger.Info("ListReferenceConfigSuites")
-	suites, err := accessor.Querier().ReferenceConfigSuiteList(ctx, accessor.Source())
+	suites, err := querier.ReferenceConfigSuiteList(ctx, ds)
 	if err != nil {
 		return api.AdminListReferenceConfigSuites500JSONResponse{
 			N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot list reference config suites: %v", err)},

@@ -104,16 +104,16 @@ func TestInvocationCreateEndpoint(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+			server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
-			actor := fixture.InsertActor(t, ctx, accessor.Source(), tt.actorName)
-			token := fixture.InsertToken(t, ctx, accessor.Source(), tt.tokenName, actor.ID, 0, tt.permissions)
+			actor := fixture.InsertActor(t, ctx, ds, tt.actorName)
+			token := fixture.InsertToken(t, ctx, ds, tt.tokenName, actor.ID, 0, tt.permissions)
 
 			resp, resBody := PostHttp(t, server.URL+"/v1/invocations/async", tt.body, token.ID)
 			require.Equal(t, tt.expectedStatus, resp.StatusCode)
 
 			if tt.expectedStatus == http.StatusCreated {
-				invocations, err := accessor.Querier().InvocationGetAvailable(ctx, accessor.Source(), &dbsqlc.InvocationGetAvailableParams{
+				invocations, err := querier.InvocationGetAvailable(ctx, ds, &dbsqlc.InvocationGetAvailableParams{
 					AttemptedBy: actor.ID,
 					QueueID:     actor.QueueID,
 					Max:         10,
@@ -155,11 +155,11 @@ func TestInvocationGetEndpoint(t *testing.T) {
 	}
 
 	setup := func(t *testing.T, ctx context.Context) (*httptest.Server, string, string, string, *httptest.Server) {
-		server, accessor, server2 := SetupHttpTestWithDb(t, ctx)
-		actor := fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
-		token := fixture.InsertToken(t, ctx, accessor.Source(), "actor-token", actor.ID, 0, []string{"read:invocation"})
-		user := fixture.InsertActor(t, ctx, accessor.Source(), "user")
-		userToken := fixture.InsertToken(t, ctx, accessor.Source(), "user-token", user.ID, 0, []string{"create:invocation"})
+		server, ds, server2 := SetupHttpTestWithDb(t, ctx)
+		actor := fixture.InsertActor(t, ctx, ds, "actor1")
+		token := fixture.InsertToken(t, ctx, ds, "actor-token", actor.ID, 0, []string{"read:invocation"})
+		user := fixture.InsertActor(t, ctx, ds, "user")
+		userToken := fixture.InsertToken(t, ctx, ds, "user-token", user.ID, 0, []string{"create:invocation"})
 
 		body := `{"actor":"actor1","meta":{"kind": "test", "trace_id": "123"},"payload":{"req": "16888"}}`
 		resp, respBody := PostHttp(t, server.URL+"/v1/invocations/async", body, userToken.ID)

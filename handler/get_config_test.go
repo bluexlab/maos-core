@@ -8,7 +8,6 @@ import (
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/require"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
-	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess/dbsqlc"
 	"gitlab.com/navyx/ai/maos/maos-core/handler"
 	"gitlab.com/navyx/ai/maos/maos-core/internal/fixture"
@@ -21,10 +20,9 @@ func TestGetActorConfig(t *testing.T) {
 	ctx := context.Background()
 	logger := testhelper.Logger(t)
 
-	setupGetActorConfigTest := func(t *testing.T) (*pgxpool.Pool, dbaccess.Accessor, *dbsqlc.Actor, *dbsqlc.Config) {
+	setupGetActorConfigTest := func(t *testing.T) (*pgxpool.Pool, *dbsqlc.Actor, *dbsqlc.Config) {
 		t.Helper()
 		dbPool := testhelper.TestDB(ctx, t)
-		accessor := dbaccess.New(dbPool)
 
 		// Create an actor
 		actor := fixture.InsertActor(t, ctx, dbPool, "test-actor")
@@ -51,19 +49,19 @@ func TestGetActorConfig(t *testing.T) {
 		fixture.InsertConfig2(t, ctx, dbPool, actor.ID, &inactiveConfigSuite2.ID, "test-user", map[string]string{"inactive_key_2": "inactive_value_2"})
 		activeConfig := fixture.InsertConfig2(t, ctx, dbPool, actor.ID, &activeConfigSuite.ID, "test-user", map[string]string{"active_key": "active_value"})
 
-		return dbPool, accessor, actor, activeConfig
+		return dbPool, actor, activeConfig
 	}
 
 	t.Run("Successfully get actor config", func(t *testing.T) {
 		t.Parallel()
-		_, accessor, actor, _ := setupGetActorConfigTest(t)
+		dbPool, actor, _ := setupGetActorConfigTest(t)
 
 		// Create a mock context with a token
 		token := &middleware.Token{ActorId: actor.ID}
 		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
 
 		request := api.GetCallerConfigRequestObject{}
-		response, err := handler.GetActorConfig(ctx, logger, accessor, request)
+		response, err := handler.GetActorConfig(ctx, logger, dbPool, request)
 
 		require.NoError(t, err)
 		require.IsType(t, api.GetCallerConfig200JSONResponse{}, response)
@@ -76,7 +74,7 @@ func TestGetActorConfig(t *testing.T) {
 
 	t.Run("Active config not version compatible", func(t *testing.T) {
 		t.Parallel()
-		dbPool, accessor, actor, config := setupGetActorConfigTest(t)
+		dbPool, actor, config := setupGetActorConfigTest(t)
 
 		// Update the active config with a higher minimum actor version
 		_, err := dbPool.Exec(ctx, "UPDATE configs SET min_actor_version = '{2,0,0}' WHERE id = $1", config.ID)
@@ -91,7 +89,7 @@ func TestGetActorConfig(t *testing.T) {
 				XActorVersion: lo.ToPtr("1.0.0"),
 			},
 		}
-		response, err := handler.GetActorConfig(ctx, logger, accessor, request)
+		response, err := handler.GetActorConfig(ctx, logger, dbPool, request)
 
 		require.NoError(t, err)
 		require.IsType(t, api.GetCallerConfig200JSONResponse{}, response)
@@ -104,7 +102,7 @@ func TestGetActorConfig(t *testing.T) {
 
 	t.Run("No compatible config found", func(t *testing.T) {
 		t.Parallel()
-		dbPool, accessor, actor, _ := setupGetActorConfigTest(t)
+		dbPool, actor, _ := setupGetActorConfigTest(t)
 
 		// Update all configs with a higher minimum actor version
 		_, err := dbPool.Exec(ctx, "UPDATE configs SET min_actor_version = '{3,0,0}'")
@@ -119,7 +117,7 @@ func TestGetActorConfig(t *testing.T) {
 				XActorVersion: lo.ToPtr("1.0.0"),
 			},
 		}
-		response, err := handler.GetActorConfig(ctx, logger, accessor, request)
+		response, err := handler.GetActorConfig(ctx, logger, dbPool, request)
 
 		require.NoError(t, err)
 		require.IsType(t, api.GetCallerConfig404Response{}, response)
@@ -127,10 +125,10 @@ func TestGetActorConfig(t *testing.T) {
 
 	t.Run("No token in context", func(t *testing.T) {
 		t.Parallel()
-		_, accessor, _, _ := setupGetActorConfigTest(t)
+		dbPool, _, _ := setupGetActorConfigTest(t)
 
 		request := api.GetCallerConfigRequestObject{}
-		response, err := handler.GetActorConfig(context.Background(), logger, accessor, request)
+		response, err := handler.GetActorConfig(context.Background(), logger, dbPool, request)
 
 		require.NoError(t, err)
 		require.IsType(t, api.GetCallerConfig401Response{}, response)
@@ -138,14 +136,14 @@ func TestGetActorConfig(t *testing.T) {
 
 	t.Run("Actor not found", func(t *testing.T) {
 		t.Parallel()
-		_, accessor, _, _ := setupGetActorConfigTest(t)
+		dbPool, _, _ := setupGetActorConfigTest(t)
 
 		// Create a mock context with a non-existent actor ID
 		token := &middleware.Token{ActorId: 999999}
 		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
 
 		request := api.GetCallerConfigRequestObject{}
-		response, err := handler.GetActorConfig(ctx, logger, accessor, request)
+		response, err := handler.GetActorConfig(ctx, logger, dbPool, request)
 
 		require.NoError(t, err)
 		require.IsType(t, api.GetCallerConfig404Response{}, response)
@@ -153,7 +151,7 @@ func TestGetActorConfig(t *testing.T) {
 
 	t.Run("Database error", func(t *testing.T) {
 		t.Parallel()
-		dbPool, accessor, actor, _ := setupGetActorConfigTest(t)
+		dbPool, actor, _ := setupGetActorConfigTest(t)
 
 		// Create a mock context with a token
 		token := &middleware.Token{ActorId: actor.ID}
@@ -163,7 +161,7 @@ func TestGetActorConfig(t *testing.T) {
 		dbPool.Close()
 
 		request := api.GetCallerConfigRequestObject{}
-		response, err := handler.GetActorConfig(ctx, logger, accessor, request)
+		response, err := handler.GetActorConfig(ctx, logger, dbPool, request)
 
 		require.NoError(t, err)
 		require.IsType(t, api.GetCallerConfig500JSONResponse{}, response)
@@ -174,7 +172,7 @@ func TestGetActorConfig(t *testing.T) {
 
 	t.Run("Invalid config content", func(t *testing.T) {
 		t.Parallel()
-		dbPool, accessor, actor, config := setupGetActorConfigTest(t)
+		dbPool, actor, config := setupGetActorConfigTest(t)
 
 		// Update the config with invalid JSON content
 		_, err := dbPool.Exec(ctx, "UPDATE configs SET content = $1 WHERE id = $2", `"invalid_json"`, config.ID)
@@ -185,7 +183,7 @@ func TestGetActorConfig(t *testing.T) {
 		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
 
 		request := api.GetCallerConfigRequestObject{}
-		response, err := handler.GetActorConfig(ctx, logger, accessor, request)
+		response, err := handler.GetActorConfig(ctx, logger, dbPool, request)
 
 		require.NoError(t, err)
 		require.IsType(t, api.GetCallerConfig500JSONResponse{}, response)

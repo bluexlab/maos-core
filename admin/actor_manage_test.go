@@ -11,11 +11,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"gitlab.com/navyx/ai/maos/maos-core/admin"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
-	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess/dbsqlc"
 	"gitlab.com/navyx/ai/maos/maos-core/internal/fixture"
 	"gitlab.com/navyx/ai/maos/maos-core/internal/testhelper"
 )
+
+var querier = dbsqlc.New()
 
 func TestListActorsWithDB(t *testing.T) {
 	t.Parallel()
@@ -27,15 +28,13 @@ func TestListActorsWithDB(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
 
-		accessor := dbaccess.New(dbPool)
-
 		// Setup actors
 		fixture.InsertActor(t, ctx, dbPool, "actor1")
 		fixture.InsertActor(t, ctx, dbPool, "actor2")
 
 		request := api.AdminListActorsRequestObject{}
 
-		response, err := admin.ListActors(ctx, logger, accessor, request)
+		response, err := admin.ListActors(ctx, logger, dbPool, request)
 
 		assert.NoError(t, err)
 		require.IsType(t, api.AdminListActors200JSONResponse{}, response)
@@ -66,8 +65,6 @@ func TestListActorsWithDB(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
 
-		accessor := dbaccess.New(dbPool)
-
 		// Setup actors
 		lo.RepeatBy(21, func(i int) *dbsqlc.Actor {
 			return fixture.InsertActor(t, ctx, dbPool, fmt.Sprintf("actor-%03d", i))
@@ -80,7 +77,7 @@ func TestListActorsWithDB(t *testing.T) {
 			},
 		}
 
-		response, err := admin.ListActors(ctx, logger, accessor, request)
+		response, err := admin.ListActors(ctx, logger, dbPool, request)
 
 		assert.NoError(t, err)
 		require.IsType(t, api.AdminListActors200JSONResponse{}, response)
@@ -111,13 +108,11 @@ func TestListActorsWithDB(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
 
-		accessor := dbaccess.New(dbPool)
-
 		// Setup actor
 		actor := fixture.InsertActor(t, ctx, dbPool, "actor-with-token")
 
 		// Add API token to the actor
-		_, err := accessor.Querier().ApiTokenInsert(ctx, accessor.Source(), &dbsqlc.ApiTokenInsertParams{
+		_, err := querier.ApiTokenInsert(ctx, dbPool, &dbsqlc.ApiTokenInsertParams{
 			ID:          "test-token",
 			ActorId:     actor.ID,
 			Permissions: []string{"read"},
@@ -125,7 +120,7 @@ func TestListActorsWithDB(t *testing.T) {
 		assert.NoError(t, err)
 
 		request := api.AdminListActorsRequestObject{}
-		response, err := admin.ListActors(ctx, logger, accessor, request)
+		response, err := admin.ListActors(ctx, logger, dbPool, request)
 
 		assert.NoError(t, err)
 		require.IsType(t, api.AdminListActors200JSONResponse{}, response)
@@ -148,14 +143,12 @@ func TestListActorsWithDB(t *testing.T) {
 		t.Parallel()
 		dbPool := testhelper.TestDB(ctx, t)
 
-		accessor := dbaccess.New(dbPool)
-
 		fixture.InsertActor(t, ctx, dbPool, "actor1")
 		dbPool.Close()
 
 		request := api.AdminListActorsRequestObject{}
 
-		response, err := admin.ListActors(ctx, logger, accessor, request)
+		response, err := admin.ListActors(ctx, logger, dbPool, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminListActors500JSONResponse{}, response)
@@ -174,7 +167,6 @@ func TestCreateActorWithDB(t *testing.T) {
 	t.Run("Successful actor creation with all fields", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
-		accessor := dbaccess.New(dbPool)
 
 		request := api.AdminCreateActorRequestObject{
 			Body: &api.AdminCreateActorJSONRequestBody{
@@ -186,7 +178,7 @@ func TestCreateActorWithDB(t *testing.T) {
 			},
 		}
 
-		response, err := admin.CreateActor(ctx, logger, accessor, request)
+		response, err := admin.CreateActor(ctx, logger, dbPool, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminCreateActor201JSONResponse{}, response)
@@ -203,7 +195,7 @@ func TestCreateActorWithDB(t *testing.T) {
 		assert.True(t, jsonResponse.Renameable)
 
 		// Verify the actor was created in the database
-		actor, err := accessor.Querier().ActorFindById(ctx, accessor.Source(), jsonResponse.Id)
+		actor, err := querier.ActorFindById(ctx, dbPool, jsonResponse.Id)
 		assert.NoError(t, err)
 		assert.Equal(t, jsonResponse.Id, actor.ID)
 		assert.Equal(t, jsonResponse.Name, actor.Name)
@@ -214,7 +206,7 @@ func TestCreateActorWithDB(t *testing.T) {
 		assert.Equal(t, jsonResponse.Configurable, actor.Configurable)
 
 		// Verify the queue was created in the database
-		queue, err := accessor.Querier().QueueFindById(ctx, accessor.Source(), actor.QueueID)
+		queue, err := querier.QueueFindById(ctx, dbPool, actor.QueueID)
 		assert.NoError(t, err)
 		assert.Equal(t, actor.Name, queue.Name)
 		assert.Equal(t, []byte(`{"type": "actor"}`), queue.Metadata)
@@ -223,7 +215,6 @@ func TestCreateActorWithDB(t *testing.T) {
 	t.Run("Successful actor creation with partial fields", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
-		accessor := dbaccess.New(dbPool)
 
 		request := api.AdminCreateActorRequestObject{
 			Body: &api.AdminCreateActorJSONRequestBody{
@@ -234,7 +225,7 @@ func TestCreateActorWithDB(t *testing.T) {
 			},
 		}
 
-		response, err := admin.CreateActor(ctx, logger, accessor, request)
+		response, err := admin.CreateActor(ctx, logger, dbPool, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminCreateActor201JSONResponse{}, response)
@@ -252,7 +243,7 @@ func TestCreateActorWithDB(t *testing.T) {
 		assert.True(t, jsonResponse.Renameable)
 
 		// Verify the actor was created in the database
-		actor, err := accessor.Querier().ActorFindById(ctx, accessor.Source(), jsonResponse.Id)
+		actor, err := querier.ActorFindById(ctx, dbPool, jsonResponse.Id)
 		assert.NoError(t, err)
 		assert.Equal(t, jsonResponse.Id, actor.ID)
 		assert.Equal(t, jsonResponse.Name, actor.Name)
@@ -264,7 +255,7 @@ func TestCreateActorWithDB(t *testing.T) {
 		assert.False(t, jsonResponse.Migratable)
 
 		// Verify the queue was created in the database
-		queue, err := accessor.Querier().QueueFindById(ctx, accessor.Source(), actor.QueueID)
+		queue, err := querier.QueueFindById(ctx, dbPool, actor.QueueID)
 		assert.NoError(t, err)
 		assert.Equal(t, actor.Name, queue.Name)
 		assert.Equal(t, []byte(`{"type": "actor"}`), queue.Metadata)
@@ -274,7 +265,6 @@ func TestCreateActorWithDB(t *testing.T) {
 	t.Run("Database error", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
-		accessor := dbaccess.New(dbPool)
 
 		request := api.AdminCreateActorRequestObject{
 			Body: &api.AdminCreateActorJSONRequestBody{
@@ -283,7 +273,7 @@ func TestCreateActorWithDB(t *testing.T) {
 		}
 
 		dbPool.Close()
-		response, err := admin.CreateActor(ctx, logger, accessor, request)
+		response, err := admin.CreateActor(ctx, logger, dbPool, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminCreateActor500JSONResponse{}, response)
@@ -293,7 +283,6 @@ func TestCreateActorWithDB(t *testing.T) {
 	t.Run("Duplicate actor name", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
-		accessor := dbaccess.New(dbPool)
 
 		// Insert an actor first
 		existingActor := fixture.InsertActor(t, ctx, dbPool, "ExistingActor")
@@ -304,7 +293,7 @@ func TestCreateActorWithDB(t *testing.T) {
 			},
 		}
 
-		response, err := admin.CreateActor(ctx, logger, accessor, request)
+		response, err := admin.CreateActor(ctx, logger, dbPool, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminCreateActor500JSONResponse{}, response)
@@ -314,7 +303,6 @@ func TestCreateActorWithDB(t *testing.T) {
 	t.Run("Invalid deployable value", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
-		accessor := dbaccess.New(dbPool)
 
 		request := api.AdminCreateActorRequestObject{
 			Body: &api.AdminCreateActorJSONRequestBody{
@@ -325,7 +313,7 @@ func TestCreateActorWithDB(t *testing.T) {
 			},
 		}
 
-		response, err := admin.CreateActor(ctx, logger, accessor, request)
+		response, err := admin.CreateActor(ctx, logger, dbPool, request)
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminCreateActor400JSONResponse{}, response)
 	})
@@ -333,7 +321,6 @@ func TestCreateActorWithDB(t *testing.T) {
 	t.Run("Invalid configurable value", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
-		accessor := dbaccess.New(dbPool)
 
 		request := api.AdminCreateActorRequestObject{
 			Body: &api.AdminCreateActorJSONRequestBody{
@@ -344,7 +331,7 @@ func TestCreateActorWithDB(t *testing.T) {
 			},
 		}
 
-		response, err := admin.CreateActor(ctx, logger, accessor, request)
+		response, err := admin.CreateActor(ctx, logger, dbPool, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminCreateActor400JSONResponse{}, response)
@@ -358,7 +345,6 @@ func TestUpdateActor(t *testing.T) {
 	t.Run("Successful update", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
-		accessor := dbaccess.New(dbPool)
 
 		// Insert an actor first
 		existingActor := fixture.InsertActor(t, ctx, dbPool, "ExistingActor")
@@ -374,7 +360,7 @@ func TestUpdateActor(t *testing.T) {
 			},
 		}
 
-		response, err := admin.UpdateActor(ctx, logger, accessor, request)
+		response, err := admin.UpdateActor(ctx, logger, dbPool, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminUpdateActor200JSONResponse{}, response)
@@ -391,7 +377,6 @@ func TestUpdateActor(t *testing.T) {
 	t.Run("Successful update with partial parameters", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
-		accessor := dbaccess.New(dbPool)
 
 		// Insert an actor first
 		existingActor := fixture.InsertActor(t, ctx, dbPool, "ExistingActor")
@@ -405,7 +390,7 @@ func TestUpdateActor(t *testing.T) {
 			},
 		}
 
-		response, err := admin.UpdateActor(ctx, logger, accessor, request)
+		response, err := admin.UpdateActor(ctx, logger, dbPool, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminUpdateActor200JSONResponse{}, response)
@@ -421,7 +406,7 @@ func TestUpdateActor(t *testing.T) {
 		assert.Equal(t, existingActor.Configurable, jsonResponse.Data.Configurable)
 
 		// Verify the actor was updated in the database
-		updatedActor, err := accessor.Querier().ActorFindById(ctx, accessor.Source(), existingActor.ID)
+		updatedActor, err := querier.ActorFindById(ctx, dbPool, existingActor.ID)
 		assert.NoError(t, err)
 		assert.Equal(t, "PartiallyUpdatedActor", updatedActor.Name)
 		assert.False(t, updatedActor.Enabled)
@@ -432,7 +417,6 @@ func TestUpdateActor(t *testing.T) {
 	t.Run("Actor not found", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
-		accessor := dbaccess.New(dbPool)
 
 		request := api.AdminUpdateActorRequestObject{
 			Id: 999999, // Non-existent ID
@@ -441,7 +425,7 @@ func TestUpdateActor(t *testing.T) {
 			},
 		}
 
-		response, err := admin.UpdateActor(ctx, logger, accessor, request)
+		response, err := admin.UpdateActor(ctx, logger, dbPool, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminUpdateActor404Response{}, response)
@@ -450,7 +434,6 @@ func TestUpdateActor(t *testing.T) {
 	t.Run("Database error", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
-		accessor := dbaccess.New(dbPool)
 
 		// Insert an actor first
 		existingActor := fixture.InsertActor(t, ctx, dbPool, "ExistingActor")
@@ -463,7 +446,7 @@ func TestUpdateActor(t *testing.T) {
 		}
 
 		dbPool.Close() // Simulate database error
-		response, err := admin.UpdateActor(ctx, logger, accessor, request)
+		response, err := admin.UpdateActor(ctx, logger, dbPool, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminUpdateActor500JSONResponse{}, response)

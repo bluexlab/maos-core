@@ -22,18 +22,18 @@ func TestInvocationExecuteEndpoint(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("one actor and one execution", func(t *testing.T) {
-		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+		server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
-		actor := fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
-		token := fixture.InsertToken(t, ctx, accessor.Source(), "actor-token", actor.ID, 0, []string{"read:invocation"})
-		user := fixture.InsertActor(t, ctx, accessor.Source(), "user")
-		userToken := fixture.InsertToken(t, ctx, accessor.Source(), "user-token", user.ID, 0, []string{"create:invocation"})
+		actor := fixture.InsertActor(t, ctx, ds, "actor1")
+		token := fixture.InsertToken(t, ctx, ds, "actor-token", actor.ID, 0, []string{"read:invocation"})
+		user := fixture.InsertActor(t, ctx, ds, "user")
+		userToken := fixture.InsertToken(t, ctx, ds, "user-token", user.ID, 0, []string{"create:invocation"})
 
 		var invocationId int64
 		go func() {
 			// get available invocation
 			time.Sleep(50 * time.Millisecond)
-			invocations, err := accessor.Querier().InvocationGetAvailable(ctx, accessor.Source(), &dbsqlc.InvocationGetAvailableParams{
+			invocations, err := querier.InvocationGetAvailable(ctx, ds, &dbsqlc.InvocationGetAvailableParams{
 				AttemptedBy: actor.ID,
 				QueueID:     actor.QueueID,
 				Max:         1,
@@ -61,11 +61,11 @@ func TestInvocationExecuteEndpoint(t *testing.T) {
 	})
 
 	t.Run("timeout", func(t *testing.T) {
-		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+		server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
-		fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
-		user := fixture.InsertActor(t, ctx, accessor.Source(), "user")
-		userToken := fixture.InsertToken(t, ctx, accessor.Source(), "user-token", user.ID, 0, []string{"create:invocation"})
+		fixture.InsertActor(t, ctx, ds, "actor1")
+		user := fixture.InsertActor(t, ctx, ds, "user")
+		userToken := fixture.InsertToken(t, ctx, ds, "user-token", user.ID, 0, []string{"create:invocation"})
 
 		body := `{"actor":"actor1","meta":{"kind": "test", "trace_id": "456"},"payload":{"key1": 16888,"key2":{"key3": "value3"}}}`
 		resp, body := PostHttp(t, server.URL+"/v1/invocations/sync?wait=1", body, userToken.ID)
@@ -76,17 +76,17 @@ func TestInvocationExecuteEndpoint(t *testing.T) {
 	})
 
 	t.Run("multiple actors and executions", func(t *testing.T) {
-		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+		server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
 		const (
 			actorCount   = 4
 			executeCount = 20
 		)
 
-		actor := fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
-		token := fixture.InsertToken(t, ctx, accessor.Source(), "actor-token", actor.ID, 0, []string{"read:invocation"})
-		user := fixture.InsertActor(t, ctx, accessor.Source(), "user")
-		userToken := fixture.InsertToken(t, ctx, accessor.Source(), "user-token", user.ID, 0, []string{"create:invocation"})
+		actor := fixture.InsertActor(t, ctx, ds, "actor1")
+		token := fixture.InsertToken(t, ctx, ds, "actor-token", actor.ID, 0, []string{"read:invocation"})
+		user := fixture.InsertActor(t, ctx, ds, "user")
+		userToken := fixture.InsertToken(t, ctx, ds, "user-token", user.ID, 0, []string{"create:invocation"})
 
 		errCh := make(chan error, executeCount)
 
@@ -233,16 +233,16 @@ func TestInvocationExecuteEndpointErrorCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+			server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
-			actor := fixture.InsertActor(t, ctx, accessor.Source(), tt.actorName)
-			token := fixture.InsertToken(t, ctx, accessor.Source(), tt.tokenName, actor.ID, 0, tt.permissions)
+			actor := fixture.InsertActor(t, ctx, ds, tt.actorName)
+			token := fixture.InsertToken(t, ctx, ds, tt.tokenName, actor.ID, 0, tt.permissions)
 
 			resp, resBody := PostHttp(t, server.URL+"/v1/invocations/sync", tt.body, token.ID)
 			require.Equal(t, tt.expectedStatus, resp.StatusCode)
 
 			if tt.expectedStatus == http.StatusCreated {
-				invocations, err := accessor.Querier().InvocationGetAvailable(ctx, accessor.Source(), &dbsqlc.InvocationGetAvailableParams{
+				invocations, err := querier.InvocationGetAvailable(ctx, ds, &dbsqlc.InvocationGetAvailableParams{
 					AttemptedBy: actor.ID,
 					QueueID:     actor.QueueID,
 					Max:         10,

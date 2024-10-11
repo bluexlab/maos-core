@@ -18,6 +18,8 @@ import (
 
 const minSyncInterval = 1 * time.Minute
 
+var querier = dbsqlc.New()
+
 type S3ClientInterface interface {
 	ListObjectsV2(ctx context.Context, params *s3.ListObjectsV2Input, optFns ...func(*s3.Options)) (*s3.ListObjectsV2Output, error)
 	GetObject(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error)
@@ -31,20 +33,20 @@ type S3SuiteStore struct {
 	bucketName  string
 	keyPrefix   string
 	displayName string
-	db          dbaccess.Accessor
+	dataSource  dbaccess.DataSource
 	lastUpdated map[string]time.Time
 	lastSync    time.Time
 }
 
 // NewS3SuiteStore creates a new S3SuiteStore
-func NewS3SuiteStore(logger *slog.Logger, s3Client S3ClientInterface, bucketName, keyPrefix, displayName string, db dbaccess.Accessor, scanInterval time.Duration) *S3SuiteStore {
+func NewS3SuiteStore(logger *slog.Logger, s3Client S3ClientInterface, bucketName, keyPrefix, displayName string, dataSource dbaccess.DataSource, scanInterval time.Duration) *S3SuiteStore {
 	return &S3SuiteStore{
 		logger:      logger,
 		s3Client:    s3Client,
 		bucketName:  bucketName,
 		keyPrefix:   keyPrefix,
 		displayName: displayName,
-		db:          db,
+		dataSource:  dataSource,
 		lastUpdated: make(map[string]time.Time),
 	}
 }
@@ -97,7 +99,7 @@ func (s *S3SuiteStore) SyncSuites(ctx context.Context) error {
 			}
 
 			s.logger.Info("Upserting suite in database", "suiteName", suite.SuiteName)
-			_, err = s.db.Querier().ReferenceConfigSuiteUpsert(ctx, s.db.Source(), &dbsqlc.ReferenceConfigSuiteUpsertParams{
+			_, err = querier.ReferenceConfigSuiteUpsert(ctx, s.dataSource, &dbsqlc.ReferenceConfigSuiteUpsertParams{
 				Name:              suite.SuiteName,
 				ConfigSuitesBytes: ConfigSuitesBytes,
 			})

@@ -10,7 +10,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	maoscore "gitlab.com/navyx/ai/maos/maos-core"
-	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 	"gitlab.com/navyx/ai/maos/maos-core/migrate"
 )
 
@@ -107,8 +106,7 @@ func migrateUp(logger *slog.Logger) {
 
 	defer pool.Close()
 
-	accessor := dbaccess.New(pool)
-	if _, err := migrate.New(accessor, logger).Migrate(ctx, migrate.DirectionUp, &migrate.MigrateOpts{}); err != nil {
+	if _, err := migrate.New(pool, logger).Migrate(ctx, migrate.DirectionUp, &migrate.MigrateOpts{}); err != nil {
 		logger.Error("Failed to migrate database", "error", err.Error())
 		os.Exit(2)
 	}

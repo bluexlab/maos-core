@@ -38,6 +38,7 @@ var (
 
 	migrations    = mustMigrationsFromFS(migrationFS)
 	migrationsMap = ValidateAndInit(migrations)
+	querier       = dbsqlc.New()
 )
 
 func GetMigrations() []*Migration {
@@ -52,11 +53,11 @@ type Config struct {
 // Migrator is a database migration tool which can run up or down migrations in order to establish the schema.
 type Migrator struct {
 	logger     *slog.Logger
-	accessor   dbaccess.Accessor
+	dataSource dbaccess.DataSource
 	migrations map[int]*Migration // allows us to inject test migrations
 }
 
-func New(accessor dbaccess.Accessor, logger *slog.Logger) *Migrator {
+func New(dataSource dbaccess.DataSource, logger *slog.Logger) *Migrator {
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 			Level: slog.LevelWarn,
@@ -65,7 +66,7 @@ func New(accessor dbaccess.Accessor, logger *slog.Logger) *Migrator {
 
 	return &Migrator{
 		logger:     logger,
-		accessor:   accessor,
+		dataSource: dataSource,
 		migrations: migrationsMap,
 	}
 }
@@ -196,7 +197,7 @@ func (m *Migrator) migrateDown(ctx context.Context, direction Direction, opts *M
 	}
 
 	if !opts.DryRun {
-		if _, err := m.accessor.Querier().MigrationDeleteByVersionMany(ctx, m.accessor.Source(), util.MapSlice(res.Versions, migrateVersionToInt64)); err != nil {
+		if _, err := querier.MigrationDeleteByVersionMany(ctx, m.dataSource, util.MapSlice(res.Versions, migrateVersionToInt64)); err != nil {
 			return nil, fmt.Errorf("error deleting migration rows for versions %+v: %w", res.Versions, err)
 		}
 	}
@@ -225,7 +226,7 @@ func (m *Migrator) migrateUp(ctx context.Context, direction Direction, opts *Mig
 	}
 
 	if opts == nil || !opts.DryRun {
-		if _, err := m.accessor.Querier().MigrationInsertMany(ctx, m.accessor.Source(), util.MapSlice(res.Versions, migrateVersionToInt64)); err != nil {
+		if _, err := querier.MigrationInsertMany(ctx, m.dataSource, util.MapSlice(res.Versions, migrateVersionToInt64)); err != nil {
 			return nil, fmt.Errorf("error inserting migration rows for versions %+v: %w", res.Versions, err)
 		}
 	}
@@ -295,7 +296,7 @@ func (m *Migrator) applyMigrations(ctx context.Context, direction Direction, opt
 
 		if !opts.DryRun {
 			start := time.Now()
-			_, err := m.accessor.Exec(ctx, sql)
+			_, err := m.dataSource.Exec(ctx, sql)
 			if err != nil {
 				return nil, fmt.Errorf("error applying version %03d [%s]: %w",
 					versionBundle.Version, strings.ToUpper(string(direction)), err)
@@ -320,7 +321,7 @@ func (m *Migrator) applyMigrations(ctx context.Context, direction Direction, opt
 // Uses a subtransaction to handle the case when the `_migration` table doesn't exist.
 // This prevents the main transaction from being aborted on an unsuccessful check.
 func (m *Migrator) existingMigrations(ctx context.Context) ([]*dbsqlc.Migration, error) {
-	exists, err := m.accessor.Querier().TableExists(ctx, m.accessor.Source(), "_migration")
+	exists, err := querier.TableExists(ctx, m.dataSource, "_migration")
 	if err != nil {
 		return nil, fmt.Errorf("error checking if `%s` exists: %w", "_migration", err)
 	}
@@ -328,7 +329,7 @@ func (m *Migrator) existingMigrations(ctx context.Context) ([]*dbsqlc.Migration,
 		return nil, nil
 	}
 
-	migrations, err := m.accessor.Querier().MigrationGetAll(ctx, m.accessor.Source())
+	migrations, err := querier.MigrationGetAll(ctx, m.dataSource)
 	if err != nil {
 		return nil, fmt.Errorf("error getting existing migrations: %w", err)
 	}

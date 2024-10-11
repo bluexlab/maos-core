@@ -34,16 +34,17 @@ var (
 		dbsqlc.InvocationStateCompleted,
 		dbsqlc.InvocationStateDiscarded,
 	}
+	querier = dbsqlc.New()
 )
 
-func NewManager(logger *slog.Logger, accessor dbaccess.Accessor) *Manager {
-	pgListener := listener.NewPgListener(accessor.Pool())
+func NewManager(logger *slog.Logger, pool dbaccess.SourcePool) *Manager {
+	pgListener := listener.NewPgListener(pool)
 	notifier := notifier.New(logger, pgListener, func(status startstop.Status) {
 		logger.Info("Invocation manager notifier status changed", "status", status)
 	})
 	return &Manager{
 		logger:           logger,
-		accessor:         accessor,
+		dataSource:       pool,
 		notifier:         notifier,
 		invokeDispatcher: NewDispatcher[InvokeRequest](),
 	}
@@ -54,7 +55,7 @@ type InvokeRequest struct {
 
 type Manager struct {
 	logger           *slog.Logger
-	accessor         dbaccess.Accessor
+	dataSource       dbaccess.DataSource
 	notifier         *notifier.Notifier
 	invokeDispatcher *Dispatcher[InvokeRequest]
 	invokeSub        *notifier.Subscription
@@ -136,7 +137,7 @@ func (m *Manager) InsertInvocation(ctx context.Context, callerActorId int64, req
 		}, nil
 	}
 
-	invocation, err := m.accessor.Querier().InvocationInsert(ctx, m.accessor.Source(), &dbsqlc.InvocationInsertParams{
+	invocation, err := querier.InvocationInsert(ctx, m.dataSource, &dbsqlc.InvocationInsertParams{
 		ActorName: request.Body.Actor,
 		State:     "available",
 		Metadata:  metadata,
@@ -154,7 +155,7 @@ func (m *Manager) InsertInvocation(ctx context.Context, callerActorId int64, req
 
 	// notify invoke topic with the queue id
 	queueId := strconv.FormatInt(invocation.QueueID, 10)
-	m.accessor.Querier().PgNotifyOne(ctx, m.accessor.Source(), &dbsqlc.PgNotifyOneParams{
+	querier.PgNotifyOne(ctx, m.dataSource, &dbsqlc.PgNotifyOneParams{
 		Topic:   invokeTopic,
 		Payload: queueId,
 	})
@@ -173,7 +174,7 @@ func (m *Manager) GetInvocationById(ctx context.Context, callerActorId int64, re
 	}
 
 	getInvocation := func() api.GetInvocationByIdResponseObject {
-		invocation, err := m.accessor.Querier().InvocationFindById(ctx, m.accessor.Source(), invocationId)
+		invocation, err := querier.InvocationFindById(ctx, m.dataSource, invocationId)
 		if invocation == nil || err != nil {
 			if err == pgx.ErrNoRows {
 				return api.GetInvocationById404Response{}
@@ -305,7 +306,7 @@ func (m *Manager) ExecuteInvocationSync(ctx context.Context, callerActorId int64
 	})
 	defer responseSub.Unlisten(ctx)
 
-	invocation, err := m.accessor.Querier().InvocationInsert(ctx, m.accessor.Source(), &dbsqlc.InvocationInsertParams{
+	invocation, err := querier.InvocationInsert(ctx, m.dataSource, &dbsqlc.InvocationInsertParams{
 		ActorName: request.Body.Actor,
 		State:     "available",
 		Metadata:  metadata,
@@ -323,7 +324,7 @@ func (m *Manager) ExecuteInvocationSync(ctx context.Context, callerActorId int64
 
 	// notify invoke topic with the queue id
 	queueId := strconv.FormatInt(invocation.QueueID, 10)
-	m.accessor.Querier().PgNotifyOne(ctx, m.accessor.Source(), &dbsqlc.PgNotifyOneParams{
+	querier.PgNotifyOne(ctx, m.dataSource, &dbsqlc.PgNotifyOneParams{
 		Topic:   invokeTopic,
 		Payload: queueId,
 	})
@@ -335,7 +336,7 @@ func (m *Manager) ExecuteInvocationSync(ctx context.Context, callerActorId int64
 	invocationIdStr := strconv.FormatInt(invocation.ID, 10)
 
 	returnInvication := func() (api.CreateInvocationSyncResponseObject, error) {
-		latestInvocation, err := m.accessor.Querier().InvocationFindById(ctx, m.accessor.Source(), invocation.ID)
+		latestInvocation, err := querier.InvocationFindById(ctx, m.dataSource, invocation.ID)
 		result, err1 := parseJson(latestInvocation.Result)
 		errors, err2 := parseJson(latestInvocation.Errors)
 		if err1 != nil || err2 != nil {
@@ -394,7 +395,7 @@ func (m *Manager) ReturnInvocationResponse(ctx context.Context, callerActorId in
 		}, nil
 	}
 
-	invocation, err := m.accessor.Querier().InvocationSetCompleteIfRunning(ctx, m.accessor.Source(), &dbsqlc.InvocationSetCompleteIfRunningParams{
+	invocation, err := querier.InvocationSetCompleteIfRunning(ctx, m.dataSource, &dbsqlc.InvocationSetCompleteIfRunningParams{
 		ID:          invocationId,
 		FinalizedAt: time.Now().Unix(),
 		FinalizerID: callerActorId,
@@ -418,7 +419,7 @@ func (m *Manager) ReturnInvocationResponse(ctx context.Context, callerActorId in
 
 	// notify response topic with the invocation id
 	m.logger.Debug("Notify response topic", "topic", responseTopic, "payload", request.InvokeId)
-	m.accessor.Querier().PgNotifyOne(ctx, m.accessor.Source(), &dbsqlc.PgNotifyOneParams{
+	querier.PgNotifyOne(ctx, m.dataSource, &dbsqlc.PgNotifyOneParams{
 		Topic:   responseTopic,
 		Payload: request.InvokeId,
 	})
@@ -443,7 +444,7 @@ func (m *Manager) ReturnInvocationError(ctx context.Context, callerActorId int64
 		}, nil
 	}
 
-	invocation, err := m.accessor.Querier().InvocationSetFailureIfRunning(ctx, m.accessor.Source(), &dbsqlc.InvocationSetFailureIfRunningParams{
+	invocation, err := querier.InvocationSetFailureIfRunning(ctx, m.dataSource, &dbsqlc.InvocationSetFailureIfRunningParams{
 		ID:          invocationId,
 		FinalizedAt: time.Now().Unix(),
 		FinalizerID: callerActorId,
@@ -467,7 +468,7 @@ func (m *Manager) ReturnInvocationError(ctx context.Context, callerActorId int64
 
 	// notify response topic with the invocation id
 	m.logger.Debug("Notify response topic", "topic", responseTopic, "payload", request.InvokeId)
-	m.accessor.Querier().PgNotifyOne(ctx, m.accessor.Source(), &dbsqlc.PgNotifyOneParams{
+	querier.PgNotifyOne(ctx, m.dataSource, &dbsqlc.PgNotifyOneParams{
 		Topic:   responseTopic,
 		Payload: request.InvokeId,
 	})
@@ -479,7 +480,7 @@ func (m *Manager) GetNextInvocation(ctx context.Context, callerActorId int64, qu
 	m.logger.Info("GetNextInvocation start", "callerActorId", callerActorId, "queueId", queueId, "wait", request.Params.Wait)
 
 	getAvailble := func() (*dbsqlc.Invocation, error) {
-		invocations, err := m.accessor.Querier().InvocationGetAvailable(ctx, m.accessor.Source(), &dbsqlc.InvocationGetAvailableParams{
+		invocations, err := querier.InvocationGetAvailable(ctx, m.dataSource, &dbsqlc.InvocationGetAvailableParams{
 			AttemptedBy: callerActorId,
 			QueueID:     queueId,
 			Max:         1,

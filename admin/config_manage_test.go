@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"gitlab.com/navyx/ai/maos/maos-core/admin"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
-	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess/dbsqlc"
 	"gitlab.com/navyx/ai/maos/maos-core/internal/fixture"
 	"gitlab.com/navyx/ai/maos/maos-core/internal/testhelper"
@@ -21,8 +20,6 @@ func TestUpdateConfig(t *testing.T) {
 
 	t.Run("Successful update config", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
-		accessor := dbaccess.New(dbPool)
-		defer dbPool.Close()
 
 		user := "testuser"
 		actor := fixture.InsertActor(t, ctx, dbPool, "TestActor")
@@ -48,7 +45,7 @@ func TestUpdateConfig(t *testing.T) {
 			},
 		}
 
-		response, err := admin.UpdateConfig(ctx, logger, accessor, request)
+		response, err := admin.UpdateConfig(ctx, logger, dbPool, request)
 
 		require.NoError(t, err)
 		require.IsType(t, api.AdminUpdateConfig200JSONResponse{}, response)
@@ -64,8 +61,6 @@ func TestUpdateConfig(t *testing.T) {
 
 	t.Run("Config suite is deployed", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
-		accessor := dbaccess.New(dbPool)
-		defer dbPool.Close()
 
 		user := "testuser"
 		actor := fixture.InsertActor(t, ctx, dbPool, "TestActor3")
@@ -92,7 +87,7 @@ func TestUpdateConfig(t *testing.T) {
 			},
 		}
 
-		response, err := admin.UpdateConfig(ctx, logger, accessor, request)
+		response, err := admin.UpdateConfig(ctx, logger, dbPool, request)
 
 		require.NoError(t, err)
 		require.IsType(t, api.AdminUpdateConfig404Response{}, response)
@@ -100,8 +95,6 @@ func TestUpdateConfig(t *testing.T) {
 
 	t.Run("Config not found", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
-		accessor := dbaccess.New(dbPool)
-		defer dbPool.Close()
 
 		request := api.AdminUpdateConfigRequestObject{
 			Id: 999999, // Non-existent config ID
@@ -111,7 +104,7 @@ func TestUpdateConfig(t *testing.T) {
 			},
 		}
 
-		response, err := admin.UpdateConfig(ctx, logger, accessor, request)
+		response, err := admin.UpdateConfig(ctx, logger, dbPool, request)
 
 		require.NoError(t, err)
 		require.IsType(t, api.AdminUpdateConfig404Response{}, response)
@@ -119,8 +112,6 @@ func TestUpdateConfig(t *testing.T) {
 
 	t.Run("Database error", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
-		accessor := dbaccess.New(dbPool)
-		defer dbPool.Close()
 
 		actor := fixture.InsertActor(t, ctx, dbPool, "TestActor2")
 		configSuite := fixture.InsertConfigSuite(t, ctx, dbPool)
@@ -136,7 +127,7 @@ func TestUpdateConfig(t *testing.T) {
 
 		dbPool.Close() // Simulate database error by closing the connection
 
-		response, err := admin.UpdateConfig(ctx, logger, accessor, request)
+		response, err := admin.UpdateConfig(ctx, logger, dbPool, request)
 
 		require.NoError(t, err)
 		require.IsType(t, api.AdminUpdateConfig500JSONResponse{}, response)
@@ -144,13 +135,11 @@ func TestUpdateConfig(t *testing.T) {
 
 	t.Run("Update config failed if user is not the creator or reviewer", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
-		accessor := dbaccess.New(dbPool)
-		defer dbPool.Close()
 
 		actor := fixture.InsertActor(t, ctx, dbPool, "TestActor3")
 
 		// Insert a deployment with reviewers
-		deployment, err := accessor.Querier().DeploymentInsertWithConfigSuite(ctx, accessor.Source(), &dbsqlc.DeploymentInsertWithConfigSuiteParams{
+		deployment, err := querier.DeploymentInsertWithConfigSuite(ctx, dbPool, &dbsqlc.DeploymentInsertWithConfigSuiteParams{
 			CreatedBy: "creator",
 			Name:      "TestDeployment",
 			Reviewers: []string{"reviewer1", "reviewer2"},
@@ -170,26 +159,24 @@ func TestUpdateConfig(t *testing.T) {
 			},
 		}
 
-		response, err := admin.UpdateConfig(ctx, logger, accessor, request)
+		response, err := admin.UpdateConfig(ctx, logger, dbPool, request)
 
 		require.NoError(t, err)
 		require.IsType(t, api.AdminUpdateConfig404Response{}, response)
 
 		// Verify that the config was not updated
-		updatedConfig, err := accessor.Querier().ConfigFindByActorId(ctx, accessor.Source(), actor.ID)
+		updatedConfig, err := querier.ConfigFindByActorId(ctx, dbPool, actor.ID)
 		require.NoError(t, err)
 		require.Equal(t, `{"key": "value"}`, string(updatedConfig.Content))
 	})
 
 	t.Run("Update config if user is reviewer", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
-		accessor := dbaccess.New(dbPool)
-		defer dbPool.Close()
 
 		actor := fixture.InsertActor(t, ctx, dbPool, "TestActor3")
 
 		// Insert a deployment with reviewers
-		deployment, err := accessor.Querier().DeploymentInsertWithConfigSuite(ctx, accessor.Source(), &dbsqlc.DeploymentInsertWithConfigSuiteParams{
+		deployment, err := querier.DeploymentInsertWithConfigSuite(ctx, dbPool, &dbsqlc.DeploymentInsertWithConfigSuiteParams{
 			CreatedBy: "creator",
 			Name:      "TestDeployment",
 			Reviewers: []string{"reviewer1", "reviewer2"},
@@ -209,7 +196,7 @@ func TestUpdateConfig(t *testing.T) {
 			},
 		}
 
-		response, err := admin.UpdateConfig(ctx, logger, accessor, request)
+		response, err := admin.UpdateConfig(ctx, logger, dbPool, request)
 
 		require.NoError(t, err)
 		require.IsType(t, api.AdminUpdateConfig200JSONResponse{}, response)
@@ -225,8 +212,6 @@ func TestUpdateConfig(t *testing.T) {
 
 	t.Run("Invalid Kubernetes config", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
-		accessor := dbaccess.New(dbPool)
-		defer dbPool.Close()
 
 		user := "testuser"
 		actor := fixture.InsertActor2(t, ctx, dbPool, "TestActor", "agent", true, true, true, false)
@@ -248,7 +233,7 @@ func TestUpdateConfig(t *testing.T) {
 			},
 		}
 
-		response, err := admin.UpdateConfig(ctx, logger, accessor, request)
+		response, err := admin.UpdateConfig(ctx, logger, dbPool, request)
 
 		require.NoError(t, err)
 		require.IsType(t, api.AdminUpdateConfig400JSONResponse{}, response)
@@ -258,8 +243,6 @@ func TestUpdateConfig(t *testing.T) {
 
 	t.Run("Valid Kubernetes config", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
-		accessor := dbaccess.New(dbPool)
-		defer dbPool.Close()
 
 		user := "testuser"
 		actor := fixture.InsertActor(t, ctx, dbPool, "TestActor")
@@ -284,7 +267,7 @@ func TestUpdateConfig(t *testing.T) {
 			},
 		}
 
-		response, err := admin.UpdateConfig(ctx, logger, accessor, request)
+		response, err := admin.UpdateConfig(ctx, logger, dbPool, request)
 
 		require.NoError(t, err)
 		require.IsType(t, api.AdminUpdateConfig200JSONResponse{}, response)

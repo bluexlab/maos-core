@@ -57,6 +57,7 @@ func TestDB(ctx context.Context, tb testing.TB) *pgxpool.Pool {
 		tb.Fatalf("Failed to acquire pool for test DB: %v", err)
 	}
 	tb.Cleanup(func() {
+		testPool.Close()
 		dbManager.Release(testPool)
 	})
 

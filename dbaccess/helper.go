@@ -6,8 +6,8 @@ import (
 )
 
 // WithTx starts and commits a transaction on a driver executor around the given function.
-func WithTx(ctx context.Context, exec Accessor, innerFunc func(ctx context.Context, exec TxAccessor) error) error {
-	_, err := WithTxV(ctx, exec, func(ctx context.Context, tx TxAccessor) (struct{}, error) {
+func WithTx(ctx context.Context, ds DataSource, innerFunc func(ctx context.Context, ds DataSource) error) error {
+	_, err := WithTxV(ctx, ds, func(ctx context.Context, tx DataSource) (struct{}, error) {
 		return struct{}{}, innerFunc(ctx, tx)
 	})
 	return err
@@ -15,10 +15,10 @@ func WithTx(ctx context.Context, exec Accessor, innerFunc func(ctx context.Conte
 
 // WithTxV starts and commits a transaction on a driver executor
 // around the given function, allowing the return of a generic value.
-func WithTxV[T any](ctx context.Context, exec Accessor, innerFunc func(ctx context.Context, exec TxAccessor) (T, error)) (T, error) {
+func WithTxV[T any](ctx context.Context, ds DataSource, innerFunc func(ctx context.Context, ds DataSource) (T, error)) (T, error) {
 	var defaultRes T
 
-	tx, err := exec.Begin(ctx)
+	tx, err := ds.Begin(ctx)
 	if err != nil {
 		return defaultRes, fmt.Errorf("error beginning transaction: %w", err)
 	}

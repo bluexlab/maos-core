@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"gitlab.com/navyx/ai/maos/maos-core/admin"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
-	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 	"gitlab.com/navyx/ai/maos/maos-core/internal/testhelper"
 )
 
@@ -25,13 +24,11 @@ func TestGetSettingWithDB(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
 
-		accessor := dbaccess.New(dbPool)
-
 		// Setup setting
-		_, err := accessor.Source().Exec(ctx, "INSERT INTO settings (key, value) VALUES ($1, $2)", "system", []byte(`{"display_name": "test-maos", "deployment_approve_required": true}`))
+		_, err := dbPool.Exec(ctx, "INSERT INTO settings (key, value) VALUES ($1, $2)", "system", []byte(`{"display_name": "test-maos", "deployment_approve_required": true}`))
 		require.NoError(t, err)
 
-		response, err := admin.GetSetting(ctx, logger, accessor, api.AdminGetSettingRequestObject{})
+		response, err := admin.GetSetting(ctx, logger, dbPool, api.AdminGetSettingRequestObject{})
 		assert.NoError(t, err)
 		require.IsType(t, api.AdminGetSetting200JSONResponse{}, response)
 
@@ -45,12 +42,10 @@ func TestGetSettingWithDB(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
 
-		accessor := dbaccess.New(dbPool)
-
 		request := api.AdminGetSettingRequestObject{}
 
 		dbPool.Close()
-		response, err := admin.GetSetting(ctx, logger, accessor, request)
+		response, err := admin.GetSetting(ctx, logger, dbPool, request)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminGetSetting500JSONResponse{}, response)
@@ -61,9 +56,7 @@ func TestGetSettingWithDB(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
 
-		accessor := dbaccess.New(dbPool)
-
-		response, err := admin.GetSetting(ctx, logger, accessor, api.AdminGetSettingRequestObject{})
+		response, err := admin.GetSetting(ctx, logger, dbPool, api.AdminGetSettingRequestObject{})
 
 		assert.NoError(t, err)
 		require.IsType(t, api.AdminGetSetting200JSONResponse{}, response)
@@ -83,10 +76,8 @@ func TestUpdateSetting(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
 
-		accessor := dbaccess.New(dbPool)
-
 		// Setup initial setting
-		_, err := accessor.Source().Exec(ctx, "INSERT INTO settings (key, value) VALUES ($1, $2)", "system", []byte(`{"display_name": "initial-maos", "deployment_approve_required": false}`))
+		_, err := dbPool.Exec(ctx, "INSERT INTO settings (key, value) VALUES ($1, $2)", "system", []byte(`{"display_name": "initial-maos", "deployment_approve_required": false}`))
 		require.NoError(t, err)
 
 		// Prepare update request
@@ -97,7 +88,7 @@ func TestUpdateSetting(t *testing.T) {
 			},
 		}
 
-		response, err := admin.UpdateSetting(ctx, logger, accessor, updateRequest)
+		response, err := admin.UpdateSetting(ctx, logger, dbPool, updateRequest)
 		assert.NoError(t, err)
 		require.IsType(t, api.AdminUpdateSetting200JSONResponse{}, response)
 
@@ -107,7 +98,7 @@ func TestUpdateSetting(t *testing.T) {
 
 		// Verify the update in the database
 		var settingValue []byte
-		err = accessor.Source().QueryRow(ctx, "SELECT value FROM settings WHERE key = 'system'").Scan(&settingValue)
+		err = dbPool.QueryRow(ctx, "SELECT value FROM settings WHERE key = 'system'").Scan(&settingValue)
 		require.NoError(t, err)
 
 		var settingContent admin.SettingType
@@ -122,10 +113,8 @@ func TestUpdateSetting(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
 
-		accessor := dbaccess.New(dbPool)
-
 		// Setup initial setting
-		_, err := accessor.Source().Exec(ctx, "INSERT INTO settings (key, value) VALUES ($1, $2)", "system", []byte(`{"display_name": "initial-maos", "deployment_approve_required": true}`))
+		_, err := dbPool.Exec(ctx, "INSERT INTO settings (key, value) VALUES ($1, $2)", "system", []byte(`{"display_name": "initial-maos", "deployment_approve_required": true}`))
 		require.NoError(t, err)
 
 		// Prepare update request with only display name
@@ -135,7 +124,7 @@ func TestUpdateSetting(t *testing.T) {
 			},
 		}
 
-		response, err := admin.UpdateSetting(ctx, logger, accessor, updateRequest)
+		response, err := admin.UpdateSetting(ctx, logger, dbPool, updateRequest)
 		assert.NoError(t, err)
 		require.IsType(t, api.AdminUpdateSetting200JSONResponse{}, response)
 
@@ -145,7 +134,7 @@ func TestUpdateSetting(t *testing.T) {
 
 		// Verify the update in the database
 		var settingValue []byte
-		err = accessor.Source().QueryRow(ctx, "SELECT value FROM settings WHERE key = 'system'").Scan(&settingValue)
+		err = dbPool.QueryRow(ctx, "SELECT value FROM settings WHERE key = 'system'").Scan(&settingValue)
 		require.NoError(t, err)
 
 		var settingContent admin.SettingType
@@ -160,8 +149,6 @@ func TestUpdateSetting(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
 
-		accessor := dbaccess.New(dbPool)
-
 		// Prepare update request
 		updateRequest := api.AdminUpdateSettingRequestObject{
 			Body: &api.AdminUpdateSettingJSONRequestBody{
@@ -170,7 +157,7 @@ func TestUpdateSetting(t *testing.T) {
 			},
 		}
 
-		response, err := admin.UpdateSetting(ctx, logger, accessor, updateRequest)
+		response, err := admin.UpdateSetting(ctx, logger, dbPool, updateRequest)
 		assert.NoError(t, err)
 		require.IsType(t, api.AdminUpdateSetting200JSONResponse{}, response)
 
@@ -180,7 +167,7 @@ func TestUpdateSetting(t *testing.T) {
 
 		// Verify the update in the database
 		var settingValue []byte
-		err = accessor.Source().QueryRow(ctx, "SELECT value FROM settings WHERE key = 'system'").Scan(&settingValue)
+		err = dbPool.QueryRow(ctx, "SELECT value FROM settings WHERE key = 'system'").Scan(&settingValue)
 		require.NoError(t, err)
 
 		var settingContent admin.SettingType
@@ -195,12 +182,10 @@ func TestUpdateSetting(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
 
-		accessor := dbaccess.New(dbPool)
-
 		// Prepare invalid update request (nil body)
 		updateRequest := api.AdminUpdateSettingRequestObject{}
 
-		response, err := admin.UpdateSetting(ctx, logger, accessor, updateRequest)
+		response, err := admin.UpdateSetting(ctx, logger, dbPool, updateRequest)
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminUpdateSetting400JSONResponse{}, response)
 	})
@@ -210,8 +195,6 @@ func TestUpdateSetting(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		defer dbPool.Close()
 
-		accessor := dbaccess.New(dbPool)
-
 		updateRequest := api.AdminUpdateSettingRequestObject{
 			Body: &api.AdminUpdateSettingJSONRequestBody{
 				DisplayName: lo.ToPtr("test-maos"),
@@ -219,7 +202,7 @@ func TestUpdateSetting(t *testing.T) {
 		}
 
 		dbPool.Close()
-		response, err := admin.UpdateSetting(ctx, logger, accessor, updateRequest)
+		response, err := admin.UpdateSetting(ctx, logger, dbPool, updateRequest)
 
 		assert.NoError(t, err)
 		assert.IsType(t, api.AdminUpdateSetting500JSONResponse{}, response)

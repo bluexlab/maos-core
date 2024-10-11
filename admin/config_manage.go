@@ -16,7 +16,7 @@ import (
 func UpdateConfig(
 	ctx context.Context,
 	logger *slog.Logger,
-	accessor dbaccess.Accessor,
+	ds dbaccess.DataSource,
 	request api.AdminUpdateConfigRequestObject,
 ) (api.AdminUpdateConfigResponseObject, error) {
 	logger.Info("AdminUpdateConfig",
@@ -33,7 +33,7 @@ func UpdateConfig(
 		}, nil
 	}
 
-	actor, err := accessor.Querier().GetActorByConfigId(ctx, accessor.Source(), request.Id)
+	actor, err := querier.GetActorByConfigId(ctx, ds, request.Id)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return api.AdminUpdateConfig404Response{}, nil
@@ -54,9 +54,9 @@ func UpdateConfig(
 		}
 	}
 
-	updatedConfig, err := accessor.Querier().ConfigUpdateInactiveContentByCreator(
+	updatedConfig, err := querier.ConfigUpdateInactiveContentByCreator(
 		ctx,
-		accessor.Source(),
+		ds,
 		&dbsqlc.ConfigUpdateInactiveContentByCreatorParams{
 			ID:      request.Id,
 			Updater: request.Body.User,

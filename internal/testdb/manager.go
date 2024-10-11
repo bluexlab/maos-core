@@ -11,7 +11,6 @@ import (
 	"sync/atomic"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 	"gitlab.com/navyx/ai/maos/maos-core/migrate"
 )
 
@@ -82,8 +81,7 @@ func (m *Manager) Acquire(ctx context.Context) (*pgxpool.Pool, error) {
 	}
 	m.addSchemasAndPool(schemaName, pool)
 
-	accessor := dbaccess.New(pool)
-	_, err = migrate.New(accessor, nil).Migrate(ctx, migrate.DirectionUp, &migrate.MigrateOpts{})
+	_, err = migrate.New(pool, nil).Migrate(ctx, migrate.DirectionUp, &migrate.MigrateOpts{})
 	if err != nil {
 		m.logger.Error("Failed to migrate testing db url", "url", url, "error", err)
 		return nil, err

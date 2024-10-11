@@ -19,7 +19,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kelseyhightower/envconfig"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
-	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 	"gitlab.com/navyx/ai/maos/maos-core/handler"
 	"gitlab.com/navyx/ai/maos/maos-core/internal/suitestore"
 	"gitlab.com/navyx/ai/maos/maos-core/k8s"
@@ -72,7 +71,6 @@ func (a *App) Run() {
 	}
 	defer pool.Close()
 
-	accessor := dbaccess.New(pool)
 	a.logger.Info("Connected to database", "database", config.DatabaseUrl)
 
 	// Init Mux router and API handler
@@ -80,7 +78,7 @@ func (a *App) Run() {
 
 	// Init auth middleware and token cache
 	middleware, cacheCloser := middleware.NewBearerAuthMiddleware(
-		middleware.NewDatabaseApiTokenFetch(accessor, bootstrapApiToken),
+		middleware.NewDatabaseApiTokenFetch(pool, bootstrapApiToken),
 		10*time.Second,
 	)
 	defer cacheCloser()
@@ -114,7 +112,7 @@ func (a *App) Run() {
 			os.Exit(1)
 		}
 	}
-	suiteStore := suitestore.NewS3SuiteStore(a.logger.WithGroup("SuiteStore"), s3Client, config.SuiteStoreBucket, config.SuiteStorePrefix, config.MaosDisplayName, accessor, suiteStoreScanInterval)
+	suiteStore := suitestore.NewS3SuiteStore(a.logger.WithGroup("SuiteStore"), s3Client, config.SuiteStoreBucket, config.SuiteStorePrefix, config.MaosDisplayName, pool, suiteStoreScanInterval)
 
 	// Create K8s controller
 	k8sController, err := k8s.NewK8sController()
@@ -125,7 +123,7 @@ func (a *App) Run() {
 
 	apiHandler := handler.NewAPIHandler(handler.NewAPIHandlerParams{
 		Logger:          a.logger.WithGroup("APIHandler"),
-		Accessor:        accessor,
+		SourcePool:      pool,
 		SuiteStore:      suiteStore,
 		K8sController:   k8sController,
 		AOAIEndpoint:    config.AOAIEndpoint,

@@ -15,13 +15,13 @@ func TestAdminGetSettingsEndpoint(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+	server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
-	actor1 := fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
-	fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", actor1.ID, 0, []string{"admin"})
+	actor1 := fixture.InsertActor(t, ctx, ds, "actor1")
+	fixture.InsertToken(t, ctx, ds, "admin-token", actor1.ID, 0, []string{"admin"})
 
 	t.Run("Valid admin token", func(t *testing.T) {
-		_, err := accessor.Querier().SettingUpdateSystem(ctx, accessor.Source(), json.RawMessage(`{"display_name":"test-maos", "deployment_approve_required":true}`))
+		_, err := querier.SettingUpdateSystem(ctx, ds, json.RawMessage(`{"display_name":"test-maos", "deployment_approve_required":true}`))
 		require.NoError(t, err)
 
 		resp, resBody := GetHttp(t, server.URL+"/v1/admin/setting", "admin-token")
@@ -53,9 +53,9 @@ func TestAdminUpdateSettingsEndpoint(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	server, accessor, _ := SetupHttpTestWithDb(t, ctx)
-	actor1 := fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
-	fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", actor1.ID, 0, []string{"admin"})
+	server, ds, _ := SetupHttpTestWithDb(t, ctx)
+	actor1 := fixture.InsertActor(t, ctx, ds, "actor1")
+	fixture.InsertToken(t, ctx, ds, "admin-token", actor1.ID, 0, []string{"admin"})
 
 	t.Run("Valid admin token", func(t *testing.T) {
 		updateBody := `{"display_name":"updated-maos", "deployment_approve_required":false}`

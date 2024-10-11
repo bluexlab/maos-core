@@ -21,7 +21,7 @@ import (
 
 type NewAPIHandlerParams struct {
 	Logger          *slog.Logger
-	Accessor        dbaccess.Accessor
+	SourcePool      dbaccess.SourcePool
 	SuiteStore      suitestore.SuiteStore
 	K8sController   k8s.Controller
 	AOAIEndpoint    string
@@ -32,8 +32,8 @@ type NewAPIHandlerParams struct {
 func NewAPIHandler(params NewAPIHandlerParams) *APIHandler {
 	return &APIHandler{
 		logger:            params.Logger,
-		accessor:          params.Accessor,
-		invocationManager: invocation.NewManager(params.Logger, params.Accessor),
+		dataSource:        params.SourcePool,
+		invocationManager: invocation.NewManager(params.Logger, params.SourcePool),
 		suiteStore:        params.SuiteStore,
 		k8sController:     params.K8sController,
 		AdapterCredentials: adapter.AdapterCredentials{
@@ -46,7 +46,7 @@ func NewAPIHandler(params NewAPIHandlerParams) *APIHandler {
 
 type APIHandler struct {
 	logger             *slog.Logger
-	accessor           dbaccess.Accessor
+	dataSource         dbaccess.DataSource
 	invocationManager  *invocation.Manager
 	suiteStore         suitestore.SuiteStore
 	k8sController      k8s.Controller
@@ -63,7 +63,7 @@ func (s *APIHandler) Close(ctx context.Context) error {
 
 // GetCallerConfig implements the GET /v1/config endpoint
 func (s *APIHandler) GetCallerConfig(ctx context.Context, request api.GetCallerConfigRequestObject) (api.GetCallerConfigResponseObject, error) {
-	return GetActorConfig(ctx, s.logger, s.accessor, request)
+	return GetActorConfig(ctx, s.logger, s.dataSource, request)
 }
 
 // CreateInvocation implements POST /v1/invocations endpoint
@@ -325,7 +325,7 @@ func (s *APIHandler) AdminListActors(ctx context.Context, request api.AdminListA
 	if token == nil {
 		return api.AdminListActors401Response{}, nil
 	}
-	return admin.ListActors(ctx, s.logger, s.accessor, request)
+	return admin.ListActors(ctx, s.logger, s.dataSource, request)
 }
 
 func (s *APIHandler) AdminCreateActor(ctx context.Context, request api.AdminCreateActorRequestObject) (api.AdminCreateActorResponseObject, error) {
@@ -333,7 +333,7 @@ func (s *APIHandler) AdminCreateActor(ctx context.Context, request api.AdminCrea
 	if token == nil {
 		return api.AdminCreateActor401Response{}, nil
 	}
-	return admin.CreateActor(ctx, s.logger, s.accessor, request)
+	return admin.CreateActor(ctx, s.logger, s.dataSource, request)
 }
 
 func (s *APIHandler) AdminGetActor(ctx context.Context, request api.AdminGetActorRequestObject) (api.AdminGetActorResponseObject, error) {
@@ -341,7 +341,7 @@ func (s *APIHandler) AdminGetActor(ctx context.Context, request api.AdminGetActo
 	if token == nil {
 		return api.AdminGetActor401Response{}, nil
 	}
-	return admin.GetActor(ctx, s.logger, s.accessor, request)
+	return admin.GetActor(ctx, s.logger, s.dataSource, request)
 }
 
 func (s *APIHandler) AdminUpdateActor(ctx context.Context, request api.AdminUpdateActorRequestObject) (api.AdminUpdateActorResponseObject, error) {
@@ -349,7 +349,7 @@ func (s *APIHandler) AdminUpdateActor(ctx context.Context, request api.AdminUpda
 	if token == nil {
 		return api.AdminUpdateActor401Response{}, nil
 	}
-	return admin.UpdateActor(ctx, s.logger, s.accessor, request)
+	return admin.UpdateActor(ctx, s.logger, s.dataSource, request)
 }
 
 func (s *APIHandler) AdminDeleteActor(ctx context.Context, request api.AdminDeleteActorRequestObject) (api.AdminDeleteActorResponseObject, error) {
@@ -357,7 +357,7 @@ func (s *APIHandler) AdminDeleteActor(ctx context.Context, request api.AdminDele
 	if token == nil {
 		return api.AdminDeleteActor401Response{}, nil
 	}
-	return admin.DeleteActor(ctx, s.logger, s.accessor, request)
+	return admin.DeleteActor(ctx, s.logger, s.dataSource, request)
 }
 
 func (s *APIHandler) AdminListApiTokens(ctx context.Context, request api.AdminListApiTokensRequestObject) (api.AdminListApiTokensResponseObject, error) {
@@ -365,7 +365,7 @@ func (s *APIHandler) AdminListApiTokens(ctx context.Context, request api.AdminLi
 	if token == nil {
 		return api.AdminListApiTokens401Response{}, nil
 	}
-	return admin.ListApiTokens(ctx, s.logger, s.accessor, request)
+	return admin.ListApiTokens(ctx, s.logger, s.dataSource, request)
 }
 
 func (s *APIHandler) AdminCreateApiToken(ctx context.Context, request api.AdminCreateApiTokenRequestObject) (api.AdminCreateApiTokenResponseObject, error) {
@@ -373,7 +373,7 @@ func (s *APIHandler) AdminCreateApiToken(ctx context.Context, request api.AdminC
 	if token == nil {
 		return api.AdminCreateApiToken401Response{}, nil
 	}
-	return admin.CreateApiToken(ctx, s.logger, s.accessor, request)
+	return admin.CreateApiToken(ctx, s.logger, s.dataSource, request)
 }
 
 func (s *APIHandler) AdminDeleteApiToken(ctx context.Context, request api.AdminDeleteApiTokenRequestObject) (api.AdminDeleteApiTokenResponseObject, error) {
@@ -381,7 +381,7 @@ func (s *APIHandler) AdminDeleteApiToken(ctx context.Context, request api.AdminD
 	if token == nil {
 		return api.AdminDeleteApiToken401Response{}, nil
 	}
-	return admin.DeleteApiToken(ctx, s.logger, s.accessor, request)
+	return admin.DeleteApiToken(ctx, s.logger, s.dataSource, request)
 }
 
 func (s *APIHandler) AdminListDeployments(ctx context.Context, request api.AdminListDeploymentsRequestObject) (api.AdminListDeploymentsResponseObject, error) {
@@ -390,7 +390,7 @@ func (s *APIHandler) AdminListDeployments(ctx context.Context, request api.Admin
 		return api.AdminListDeployments401Response{}, nil
 	}
 
-	return admin.ListDeployments(ctx, s.logger, s.accessor, request)
+	return admin.ListDeployments(ctx, s.logger, s.dataSource, request)
 }
 
 func (s *APIHandler) AdminGetDeployment(ctx context.Context, request api.AdminGetDeploymentRequestObject) (api.AdminGetDeploymentResponseObject, error) {
@@ -399,7 +399,7 @@ func (s *APIHandler) AdminGetDeployment(ctx context.Context, request api.AdminGe
 		return api.AdminGetDeployment401Response{}, nil
 	}
 
-	return admin.GetDeployment(ctx, s.logger, s.accessor, request)
+	return admin.GetDeployment(ctx, s.logger, s.dataSource, request)
 }
 
 func (s *APIHandler) AdminGetDeploymentResult(ctx context.Context, request api.AdminGetDeploymentResultRequestObject) (api.AdminGetDeploymentResultResponseObject, error) {
@@ -407,7 +407,7 @@ func (s *APIHandler) AdminGetDeploymentResult(ctx context.Context, request api.A
 	if token == nil {
 		return api.AdminGetDeploymentResult401Response{}, nil
 	}
-	return admin.GetDeploymentResult(ctx, s.logger, s.accessor, request)
+	return admin.GetDeploymentResult(ctx, s.logger, s.dataSource, request)
 }
 
 func (s *APIHandler) AdminCreateDeployment(ctx context.Context, request api.AdminCreateDeploymentRequestObject) (api.AdminCreateDeploymentResponseObject, error) {
@@ -416,7 +416,7 @@ func (s *APIHandler) AdminCreateDeployment(ctx context.Context, request api.Admi
 		return api.AdminCreateDeployment401Response{}, nil
 	}
 
-	return admin.CreateDeployment(ctx, s.logger, s.accessor, request)
+	return admin.CreateDeployment(ctx, s.logger, s.dataSource, request)
 }
 
 func (s *APIHandler) AdminUpdateDeployment(ctx context.Context, request api.AdminUpdateDeploymentRequestObject) (api.AdminUpdateDeploymentResponseObject, error) {
@@ -424,7 +424,7 @@ func (s *APIHandler) AdminUpdateDeployment(ctx context.Context, request api.Admi
 	if token == nil {
 		return api.AdminUpdateDeployment401Response{}, nil
 	}
-	return admin.UpdateDeployment(ctx, s.logger, s.accessor, request)
+	return admin.UpdateDeployment(ctx, s.logger, s.dataSource, request)
 }
 
 func (s *APIHandler) AdminSubmitDeployment(ctx context.Context, request api.AdminSubmitDeploymentRequestObject) (api.AdminSubmitDeploymentResponseObject, error) {
@@ -432,7 +432,7 @@ func (s *APIHandler) AdminSubmitDeployment(ctx context.Context, request api.Admi
 	if token == nil {
 		return api.AdminSubmitDeployment401Response{}, nil
 	}
-	return admin.SubmitDeployment(ctx, s.logger, s.accessor, request)
+	return admin.SubmitDeployment(ctx, s.logger, s.dataSource, request)
 }
 
 func (s *APIHandler) AdminPublishDeployment(ctx context.Context, request api.AdminPublishDeploymentRequestObject) (api.AdminPublishDeploymentResponseObject, error) {
@@ -440,7 +440,7 @@ func (s *APIHandler) AdminPublishDeployment(ctx context.Context, request api.Adm
 	if token == nil {
 		return api.AdminPublishDeployment401Response{}, nil
 	}
-	return admin.PublishDeployment(ctx, s.logger, s.accessor, s.suiteStore, s.k8sController, request)
+	return admin.PublishDeployment(ctx, s.logger, s.dataSource, s.suiteStore, s.k8sController, request)
 }
 
 func (s *APIHandler) AdminRejectDeployment(ctx context.Context, request api.AdminRejectDeploymentRequestObject) (api.AdminRejectDeploymentResponseObject, error) {
@@ -448,7 +448,7 @@ func (s *APIHandler) AdminRejectDeployment(ctx context.Context, request api.Admi
 	if token == nil {
 		return api.AdminRejectDeployment401Response{}, nil
 	}
-	return admin.RejectDeployment(ctx, s.logger, s.accessor, request)
+	return admin.RejectDeployment(ctx, s.logger, s.dataSource, request)
 }
 
 func (s *APIHandler) AdminDeleteDeployment(ctx context.Context, request api.AdminDeleteDeploymentRequestObject) (api.AdminDeleteDeploymentResponseObject, error) {
@@ -456,7 +456,7 @@ func (s *APIHandler) AdminDeleteDeployment(ctx context.Context, request api.Admi
 	if token == nil {
 		return api.AdminDeleteDeployment401Response{}, nil
 	}
-	return admin.DeleteDeployment(ctx, s.logger, s.accessor, request)
+	return admin.DeleteDeployment(ctx, s.logger, s.dataSource, request)
 }
 
 func (s *APIHandler) AdminRestartDeployment(ctx context.Context, request api.AdminRestartDeploymentRequestObject) (api.AdminRestartDeploymentResponseObject, error) {
@@ -464,7 +464,7 @@ func (s *APIHandler) AdminRestartDeployment(ctx context.Context, request api.Adm
 	if token == nil {
 		return api.AdminRestartDeployment401Response{}, nil
 	}
-	return admin.RestartDeployment(ctx, s.logger, s.accessor, s.k8sController, request)
+	return admin.RestartDeployment(ctx, s.logger, s.dataSource, s.k8sController, request)
 }
 
 func (s *APIHandler) AdminListPodMetrics(ctx context.Context, request api.AdminListPodMetricsRequestObject) (api.AdminListPodMetricsResponseObject, error) {
@@ -480,7 +480,7 @@ func (s *APIHandler) AdminUpdateConfig(ctx context.Context, request api.AdminUpd
 	if token == nil {
 		return api.AdminUpdateConfig401Response{}, nil
 	}
-	return admin.UpdateConfig(ctx, s.logger, s.accessor, request)
+	return admin.UpdateConfig(ctx, s.logger, s.dataSource, request)
 }
 
 func (s *APIHandler) AdminGetSetting(ctx context.Context, request api.AdminGetSettingRequestObject) (api.AdminGetSettingResponseObject, error) {
@@ -488,7 +488,7 @@ func (s *APIHandler) AdminGetSetting(ctx context.Context, request api.AdminGetSe
 	if token == nil {
 		return api.AdminGetSetting401Response{}, nil
 	}
-	return admin.GetSetting(ctx, s.logger, s.accessor, request)
+	return admin.GetSetting(ctx, s.logger, s.dataSource, request)
 }
 
 func (s *APIHandler) AdminUpdateSetting(ctx context.Context, request api.AdminUpdateSettingRequestObject) (api.AdminUpdateSettingResponseObject, error) {
@@ -496,7 +496,7 @@ func (s *APIHandler) AdminUpdateSetting(ctx context.Context, request api.AdminUp
 	if token == nil {
 		return api.AdminUpdateSetting401Response{}, nil
 	}
-	return admin.UpdateSetting(ctx, s.logger, s.accessor, request)
+	return admin.UpdateSetting(ctx, s.logger, s.dataSource, request)
 }
 
 func (s *APIHandler) AdminListReferenceConfigSuites(ctx context.Context, request api.AdminListReferenceConfigSuitesRequestObject) (api.AdminListReferenceConfigSuitesResponseObject, error) {
@@ -504,7 +504,7 @@ func (s *APIHandler) AdminListReferenceConfigSuites(ctx context.Context, request
 	if token == nil {
 		return api.AdminListReferenceConfigSuites401Response{}, nil
 	}
-	return admin.ListReferenceConfigSuites(ctx, s.logger, s.accessor, request)
+	return admin.ListReferenceConfigSuites(ctx, s.logger, s.dataSource, request)
 }
 
 func (s *APIHandler) AdminSyncReferenceConfigSuites(ctx context.Context, request api.AdminSyncReferenceConfigSuitesRequestObject) (api.AdminSyncReferenceConfigSuitesResponseObject, error) {

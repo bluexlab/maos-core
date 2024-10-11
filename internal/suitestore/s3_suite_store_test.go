@@ -14,11 +14,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess/dbsqlc"
 	"gitlab.com/navyx/ai/maos/maos-core/internal/suitestore"
 	"gitlab.com/navyx/ai/maos/maos-core/internal/testhelper"
 )
+
+var querier = dbsqlc.New()
 
 // MockS3Client is a mock for the S3 client
 type MockS3Client struct {
@@ -68,7 +69,6 @@ func (m *MockQuerier) ReferenceConfigSuiteUpsert(ctx context.Context, source str
 func TestS3SuiteStore_SyncStore(t *testing.T) {
 	ctx := context.Background()
 	dbPool := testhelper.TestDB(ctx, t)
-	accessor := dbaccess.New(dbPool)
 
 	mockS3Client := new(MockS3Client)
 
@@ -78,7 +78,7 @@ func TestS3SuiteStore_SyncStore(t *testing.T) {
 		"test-bucket",
 		"test-prefix",
 		"test-maos",
-		accessor,
+		dbPool,
 		600*time.Millisecond,
 	)
 
@@ -156,7 +156,7 @@ func TestS3SuiteStore_SyncStore(t *testing.T) {
 	mockS3Client.AssertExpectations(t)
 
 	// Verify that the suites were added to the database
-	suites, err := accessor.Querier().ReferenceConfigSuiteList(ctx, accessor.Source())
+	suites, err := querier.ReferenceConfigSuiteList(ctx, dbPool)
 	require.NoError(t, err)
 	require.Len(t, suites, 3)
 	require.Equal(t, "suite1", suites[0].Name)
@@ -167,7 +167,6 @@ func TestS3SuiteStore_SyncStore(t *testing.T) {
 func TestS3SuiteStore_SyncStore_IgnoreUnchangedSuite(t *testing.T) {
 	ctx := context.Background()
 	dbPool := testhelper.TestDB(ctx, t)
-	accessor := dbaccess.New(dbPool)
 	mockS3Client := new(MockS3Client)
 	now := time.Now()
 
@@ -177,7 +176,7 @@ func TestS3SuiteStore_SyncStore_IgnoreUnchangedSuite(t *testing.T) {
 		"test-bucket",
 		"test-prefix",
 		"test-maos",
-		accessor,
+		dbPool,
 		1*time.Second,
 	)
 
@@ -213,7 +212,6 @@ func TestS3SuiteStore_SyncStore_IgnoreUnchangedSuite(t *testing.T) {
 func TestS3SuiteStore_WriteSuite(t *testing.T) {
 	ctx := context.Background()
 	dbPool := testhelper.TestDB(ctx, t)
-	accessor := dbaccess.New(dbPool)
 	mockS3Client := new(MockS3Client)
 
 	store := suitestore.NewS3SuiteStore(
@@ -222,7 +220,7 @@ func TestS3SuiteStore_WriteSuite(t *testing.T) {
 		"test-bucket",
 		"test-prefix",
 		"test-maos",
-		accessor,
+		dbPool,
 		1*time.Second,
 	)
 
@@ -252,7 +250,6 @@ func TestS3SuiteStore_WriteSuite(t *testing.T) {
 func TestS3SuiteStore_WriteSuite_Error(t *testing.T) {
 	ctx := context.Background()
 	dbPool := testhelper.TestDB(ctx, t)
-	accessor := dbaccess.New(dbPool)
 	mockS3Client := new(MockS3Client)
 
 	store := suitestore.NewS3SuiteStore(
@@ -261,7 +258,7 @@ func TestS3SuiteStore_WriteSuite_Error(t *testing.T) {
 		"test-bucket",
 		"test-prefix",
 		"", // Empty display name to trigger error
-		accessor,
+		dbPool,
 		1*time.Second,
 	)
 

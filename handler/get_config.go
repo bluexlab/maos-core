@@ -13,10 +13,12 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/util"
 )
 
+var querier = dbsqlc.New()
+
 func GetActorConfig(
 	ctx context.Context,
 	logger *slog.Logger,
-	accessor dbaccess.Accessor,
+	ds dbaccess.DataSource,
 	request api.GetCallerConfigRequestObject,
 ) (api.GetCallerConfigResponseObject, error) {
 	logger.Info("GetActorConfig", "ActorVersion", request.Params.XActorVersion)
@@ -37,9 +39,9 @@ func GetActorConfig(
 	}
 
 	// get active version compatible config
-	config, err := accessor.Querier().ConfigActorActiveConfig(
+	config, err := querier.ConfigActorActiveConfig(
 		ctx,
-		accessor.Source(),
+		ds,
 		&dbsqlc.ConfigActorActiveConfigParams{
 			ActorId:      token.ActorId,
 			ActorVersion: actorVersion,
@@ -61,9 +63,9 @@ func GetActorConfig(
 	}
 
 	// active config not found, get latest version compatible retired config
-	config, err = accessor.Querier().ConfigActorRetiredAndVersionCompatibleConfig(
+	config, err = querier.ConfigActorRetiredAndVersionCompatibleConfig(
 		ctx,
-		accessor.Source(),
+		ds,
 		&dbsqlc.ConfigActorRetiredAndVersionCompatibleConfigParams{
 			ActorId:      token.ActorId,
 			ActorVersion: actorVersion,

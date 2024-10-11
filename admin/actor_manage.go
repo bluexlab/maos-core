@@ -13,12 +13,12 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/util"
 )
 
-func ListActors(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminListActorsRequestObject) (api.AdminListActorsResponseObject, error) {
+func ListActors(ctx context.Context, logger *slog.Logger, ds dbaccess.DataSource, request api.AdminListActorsRequestObject) (api.AdminListActorsResponseObject, error) {
 	logger.Info("ListActors", "request", request)
 
 	page, _ := lo.Coalesce[*int](request.Params.Page, &defaultPage)
 	pageSize, _ := lo.Coalesce[*int](request.Params.PageSize, &defaultPageSize)
-	res, err := accessor.Querier().ActorListPagenated(ctx, accessor.Source(), &dbsqlc.ActorListPagenatedParams{
+	res, err := querier.ActorListPagenated(ctx, ds, &dbsqlc.ActorListPagenatedParams{
 		Page:     int64(*page),
 		PageSize: int64(*pageSize),
 	})
@@ -53,7 +53,7 @@ func ListActors(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acce
 	return response, nil
 }
 
-func CreateActor(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminCreateActorRequestObject) (api.AdminCreateActorResponseObject, error) {
+func CreateActor(ctx context.Context, logger *slog.Logger, ds dbaccess.DataSource, request api.AdminCreateActorRequestObject) (api.AdminCreateActorResponseObject, error) {
 	logger.Info("CreateActor", "request", request.Body)
 
 	if request.Body.Name == "" {
@@ -73,7 +73,7 @@ func CreateActor(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acc
 		}, nil
 	}
 
-	queue, err := accessor.Querier().QueueInsert(ctx, accessor.Source(), &dbsqlc.QueueInsertParams{
+	queue, err := querier.QueueInsert(ctx, ds, &dbsqlc.QueueInsertParams{
 		Name:     request.Body.Name,
 		Metadata: []byte(`{"type":"actor"}`),
 	})
@@ -84,7 +84,7 @@ func CreateActor(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acc
 		}, nil
 	}
 
-	actor, err := accessor.Querier().ActorInsert(ctx, accessor.Source(), &dbsqlc.ActorInsertParams{
+	actor, err := querier.ActorInsert(ctx, ds, &dbsqlc.ActorInsertParams{
 		Name:         request.Body.Name,
 		Role:         dbsqlc.ActorRole(request.Body.Role),
 		QueueID:      queue.ID,
@@ -113,10 +113,10 @@ func CreateActor(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acc
 	}, nil
 }
 
-func GetActor(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminGetActorRequestObject) (api.AdminGetActorResponseObject, error) {
+func GetActor(ctx context.Context, logger *slog.Logger, ds dbaccess.DataSource, request api.AdminGetActorRequestObject) (api.AdminGetActorResponseObject, error) {
 	logger.Info("GetActor", "actorId", request.Id)
 
-	actor, err := accessor.Querier().ActorFindById(ctx, accessor.Source(), int64(request.Id))
+	actor, err := querier.ActorFindById(ctx, ds, int64(request.Id))
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return api.AdminGetActor404Response{}, nil
@@ -148,7 +148,7 @@ func GetActor(ctx context.Context, logger *slog.Logger, accessor dbaccess.Access
 	}, nil
 }
 
-func UpdateActor(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminUpdateActorRequestObject) (api.AdminUpdateActorResponseObject, error) {
+func UpdateActor(ctx context.Context, logger *slog.Logger, ds dbaccess.DataSource, request api.AdminUpdateActorRequestObject) (api.AdminUpdateActorResponseObject, error) {
 	logger.Info("UpdateActor", "actorId", request.Id, "name", lo.FromPtrOr(request.Body.Name, "<nil>"))
 
 	if lo.FromPtrOr(request.Body.Migratable, false) && (!lo.FromPtrOr(request.Body.Deployable, false) || !lo.FromPtrOr(request.Body.Configurable, false)) {
@@ -162,7 +162,7 @@ func UpdateActor(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acc
 		}, nil
 	}
 
-	actor, err := accessor.Querier().ActorUpdate(ctx, accessor.Source(), &dbsqlc.ActorUpdateParams{
+	actor, err := querier.ActorUpdate(ctx, ds, &dbsqlc.ActorUpdateParams{
 		ID:           int64(request.Id),
 		Name:         request.Body.Name,
 		Role:         dbsqlc.NullActorRole{ActorRole: dbsqlc.ActorRole(lo.FromPtrOr(request.Body.Role, "")), Valid: request.Body.Role != nil},
@@ -196,10 +196,10 @@ func UpdateActor(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acc
 	}, nil
 }
 
-func DeleteActor(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminDeleteActorRequestObject) (api.AdminDeleteActorResponseObject, error) {
+func DeleteActor(ctx context.Context, logger *slog.Logger, ds dbaccess.DataSource, request api.AdminDeleteActorRequestObject) (api.AdminDeleteActorResponseObject, error) {
 	logger.Info("DeleteActor", "actorId", request.Id)
 
-	actor, err := accessor.Querier().ActorDelete(ctx, accessor.Source(), int64(request.Id))
+	actor, err := querier.ActorDelete(ctx, ds, int64(request.Id))
 	if err != nil {
 		logger.Error("Cannot delete actor", "error", err)
 		return api.AdminDeleteActor500JSONResponse{

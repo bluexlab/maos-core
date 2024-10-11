@@ -15,11 +15,14 @@ import (
 	"github.com/stretchr/testify/require"
 	"gitlab.com/navyx/ai/maos/maos-core/api"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
+	"gitlab.com/navyx/ai/maos/maos-core/dbaccess/dbsqlc"
 	"gitlab.com/navyx/ai/maos/maos-core/handler"
 	"gitlab.com/navyx/ai/maos/maos-core/internal/testhelper"
 	"gitlab.com/navyx/ai/maos/maos-core/k8s"
 	"gitlab.com/navyx/ai/maos/maos-core/middleware"
 )
+
+var querier = dbsqlc.New()
 
 type MockK8sController struct {
 	mock.Mock
@@ -66,7 +69,7 @@ func (m *MockK8sController) RunMigrations(ctx context.Context, params []k8s.Migr
 
 // SetupHttpTestWithDb sets up two test servers and database accessors.
 // It can simulate two running services in HA mode.
-func SetupHttpTestWithDb(t *testing.T, ctx context.Context) (*httptest.Server, dbaccess.Accessor, *httptest.Server) {
+func SetupHttpTestWithDb(t *testing.T, ctx context.Context) (*httptest.Server, dbaccess.DataSource, *httptest.Server) {
 	dbPool := testhelper.TestDB(ctx, t)
 	pool2, err := pgxpool.NewWithConfig(ctx, dbPool.Config())
 	require.NoError(t, err)
@@ -76,13 +79,13 @@ func SetupHttpTestWithDb(t *testing.T, ctx context.Context) (*httptest.Server, d
 		pool2.Close()
 	})
 
-	s, a, _, _ := builder(t, ctx, dbPool)
+	s, ds, _, _ := builder(t, ctx, dbPool)
 	s2, _, _, _ := builder(t, ctx, pool2)
 
-	return s, a, s2
+	return s, ds, s2
 }
 
-func SetupHttpTestWithDbAndSuiteStore(t *testing.T, ctx context.Context) (*httptest.Server, dbaccess.Accessor, *httptest.Server, *testhelper.MockSuiteStore) {
+func SetupHttpTestWithDbAndSuiteStore(t *testing.T, ctx context.Context) (*httptest.Server, dbaccess.DataSource, *httptest.Server, *testhelper.MockSuiteStore) {
 	dbPool := testhelper.TestDB(ctx, t)
 	pool2, err := pgxpool.NewWithConfig(ctx, dbPool.Config())
 	require.NoError(t, err)
@@ -92,13 +95,13 @@ func SetupHttpTestWithDbAndSuiteStore(t *testing.T, ctx context.Context) (*httpt
 		pool2.Close()
 	})
 
-	s, a, suiteStore, _ := builder(t, ctx, dbPool)
+	s, ds, suiteStore, _ := builder(t, ctx, dbPool)
 	s2, _, _, _ := builder(t, ctx, pool2)
 
-	return s, a, s2, suiteStore
+	return s, ds, s2, suiteStore
 }
 
-func SetupHttpTestWithDbAndK8s(t *testing.T, ctx context.Context) (*httptest.Server, dbaccess.Accessor, *MockK8sController) {
+func SetupHttpTestWithDbAndK8s(t *testing.T, ctx context.Context) (*httptest.Server, dbaccess.DataSource, *MockK8sController) {
 	dbPool := testhelper.TestDB(ctx, t)
 	pool2, err := pgxpool.NewWithConfig(ctx, dbPool.Config())
 	require.NoError(t, err)
@@ -108,13 +111,12 @@ func SetupHttpTestWithDbAndK8s(t *testing.T, ctx context.Context) (*httptest.Ser
 		pool2.Close()
 	})
 
-	s, a, _, k8sController := builder(t, ctx, dbPool)
+	s, ds, _, k8sController := builder(t, ctx, dbPool)
 
-	return s, a, k8sController
+	return s, ds, k8sController
 }
 
-func builder(t *testing.T, ctx context.Context, pool *pgxpool.Pool) (*httptest.Server, *dbaccess.PgAccessor, *testhelper.MockSuiteStore, *MockK8sController) {
-	accessor := dbaccess.New(pool)
+func builder(t *testing.T, ctx context.Context, pool *pgxpool.Pool) (*httptest.Server, dbaccess.DataSource, *testhelper.MockSuiteStore, *MockK8sController) {
 	suiteStore := testhelper.NewMockSuiteStore()
 	logger := testhelper.Logger(t)
 
@@ -122,7 +124,7 @@ func builder(t *testing.T, ctx context.Context, pool *pgxpool.Pool) (*httptest.S
 
 	apiHandler := handler.NewAPIHandler(handler.NewAPIHandlerParams{
 		Logger:          logger.WithGroup("APIHandler"),
-		Accessor:        accessor,
+		SourcePool:      pool,
 		SuiteStore:      suiteStore,
 		K8sController:   mockK8sController,
 		AOAIEndpoint:    "--AOAI_ENDPOINT--",
@@ -134,7 +136,7 @@ func builder(t *testing.T, ctx context.Context, pool *pgxpool.Pool) (*httptest.S
 
 	router := mux.NewRouter()
 	middleware, cacheCloser := middleware.NewBearerAuthMiddleware(
-		middleware.NewDatabaseApiTokenFetch(accessor, ""),
+		middleware.NewDatabaseApiTokenFetch(pool, ""),
 		10*time.Second,
 	)
 
@@ -159,5 +161,5 @@ func builder(t *testing.T, ctx context.Context, pool *pgxpool.Pool) (*httptest.S
 		cacheCloser()
 	})
 
-	return server, accessor, suiteStore, mockK8sController
+	return server, pool, suiteStore, mockK8sController
 }

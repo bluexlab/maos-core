@@ -19,7 +19,7 @@ import (
 	"gitlab.com/navyx/ai/maos/maos-core/util"
 )
 
-func ListDeployments(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminListDeploymentsRequestObject) (api.AdminListDeploymentsResponseObject, error) {
+func ListDeployments(ctx context.Context, logger *slog.Logger, ds dbaccess.DataSource, request api.AdminListDeploymentsRequestObject) (api.AdminListDeploymentsResponseObject, error) {
 	logger.Info("AdminListDeployments",
 		"status", lo.FromPtrOr(request.Params.Status, "<nil>"),
 		"reviewer", lo.FromPtrOr(request.Params.Reviewer, "<nil>"),
@@ -35,7 +35,7 @@ func ListDeployments(ctx context.Context, logger *slog.Logger, accessor dbaccess
 		status.Scan(string(*request.Params.Status))
 	}
 
-	res, err := accessor.Querier().DeploymentListPaginated(ctx, accessor.Source(), &dbsqlc.DeploymentListPaginatedParams{
+	res, err := querier.DeploymentListPaginated(ctx, ds, &dbsqlc.DeploymentListPaginatedParams{
 		Page:     int64(*page),
 		PageSize: int64(pageSize),
 		Status:   status,
@@ -77,10 +77,10 @@ func ListDeployments(ctx context.Context, logger *slog.Logger, accessor dbaccess
 	return response, nil
 }
 
-func GetDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminGetDeploymentRequestObject) (api.AdminGetDeploymentResponseObject, error) {
+func GetDeployment(ctx context.Context, logger *slog.Logger, ds dbaccess.DataSource, request api.AdminGetDeploymentRequestObject) (api.AdminGetDeploymentResponseObject, error) {
 	logger.Info("AdminGetDeployment", "id", request.Id)
 
-	deployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), int64(request.Id))
+	deployment, err := querier.DeploymentGetById(ctx, ds, int64(request.Id))
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return api.AdminGetDeployment404Response{}, nil
@@ -108,7 +108,7 @@ func GetDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.A
 		}, nil
 	}
 
-	configs, err := accessor.Querier().ConfigListBySuiteIdGroupByActor(ctx, accessor.Source(), *deployment.ConfigSuiteID)
+	configs, err := querier.ConfigListBySuiteIdGroupByActor(ctx, ds, *deployment.ConfigSuiteID)
 	if err != nil {
 		logger.Error("Cannot get configs", "error", err)
 		return api.AdminGetDeployment500JSONResponse{
@@ -159,10 +159,10 @@ func GetDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.A
 	}, nil
 }
 
-func GetDeploymentResult(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminGetDeploymentResultRequestObject) (api.AdminGetDeploymentResultResponseObject, error) {
+func GetDeploymentResult(ctx context.Context, logger *slog.Logger, ds dbaccess.DataSource, request api.AdminGetDeploymentResultRequestObject) (api.AdminGetDeploymentResultResponseObject, error) {
 	logger.Info("AdminGetDeploymentResult", "id", request.Id)
 
-	deployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), int64(request.Id))
+	deployment, err := querier.DeploymentGetById(ctx, ds, int64(request.Id))
 	if err != nil {
 		return api.AdminGetDeploymentResult404Response{}, nil
 	}
@@ -182,7 +182,7 @@ func GetDeploymentResult(ctx context.Context, logger *slog.Logger, accessor dbac
 	}, nil
 }
 
-func CreateDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminCreateDeploymentRequestObject) (api.AdminCreateDeploymentResponseObject, error) {
+func CreateDeployment(ctx context.Context, logger *slog.Logger, ds dbaccess.DataSource, request api.AdminCreateDeploymentRequestObject) (api.AdminCreateDeploymentResponseObject, error) {
 	logger.Info("AdminCreateDeployment", "request", request.Body)
 
 	if request.Body.Name == "" || request.Body.User == "" {
@@ -191,7 +191,7 @@ func CreateDeployment(ctx context.Context, logger *slog.Logger, accessor dbacces
 		}, nil
 	}
 
-	deployment, err := accessor.Querier().DeploymentInsertWithConfigSuite(ctx, accessor.Source(), &dbsqlc.DeploymentInsertWithConfigSuiteParams{
+	deployment, err := querier.DeploymentInsertWithConfigSuite(ctx, ds, &dbsqlc.DeploymentInsertWithConfigSuiteParams{
 		Name:      request.Body.Name,
 		Reviewers: lo.FromPtrOr(request.Body.Reviewers, nil),
 		CreatedBy: request.Body.User,
@@ -220,10 +220,10 @@ func CreateDeployment(ctx context.Context, logger *slog.Logger, accessor dbacces
 	}, nil
 }
 
-func UpdateDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminUpdateDeploymentRequestObject) (api.AdminUpdateDeploymentResponseObject, error) {
+func UpdateDeployment(ctx context.Context, logger *slog.Logger, ds dbaccess.DataSource, request api.AdminUpdateDeploymentRequestObject) (api.AdminUpdateDeploymentResponseObject, error) {
 	logger.Info("AdminUpdateDeployment", "id", request.Id, "name", lo.FromPtrOr(request.Body.Name, "<nil>"), "reviewers", lo.FromPtrOr(request.Body.Reviewers, nil))
 
-	deployment, err := accessor.Querier().DeploymentUpdate(ctx, accessor.Source(), &dbsqlc.DeploymentUpdateParams{
+	deployment, err := querier.DeploymentUpdate(ctx, ds, &dbsqlc.DeploymentUpdateParams{
 		ID:        int64(request.Id),
 		Name:      request.Body.Name,
 		Reviewers: lo.FromPtrOr(request.Body.Reviewers, nil),
@@ -258,10 +258,10 @@ func UpdateDeployment(ctx context.Context, logger *slog.Logger, accessor dbacces
 	}, nil
 }
 
-func SubmitDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminSubmitDeploymentRequestObject) (api.AdminSubmitDeploymentResponseObject, error) {
+func SubmitDeployment(ctx context.Context, logger *slog.Logger, ds dbaccess.DataSource, request api.AdminSubmitDeploymentRequestObject) (api.AdminSubmitDeploymentResponseObject, error) {
 	logger.Info("AdminSubmitDeployment", "id", request.Id)
 
-	tx, err := accessor.Source().Begin(ctx)
+	tx, err := ds.Begin(ctx)
 	if err != nil {
 		logger.Error("Cannot start transaction", "error", err)
 		return api.AdminSubmitDeployment500JSONResponse{
@@ -270,7 +270,7 @@ func SubmitDeployment(ctx context.Context, logger *slog.Logger, accessor dbacces
 	}
 	defer tx.Rollback(ctx)
 
-	deployment, err := accessor.Querier().DeploymentGetById(ctx, tx, int64(request.Id))
+	deployment, err := querier.DeploymentGetById(ctx, tx, int64(request.Id))
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return api.AdminSubmitDeployment404Response{}, nil
@@ -301,7 +301,7 @@ func SubmitDeployment(ctx context.Context, logger *slog.Logger, accessor dbacces
 		}, nil
 	}
 
-	_, err = accessor.Querier().DeploymentSubmitForReview(ctx, tx, int64(request.Id))
+	_, err = querier.DeploymentSubmitForReview(ctx, tx, int64(request.Id))
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return api.AdminSubmitDeployment404Response{}, nil
@@ -321,7 +321,7 @@ func SubmitDeployment(ctx context.Context, logger *slog.Logger, accessor dbacces
 	return api.AdminSubmitDeployment200Response{}, nil
 }
 
-func RejectDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminRejectDeploymentRequestObject) (api.AdminRejectDeploymentResponseObject, error) {
+func RejectDeployment(ctx context.Context, logger *slog.Logger, ds dbaccess.DataSource, request api.AdminRejectDeploymentRequestObject) (api.AdminRejectDeploymentResponseObject, error) {
 	logger.Info("AdminRejectDeployment", "id", request.Id, "user", request.Body.User)
 
 	if request.Body == nil || request.Body.User == "" {
@@ -330,7 +330,7 @@ func RejectDeployment(ctx context.Context, logger *slog.Logger, accessor dbacces
 		}, nil
 	}
 
-	_, err := accessor.Querier().DeploymentReject(ctx, accessor.Source(), &dbsqlc.DeploymentRejectParams{
+	_, err := querier.DeploymentReject(ctx, ds, &dbsqlc.DeploymentRejectParams{
 		ID:         int64(request.Id),
 		RejectedBy: request.Body.User,
 		Notes:      json.RawMessage(fmt.Sprintf(`{"reason": "%s"}`, request.Body.Reason)),
@@ -352,7 +352,7 @@ func RejectDeployment(ctx context.Context, logger *slog.Logger, accessor dbacces
 func PublishDeployment(
 	ctx context.Context,
 	logger *slog.Logger,
-	accessor dbaccess.Accessor,
+	ds dbaccess.DataSource,
 	suiteStore suitestore.SuiteStore,
 	controller k8s.Controller,
 	request api.AdminPublishDeploymentRequestObject) (api.AdminPublishDeploymentResponseObject, error) {
@@ -364,7 +364,7 @@ func PublishDeployment(
 		}, nil
 	}
 
-	errMessage, err := accessor.Querier().SetDeploymentDeploying(ctx, accessor.Source(), &dbsqlc.SetDeploymentDeployingParams{
+	errMessage, err := querier.SetDeploymentDeploying(ctx, ds, &dbsqlc.SetDeploymentDeployingParams{
 		ID:         int64(request.Id),
 		ApprovedBy: request.Body.User,
 	})
@@ -382,15 +382,15 @@ func PublishDeployment(
 	}
 
 	// run deployment migrations and update deployment in background
-	go runDeploymentMigrationsAndUpdateDeployment(logger, controller, suiteStore, accessor, int64(request.Id), request.Body.User)
+	go runDeploymentMigrationsAndUpdateDeployment(logger, controller, suiteStore, ds, int64(request.Id), request.Body.User)
 
 	return api.AdminPublishDeployment201Response{}, nil
 }
 
-func DeleteDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminDeleteDeploymentRequestObject) (api.AdminDeleteDeploymentResponseObject, error) {
+func DeleteDeployment(ctx context.Context, logger *slog.Logger, ds dbaccess.DataSource, request api.AdminDeleteDeploymentRequestObject) (api.AdminDeleteDeploymentResponseObject, error) {
 	logger.Info("AdminDeleteDeployment", "id", request.Id)
 
-	_, err := accessor.Querier().DeploymentDelete(ctx, accessor.Source(), int64(request.Id))
+	_, err := querier.DeploymentDelete(ctx, ds, int64(request.Id))
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return api.AdminDeleteDeployment404Response{}, nil
@@ -408,7 +408,7 @@ func DeleteDeployment(ctx context.Context, logger *slog.Logger, accessor dbacces
 func RestartDeployment(
 	ctx context.Context,
 	logger *slog.Logger,
-	accessor dbaccess.Accessor,
+	ds dbaccess.DataSource,
 	controller k8s.Controller,
 	request api.AdminRestartDeploymentRequestObject) (api.AdminRestartDeploymentResponseObject, error) {
 	logger.Info("AdminRestartDeployment", "id", request.Id, "user", request.Body.User)
@@ -417,7 +417,7 @@ func RestartDeployment(
 		return api.AdminRestartDeployment401Response{}, nil
 	}
 
-	tx, err := accessor.Source().Begin(ctx)
+	tx, err := ds.Begin(ctx)
 	if err != nil {
 		logger.Error("Cannot start transaction", "error", err)
 		return api.AdminRestartDeployment500JSONResponse{
@@ -427,7 +427,7 @@ func RestartDeployment(
 	defer tx.Rollback(ctx)
 
 	// Query deployment and check status
-	deployment, err := accessor.Querier().DeploymentGetById(ctx, tx, int64(request.Id))
+	deployment, err := querier.DeploymentGetById(ctx, tx, int64(request.Id))
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return api.AdminRestartDeployment404Response{}, nil
@@ -450,7 +450,7 @@ func RestartDeployment(
 	}
 
 	// update kubernetes actor deployments
-	configs, err := accessor.Querier().ConfigListBySuiteIdGroupByActor(ctx, tx, *deployment.ConfigSuiteID)
+	configs, err := querier.ConfigListBySuiteIdGroupByActor(ctx, tx, *deployment.ConfigSuiteID)
 	if err != nil {
 		logger.Error("Cannot get configs", "error", err)
 		return api.AdminRestartDeployment500JSONResponse{
@@ -461,7 +461,7 @@ func RestartDeployment(
 	// rotate actor api keys
 	// it generates new api keys for each actor
 	// and set the old ones to expire after 15 minutes
-	apiTokens, err := rotateActorApiKeys(ctx, accessor, tx, configs, request.Body.User)
+	apiTokens, err := rotateActorApiKeys(ctx, tx, configs, request.Body.User)
 	if err != nil {
 		logger.Error("Cannot rotate actor api keys", "error", err)
 		return api.AdminRestartDeployment500JSONResponse{
@@ -518,8 +518,8 @@ func deserializeNotes(content []byte) *map[string]interface{} {
 	return &notesMap
 }
 
-func publishConfigSuiteToS3(ctx context.Context, configSuiteId int64, tx pgx.Tx, accessor dbaccess.Accessor, suiteStore suitestore.SuiteStore) error {
-	configs, err := accessor.Querier().ConfigListBySuiteIdGroupByActor(ctx, tx, configSuiteId)
+func publishConfigSuiteToS3(ctx context.Context, configSuiteId int64, tx pgx.Tx, ds dbaccess.DataSource, suiteStore suitestore.SuiteStore) error {
+	configs, err := querier.ConfigListBySuiteIdGroupByActor(ctx, ds, configSuiteId)
 	if err != nil {
 		return err
 	}
@@ -547,18 +547,18 @@ func runDeploymentMigrationsAndUpdateDeployment(
 	logger *slog.Logger,
 	controller k8s.Controller,
 	suiteStore suitestore.SuiteStore,
-	accessor dbaccess.Accessor,
+	ds dbaccess.DataSource,
 	deploymentId int64,
 	user string,
 ) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	err := doRunDeploymentMigrationsAndUpdateDeployment(ctx, logger, controller, suiteStore, accessor, deploymentId, user)
+	err := doRunDeploymentMigrationsAndUpdateDeployment(ctx, logger, controller, suiteStore, ds, deploymentId, user)
 	if err != nil {
 		logger.Error("Cannot run deployment migrations", "error", err)
 		// store error to deployment
-		err = accessor.Querier().UpdateDeploymentLastError(ctx, accessor.Source(), &dbsqlc.UpdateDeploymentLastErrorParams{
+		err = querier.UpdateDeploymentLastError(ctx, ds, &dbsqlc.UpdateDeploymentLastErrorParams{
 			ID:        deploymentId,
 			LastError: err.Error(),
 		})
@@ -573,11 +573,11 @@ func doRunDeploymentMigrationsAndUpdateDeployment(
 	logger *slog.Logger,
 	controller k8s.Controller,
 	suiteStore suitestore.SuiteStore,
-	accessor dbaccess.Accessor,
+	ds dbaccess.DataSource,
 	deploymentId int64,
 	user string,
 ) error {
-	deployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), deploymentId)
+	deployment, err := querier.DeploymentGetById(ctx, ds, deploymentId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return fmt.Errorf("deployment not found")
@@ -586,21 +586,21 @@ func doRunDeploymentMigrationsAndUpdateDeployment(
 		return fmt.Errorf("Cannot get deployment: %v", err)
 	}
 
-	configs, err := accessor.Querier().ConfigListBySuiteIdGroupByActor(ctx, accessor.Source(), *deployment.ConfigSuiteID)
+	configs, err := querier.ConfigListBySuiteIdGroupByActor(ctx, ds, *deployment.ConfigSuiteID)
 	if err != nil {
 		logger.Error("Cannot get configs", "error", err)
 		return fmt.Errorf("Cannot get configs: %v", err)
 	}
 
 	// run migrations
-	err = runDeploymentMigrations(ctx, logger, controller, accessor, deploymentId, configs)
+	err = runDeploymentMigrations(ctx, logger, controller, ds, deploymentId, configs)
 	if err != nil {
 		logger.Error("Cannot run deployment migrations", "error", err)
 		return fmt.Errorf("Cannot run deployment migrations: %v", err)
 	}
 
 	// migration finished, update deployment status to deployed
-	tx, err := accessor.Source().Begin(ctx)
+	tx, err := ds.Begin(ctx)
 	if err != nil {
 		logger.Error("Cannot start transaction", "error", err)
 		return fmt.Errorf("Cannot publish deployment. Cannot start transaction: %v", err)
@@ -608,7 +608,7 @@ func doRunDeploymentMigrationsAndUpdateDeployment(
 	defer tx.Rollback(ctx)
 
 	// Query deployment again and check status
-	deployment, err = accessor.Querier().DeploymentGetById(ctx, tx, deploymentId)
+	deployment, err = querier.DeploymentGetById(ctx, tx, deploymentId)
 	if err != nil {
 		logger.Error("Cannot get deployment", "error", err)
 		return fmt.Errorf("Cannot get deployment: %v", err)
@@ -624,7 +624,7 @@ func doRunDeploymentMigrationsAndUpdateDeployment(
 	}
 
 	// Activate config suite
-	suiteId, err := accessor.Querier().ConfigSuiteActivate(ctx, tx, &dbsqlc.ConfigSuiteActivateParams{
+	suiteId, err := querier.ConfigSuiteActivate(ctx, tx, &dbsqlc.ConfigSuiteActivateParams{
 		ID:        *deployment.ConfigSuiteID,
 		UpdatedBy: user,
 	})
@@ -634,7 +634,7 @@ func doRunDeploymentMigrationsAndUpdateDeployment(
 	}
 
 	// Update deployment status to deployed
-	_, err = accessor.Querier().DeploymentPublish(ctx, tx, &dbsqlc.DeploymentPublishParams{
+	_, err = querier.DeploymentPublish(ctx, tx, &dbsqlc.DeploymentPublishParams{
 		ID:         int64(deploymentId),
 		ApprovedBy: user,
 	})
@@ -644,7 +644,7 @@ func doRunDeploymentMigrationsAndUpdateDeployment(
 	}
 
 	// publish config suite to S3
-	err = publishConfigSuiteToS3(ctx, suiteId, tx, accessor, suiteStore)
+	err = publishConfigSuiteToS3(ctx, suiteId, tx, tx, suiteStore)
 	if err != nil {
 		logger.Error("Cannot publish config suite to S3", "error", err)
 		return fmt.Errorf("Cannot publish config suite to S3: %v", err)
@@ -653,7 +653,7 @@ func doRunDeploymentMigrationsAndUpdateDeployment(
 	// rotate actor api keys
 	// it generates new api keys for each actor
 	// and set the old ones to expire after 15 minutes
-	apiTokens, err := rotateActorApiKeys(ctx, accessor, tx, configs, user)
+	apiTokens, err := rotateActorApiKeys(ctx, tx, configs, user)
 	if err != nil {
 		logger.Error("Cannot rotate actor api keys", "error", err)
 		return fmt.Errorf("Cannot rotate actor api keys: %v", err)
@@ -672,7 +672,7 @@ func runDeploymentMigrations(
 	ctx context.Context,
 	logger *slog.Logger,
 	controller k8s.Controller,
-	accessor dbaccess.Accessor,
+	ds dbaccess.DataSource,
 	deploymentId int64,
 	configs []*dbsqlc.ConfigListBySuiteIdGroupByActorRow,
 ) error {
@@ -718,7 +718,7 @@ func runDeploymentMigrations(
 		logger.Error("failed to marshal migration logs", "error", err)
 	} else {
 		// write migration logs to database
-		err = accessor.Querier().UpdateDeploymentMigrationLogs(ctx, accessor.Source(), &dbsqlc.UpdateDeploymentMigrationLogsParams{
+		err = querier.UpdateDeploymentMigrationLogs(ctx, ds, &dbsqlc.UpdateDeploymentMigrationLogsParams{
 			ID:            deploymentId,
 			MigrationLogs: logsBytes,
 		})
@@ -816,7 +816,6 @@ func getReplicasFromContent(content map[string]string) int32 {
 
 func rotateActorApiKeys(
 	ctx context.Context,
-	accessor dbaccess.Accessor,
 	tx pgx.Tx,
 	configs []*dbsqlc.ConfigListBySuiteIdGroupByActorRow,
 	createdBy string,
@@ -827,7 +826,7 @@ func rotateActorApiKeys(
 		newApiToken := GenerateAPIToken()
 
 		expirationTime := time.Now().Add(60 * 24 * time.Hour)
-		_, err := accessor.Querier().ApiTokenRotate(ctx, tx, &dbsqlc.ApiTokenRotateParams{
+		_, err := querier.ApiTokenRotate(ctx, tx, &dbsqlc.ApiTokenRotateParams{
 			ID:          newApiToken,
 			ActorId:     config.ActorId,
 			NewExpireAt: int64(expirationTime.Unix()),

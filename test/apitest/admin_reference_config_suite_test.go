@@ -15,10 +15,10 @@ func TestAdminSyncReferenceConfigSuites(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("Successful sync", func(t *testing.T) {
-		server, accessor, _, suiteStore := SetupHttpTestWithDbAndSuiteStore(t, ctx)
+		server, ds, _, suiteStore := SetupHttpTestWithDbAndSuiteStore(t, ctx)
 
-		actor := fixture.InsertActor(t, ctx, accessor.Source(), "actor1")
-		fixture.InsertToken(t, ctx, accessor.Source(), "admin-token", actor.ID, 0, []string{"admin"})
+		actor := fixture.InsertActor(t, ctx, ds, "actor1")
+		fixture.InsertToken(t, ctx, ds, "admin-token", actor.ID, 0, []string{"admin"})
 
 		resp, _ := PostHttp(t, server.URL+"/v1/admin/reference_config_suites/sync", "", "admin-token")
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
@@ -37,10 +37,10 @@ func TestAdminSyncReferenceConfigSuites(t *testing.T) {
 	})
 
 	t.Run("Non-admin access", func(t *testing.T) {
-		server, accessor, _ := SetupHttpTestWithDb(t, ctx)
+		server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
-		actor := fixture.InsertActor(t, ctx, accessor.Source(), "non-admin")
-		fixture.InsertToken(t, ctx, accessor.Source(), "non-admin-token", actor.ID, 0, []string{"user"})
+		actor := fixture.InsertActor(t, ctx, ds, "non-admin")
+		fixture.InsertToken(t, ctx, ds, "non-admin-token", actor.ID, 0, []string{"user"})
 
 		resp, _ := PostHttp(t, server.URL+"/v1/admin/reference_config_suites/sync", "", "non-admin-token")
 		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)

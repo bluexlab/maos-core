@@ -16,10 +16,10 @@ type SettingType struct {
 	DeploymentApproveRequired *bool   `json:"deployment_approve_required,omitempty"`
 }
 
-func GetSetting(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminGetSettingRequestObject) (api.AdminGetSettingResponseObject, error) {
+func GetSetting(ctx context.Context, logger *slog.Logger, ds dbaccess.DataSource, request api.AdminGetSettingRequestObject) (api.AdminGetSettingResponseObject, error) {
 	logger.Info("GetSetting")
 
-	setting, err := accessor.Querier().SettingGetSystem(ctx, accessor.Source())
+	setting, err := querier.SettingGetSystem(ctx, ds)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return api.AdminGetSetting200JSONResponse{
@@ -47,7 +47,7 @@ func GetSetting(ctx context.Context, logger *slog.Logger, accessor dbaccess.Acce
 	}, nil
 }
 
-func UpdateSetting(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminUpdateSettingRequestObject) (api.AdminUpdateSettingResponseObject, error) {
+func UpdateSetting(ctx context.Context, logger *slog.Logger, ds dbaccess.DataSource, request api.AdminUpdateSettingRequestObject) (api.AdminUpdateSettingResponseObject, error) {
 	logger.Info("UpdateSetting", "request", request.Body)
 
 	return500Error := func() (api.AdminUpdateSettingResponseObject, error) {
@@ -80,7 +80,7 @@ func UpdateSetting(ctx context.Context, logger *slog.Logger, accessor dbaccess.A
 	}
 
 	// Save update to database
-	setting, err := accessor.Querier().SettingUpdateSystem(ctx, accessor.Source(), updatedSettingBytes)
+	setting, err := querier.SettingUpdateSystem(ctx, ds, updatedSettingBytes)
 	if err != nil {
 		logger.Error("Failed to update setting", "error", err)
 		return return500Error()

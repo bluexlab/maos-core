@@ -990,6 +990,9 @@ type ServerInterface interface {
 	// Restart a specific Deployment.
 	// (POST /v1/admin/deployments/{id}/restart)
 	AdminRestartDeployment(w http.ResponseWriter, r *http.Request, id int64)
+	// Get the result of a deployment
+	// (GET /v1/admin/deployments/{id}/result)
+	AdminGetDeploymentResult(w http.ResponseWriter, r *http.Request, id int64)
 	// Submit the Deployment for reviewing. Only draft deployments can be submitted. After submitting, the deployment will be in `reviewing` status. Reviewers will be notified.
 	// (POST /v1/admin/deployments/{id}/submit)
 	AdminSubmitDeployment(w http.ResponseWriter, r *http.Request, id int64)
@@ -1709,6 +1712,39 @@ func (siw *ServerInterfaceWrapper) AdminRestartDeployment(w http.ResponseWriter,
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AdminRestartDeployment(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdminGetDeploymentResult operation middleware
+func (siw *ServerInterfaceWrapper) AdminGetDeploymentResult(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", mux.Vars(r)["id"], &id, runtime.BindStyledParameterOptions{Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, TraceScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdminGetDeploymentResult(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2692,6 +2728,8 @@ func HandlerWithOptions(si ServerInterface, options GorillaServerOptions) http.H
 
 	r.HandleFunc(options.BaseURL+"/v1/admin/deployments/{id}/restart", wrapper.AdminRestartDeployment).Methods("POST")
 
+	r.HandleFunc(options.BaseURL+"/v1/admin/deployments/{id}/result", wrapper.AdminGetDeploymentResult).Methods("GET")
+
 	r.HandleFunc(options.BaseURL+"/v1/admin/deployments/{id}/submit", wrapper.AdminSubmitDeployment).Methods("POST")
 
 	r.HandleFunc(options.BaseURL+"/v1/admin/metrics/pods", wrapper.AdminListPodMetrics).Methods("GET")
@@ -3527,6 +3565,61 @@ func (response AdminRestartDeployment404Response) VisitAdminRestartDeploymentRes
 type AdminRestartDeployment500JSONResponse struct{ N500JSONResponse }
 
 func (response AdminRestartDeployment500JSONResponse) VisitAdminRestartDeploymentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminGetDeploymentResultRequestObject struct {
+	Id int64 `json:"id"`
+}
+
+type AdminGetDeploymentResultResponseObject interface {
+	VisitAdminGetDeploymentResultResponse(w http.ResponseWriter) error
+}
+
+type AdminGetDeploymentResult200JSONResponse struct {
+	Error  *string                            `json:"error,omitempty"`
+	Logs   *map[string]map[string]interface{} `json:"logs,omitempty"`
+	Status string                             `json:"status"`
+}
+
+func (response AdminGetDeploymentResult200JSONResponse) VisitAdminGetDeploymentResultResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminGetDeploymentResult400JSONResponse struct{ N400JSONResponse }
+
+func (response AdminGetDeploymentResult400JSONResponse) VisitAdminGetDeploymentResultResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AdminGetDeploymentResult401Response struct {
+}
+
+func (response AdminGetDeploymentResult401Response) VisitAdminGetDeploymentResultResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type AdminGetDeploymentResult404Response struct {
+}
+
+func (response AdminGetDeploymentResult404Response) VisitAdminGetDeploymentResultResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type AdminGetDeploymentResult500JSONResponse struct{ N500JSONResponse }
+
+func (response AdminGetDeploymentResult500JSONResponse) VisitAdminGetDeploymentResultResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
 
@@ -4624,6 +4717,9 @@ type StrictServerInterface interface {
 	// Restart a specific Deployment.
 	// (POST /v1/admin/deployments/{id}/restart)
 	AdminRestartDeployment(ctx context.Context, request AdminRestartDeploymentRequestObject) (AdminRestartDeploymentResponseObject, error)
+	// Get the result of a deployment
+	// (GET /v1/admin/deployments/{id}/result)
+	AdminGetDeploymentResult(ctx context.Context, request AdminGetDeploymentResultRequestObject) (AdminGetDeploymentResultResponseObject, error)
 	// Submit the Deployment for reviewing. Only draft deployments can be submitted. After submitting, the deployment will be in `reviewing` status. Reviewers will be notified.
 	// (POST /v1/admin/deployments/{id}/submit)
 	AdminSubmitDeployment(ctx context.Context, request AdminSubmitDeploymentRequestObject) (AdminSubmitDeploymentResponseObject, error)
@@ -5252,6 +5348,32 @@ func (sh *strictHandler) AdminRestartDeployment(w http.ResponseWriter, r *http.R
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AdminRestartDeploymentResponseObject); ok {
 		if err := validResponse.VisitAdminRestartDeploymentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdminGetDeploymentResult operation middleware
+func (sh *strictHandler) AdminGetDeploymentResult(w http.ResponseWriter, r *http.Request, id int64) {
+	var request AdminGetDeploymentResultRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdminGetDeploymentResult(ctx, request.(AdminGetDeploymentResultRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdminGetDeploymentResult")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdminGetDeploymentResultResponseObject); ok {
+		if err := validResponse.VisitAdminGetDeploymentResultResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

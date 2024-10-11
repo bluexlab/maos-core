@@ -46,9 +46,9 @@ func (m *mockK8sController4Secret) ListRunningPodsWithMetrics(ctx context.Contex
 	return args.Get(0).([]k8s.PodWithMetrics), args.Error(1)
 }
 
-func (m *mockK8sController4Secret) RunMigrations(ctx context.Context, migrations []k8s.MigrationParams) (map[string][]string, error) {
+func (m *mockK8sController4Secret) RunMigrations(ctx context.Context, migrations []k8s.MigrationParams) (map[string]interface{}, error) {
 	args := m.Called(ctx, migrations)
-	return args.Get(0).(map[string][]string), args.Error(1)
+	return args.Get(0).(map[string]interface{}), args.Error(1)
 }
 
 func TestListSecrets(t *testing.T) {

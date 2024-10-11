@@ -23,7 +23,7 @@ type mockK8sController struct {
 	k8s.Controller
 	updatedDeploymentSets [][]k8s.DeploymentParams
 	migrationParams       [][]k8s.MigrationParams
-	migrationResults      map[string][]string
+	migrationResults      map[string]interface{}
 }
 
 func (m *mockK8sController) UpdateDeploymentSet(ctx context.Context, deploymentSet []k8s.DeploymentParams) error {
@@ -35,7 +35,7 @@ func (m *mockK8sController) TriggerRollingRestart(ctx context.Context, deploymen
 	return nil
 }
 
-func (m *mockK8sController) RunMigrations(ctx context.Context, migrations []k8s.MigrationParams) (map[string][]string, error) {
+func (m *mockK8sController) RunMigrations(ctx context.Context, migrations []k8s.MigrationParams) (map[string]interface{}, error) {
 	m.migrationParams = append(m.migrationParams, migrations)
 	return m.migrationResults, nil
 }
@@ -1367,20 +1367,24 @@ func TestPublishDeployment(t *testing.T) {
 		// verify migrations
 		require.EqualValues(t, 1, len(mockController.migrationParams))
 		require.EqualValues(t, k8s.MigrationParams{
-			Name:          "maos-actor1",
-			Image:         "actor1-image:latest",
-			Command:       []string{"migrate.sh", "up"},
-			EnvVars:       map[string]string{"key": "value1"},
-			MemoryRequest: "266Mi",
-			MemoryLimit:   "522Mi",
+			Serial:           createdDeployment.ID,
+			Name:             "maos-actor1",
+			Image:            "actor1-image:latest",
+			Command:          []string{"migrate.sh", "up"},
+			ImagePullSecrets: "",
+			EnvVars:          map[string]string{"key": "value1"},
+			MemoryRequest:    "266Mi",
+			MemoryLimit:      "522Mi",
 		}, mockController.migrationParams[0][0])
 		require.EqualValues(t, k8s.MigrationParams{
-			Name:          "maos-actor2",
-			Image:         "actor2-image:latest",
-			Command:       []string{"migrate.sh", "up"},
-			EnvVars:       map[string]string{"key": "value2"},
-			MemoryRequest: "268Mi",
-			MemoryLimit:   "532Mi",
+			Serial:           createdDeployment.ID,
+			Name:             "maos-actor2",
+			Image:            "actor2-image:latest",
+			Command:          []string{"migrate.sh", "up"},
+			ImagePullSecrets: "",
+			EnvVars:          map[string]string{"key": "value2"},
+			MemoryRequest:    "268Mi",
+			MemoryLimit:      "532Mi",
 		}, mockController.migrationParams[0][1])
 
 		// Verify that UpdateDeploymentSet was called

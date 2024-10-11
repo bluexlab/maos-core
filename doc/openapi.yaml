@@ -93,6 +93,9 @@ paths:
   /v1/admin/deployments/{id}/reject:
     $ref: "./resources/admin/deployment_reject.yaml"
 
+  /v1/admin/deployments/{id}/result:
+    $ref: "./resources/admin/deployment_result.yaml"
+
   /v1/admin/configs/{id}:
     $ref: "./resources/admin/config.yaml"
 

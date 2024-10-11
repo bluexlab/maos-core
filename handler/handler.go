@@ -402,6 +402,14 @@ func (s *APIHandler) AdminGetDeployment(ctx context.Context, request api.AdminGe
 	return admin.GetDeployment(ctx, s.logger, s.accessor, request)
 }
 
+func (s *APIHandler) AdminGetDeploymentResult(ctx context.Context, request api.AdminGetDeploymentResultRequestObject) (api.AdminGetDeploymentResultResponseObject, error) {
+	token := ValidatePermissions(ctx, "AdminGetDeploymentResult")
+	if token == nil {
+		return api.AdminGetDeploymentResult401Response{}, nil
+	}
+	return admin.GetDeploymentResult(ctx, s.logger, s.accessor, request)
+}
+
 func (s *APIHandler) AdminCreateDeployment(ctx context.Context, request api.AdminCreateDeploymentRequestObject) (api.AdminCreateDeploymentResponseObject, error) {
 	token := ValidatePermissions(ctx, "AdminCreateDeployment")
 	if token == nil {

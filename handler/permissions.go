@@ -28,6 +28,7 @@ var (
 		"AdminUpdateConfig":              {"admin"},
 		"AdminListDeployments":           {"admin"},
 		"AdminGetDeployment":             {"admin"},
+		"AdminGetDeploymentResult":       {"admin"},
 		"AdminCreateDeployment":          {"admin"},
 		"AdminUpdateDeployment":          {"admin"},
 		"AdminDeleteDeployment":          {"admin"},

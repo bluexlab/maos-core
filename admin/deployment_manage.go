@@ -159,6 +159,29 @@ func GetDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.A
 	}, nil
 }
 
+func GetDeploymentResult(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminGetDeploymentResultRequestObject) (api.AdminGetDeploymentResultResponseObject, error) {
+	logger.Info("AdminGetDeploymentResult", "id", request.Id)
+
+	deployment, err := accessor.Querier().DeploymentGetById(ctx, accessor.Source(), int64(request.Id))
+	if err != nil {
+		return api.AdminGetDeploymentResult404Response{}, nil
+	}
+
+	var logs map[string]map[string]interface{}
+	if deployment.MigrationLogs != nil {
+		err = json.Unmarshal(deployment.MigrationLogs, &logs)
+		if err != nil {
+			logger.Error("Cannot unmarshal logs", "error", err)
+		}
+	}
+
+	return api.AdminGetDeploymentResult200JSONResponse{
+		Status: string(deployment.Status),
+		Error:  deployment.LastError,
+		Logs:   &logs,
+	}, nil
+}
+
 func CreateDeployment(ctx context.Context, logger *slog.Logger, accessor dbaccess.Accessor, request api.AdminCreateDeploymentRequestObject) (api.AdminCreateDeploymentResponseObject, error) {
 	logger.Info("AdminCreateDeployment", "request", request.Body)
 
@@ -674,6 +697,7 @@ func runDeploymentMigrations(
 		}
 
 		migrationParams = append(migrationParams, k8s.MigrationParams{
+			Serial:           deploymentId,
 			Name:             "maos-" + config.ActorName,
 			Image:            content["KUBE_MIGRATE_DOCKER_IMAGE"],
 			ImagePullSecrets: content["KUBE_MIGRATE_PULL_IMAGE_SECRET"],
@@ -684,10 +708,9 @@ func runDeploymentMigrations(
 		})
 	}
 
-	migrationLogs, err := controller.RunMigrations(ctx, migrationParams)
-	if err != nil {
-		logger.Error("failed to run migrations", "error", err)
-		return fmt.Errorf("failed to run migrations: %v", err)
+	migrationLogs, errMigration := controller.RunMigrations(ctx, migrationParams)
+	if errMigration != nil {
+		logger.Error("failed to run migrations", "error", errMigration)
 	}
 
 	logsBytes, err := json.Marshal(migrationLogs)
@@ -704,7 +727,7 @@ func runDeploymentMigrations(
 		}
 	}
 
-	return nil
+	return errMigration
 }
 
 func updateKubernetesDeployments(

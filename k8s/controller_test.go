@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -976,6 +977,7 @@ func TestK8sController_RunMigrations_Success(t *testing.T) {
 	// Create migration params
 	migrations := []MigrationParams{
 		{
+			Serial:        1,
 			Name:          "migration1",
 			Image:         "migration-image:v1",
 			EnvVars:       map[string]string{"ENV_VAR": "value"},
@@ -988,15 +990,19 @@ func TestK8sController_RunMigrations_Success(t *testing.T) {
 	go func() {
 		time.Sleep(300 * time.Millisecond)
 		// Verify that the job was created
+		slog.Info("---- list jobs")
 		jobs, err := clientset.BatchV1().Jobs("test-namespace").List(ctx, meta.ListOptions{})
+		slog.Info("---- after list jobs", "jobs", jobs, "err", err)
 		require.NoError(t, err)
 		require.Len(t, jobs.Items, 1)
-		require.Equal(t, "maos-migration-migration1", jobs.Items[0].Name)
+		require.Equal(t, "migration-migration1-1", jobs.Items[0].Name)
 
 		// Simulate job completion
 		job := &jobs.Items[0]
 		job.Status.Succeeded = 1
-		_, err = clientset.BatchV1().Jobs("test-namespace").UpdateStatus(ctx, job, meta.UpdateOptions{})
+		slog.Info("---- before job status", "status", job.Status)
+		job, err = clientset.BatchV1().Jobs("test-namespace").UpdateStatus(ctx, job, meta.UpdateOptions{})
+		slog.Info("---- job status", "status", job.Status)
 		require.NoError(t, err)
 	}()
 
@@ -1023,6 +1029,7 @@ func TestK8sController_RunMigrations_Failure(t *testing.T) {
 	// Create migration params
 	migrations := []MigrationParams{
 		{
+			Serial:        1,
 			Name:          "failed-migration",
 			Image:         "migration-image:v1",
 			EnvVars:       map[string]string{"ENV_VAR": "value"},
@@ -1038,7 +1045,7 @@ func TestK8sController_RunMigrations_Failure(t *testing.T) {
 		jobs, err := clientset.BatchV1().Jobs("test-namespace").List(ctx, meta.ListOptions{})
 		require.NoError(t, err)
 		require.Len(t, jobs.Items, 1)
-		require.Equal(t, "maos-migration-failed-migration", jobs.Items[0].Name)
+		require.Equal(t, "migration-failed-migration-1", jobs.Items[0].Name)
 
 		// Simulate job completion
 		job := &jobs.Items[0]
@@ -1054,7 +1061,7 @@ func TestK8sController_RunMigrations_Failure(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "migration failed")
 	require.Len(t, failures, 1)
-	require.Contains(t, failures, "maos-migration-failed-migration")
+	require.Contains(t, failures, "migration-failed-migration-1")
 }
 
 func TestK8sController_RunMigrations_Timeout(t *testing.T) {
@@ -1074,6 +1081,7 @@ func TestK8sController_RunMigrations_Timeout(t *testing.T) {
 	// Create migration params
 	migrations := []MigrationParams{
 		{
+			Serial:        1,
 			Name:          "timeout-migration",
 			Image:         "migration-image:v1",
 			EnvVars:       map[string]string{"ENV_VAR": "value"},
@@ -1095,7 +1103,7 @@ func TestK8sController_RunMigrations_Timeout(t *testing.T) {
 	jobs, err := clientset.BatchV1().Jobs("test-namespace").List(context.Background(), meta.ListOptions{})
 	require.NoError(t, err)
 	require.Len(t, jobs.Items, 1)
-	require.Equal(t, "maos-migration-timeout-migration", jobs.Items[0].Name)
+	require.Equal(t, "migration-timeout-migration-1", jobs.Items[0].Name)
 }
 
 func TestK8sController_RunMigrations_MultipleJobs(t *testing.T) {
@@ -1113,6 +1121,7 @@ func TestK8sController_RunMigrations_MultipleJobs(t *testing.T) {
 	// Create migration params for multiple jobs
 	migrations := []MigrationParams{
 		{
+			Serial:        168,
 			Name:          "migration1",
 			Image:         "migration-image:v1",
 			EnvVars:       map[string]string{"ENV_VAR": "value1"},
@@ -1121,6 +1130,7 @@ func TestK8sController_RunMigrations_MultipleJobs(t *testing.T) {
 			MemoryLimit:   "128Mi",
 		},
 		{
+			Serial:        168,
 			Name:          "migration2",
 			Image:         "migration-image:v2",
 			EnvVars:       map[string]string{"ENV_VAR": "value2"},
@@ -1136,8 +1146,8 @@ func TestK8sController_RunMigrations_MultipleJobs(t *testing.T) {
 		jobs, err := clientset.BatchV1().Jobs("test-namespace").List(ctx, meta.ListOptions{})
 		require.NoError(t, err)
 		require.Len(t, jobs.Items, 2)
-		require.Equal(t, "maos-migration-migration1", jobs.Items[0].Name)
-		require.Equal(t, "maos-migration-migration2", jobs.Items[1].Name)
+		require.Equal(t, "migration-migration1-168", jobs.Items[0].Name)
+		require.Equal(t, "migration-migration2-168", jobs.Items[1].Name)
 
 		// Simulate job completion
 		for _, job := range jobs.Items {

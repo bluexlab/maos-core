@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -29,6 +30,7 @@ import (
 
 // MigrationParams defines the parameters for a Kubernetes migration
 type MigrationParams struct {
+	Serial           int64             // Batch number of the migration
 	Name             string            // Name of the migration
 	Image            string            // Name with tag of the Docker image to use
 	ImagePullSecrets string            // Name of the secret containing image pull credentials
@@ -82,7 +84,7 @@ type Controller interface {
 	UpdateSecret(ctx context.Context, secretName string, secretData map[string]string) error
 	DeleteSecret(ctx context.Context, secretName string) error
 	ListRunningPodsWithMetrics(ctx context.Context) ([]PodWithMetrics, error)
-	RunMigrations(ctx context.Context, migrations []MigrationParams) (map[string][]string, error)
+	RunMigrations(ctx context.Context, migrations []MigrationParams) (map[string]interface{}, error)
 }
 
 // K8sController implements the Controller interface
@@ -263,7 +265,7 @@ func (c *K8sController) DeleteSecret(ctx context.Context, secretName string) err
 	return nil
 }
 
-func (c *K8sController) RunMigrations(ctx context.Context, migrations []MigrationParams) (map[string][]string, error) {
+func (c *K8sController) RunMigrations(ctx context.Context, migrations []MigrationParams) (map[string]interface{}, error) {
 	slog.Info("Running migrations", "count", len(migrations))
 
 	jobs := make(map[string]*batchv1.Job)
@@ -275,10 +277,11 @@ func (c *K8sController) RunMigrations(ctx context.Context, migrations []Migratio
 		jobs[job.Name] = job
 	}
 
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(3 * time.Second)
 	defer ticker.Stop()
 
-	failures := make(map[string][]string)
+	failures := make(map[string]interface{})
+	var lastLogs map[string]interface{}
 
 	for len(jobs) > 0 {
 		select {
@@ -293,16 +296,30 @@ func (c *K8sController) RunMigrations(ctx context.Context, migrations []Migratio
 					continue
 				}
 
+				statusJson, err := json.Marshal(updatedJob.Status)
+				if err != nil {
+					slog.Error("Failed to marshal job status", "job", jobName, "error", err)
+				} else {
+					slog.Info("Job status", "job", jobName, "status", string(statusJson))
+				}
+
+				logs, err := c.collectJobPodsLogs(ctx, jobName)
+				if err != nil {
+					slog.Error("Failed to collect job logs", "job", jobName, "error", err)
+				} else {
+					slog.Info("Job logs", "job", jobName, "logs", logs)
+				}
+				if len(logs) > 0 {
+					lastLogs = logs
+				}
+
 				if updatedJob.Status.Succeeded > 0 {
 					slog.Info("Migration job completed successfully", "job", jobName)
 					delete(jobs, jobName)
 				} else if updatedJob.Status.Failed > 0 {
 					slog.Error("Migration job failed", "job", jobName)
-					logs, err := c.collectAndPrintJobLogs(ctx, jobName)
-					if err != nil {
-						slog.Error("Failed to collect job logs", "job", jobName, "error", err)
-					}
-					failures[jobName] = logs
+					slog.Info("Job logs", "job", jobName, "logs", lastLogs)
+					failures[jobName] = lastLogs
 					delete(jobs, jobName)
 				}
 			}
@@ -317,15 +334,8 @@ func (c *K8sController) RunMigrations(ctx context.Context, migrations []Migratio
 }
 
 func (c *K8sController) createMigrationJob(ctx context.Context, migration MigrationParams) (*batchv1.Job, error) {
-	jobName := fmt.Sprintf("maos-migration-%s", migration.Name)
+	jobName := fmt.Sprintf("migration-%s-%d", migration.Name, migration.Serial)
 	slog.Info("Creating migration job", "name", jobName)
-
-	// Try to delete the job if it already exists
-	err := c.clientset.BatchV1().Jobs(c.namespace).Delete(ctx, jobName, meta.DeleteOptions{})
-	if err != nil && !errors.IsNotFound(err) {
-		slog.Error("Failed to delete existing migration job", "job", jobName, "error", err)
-		return nil, fmt.Errorf("failed to delete existing migration job %s: %v", jobName, err)
-	}
 
 	job := &batchv1.Job{
 		ObjectMeta: meta.ObjectMeta{
@@ -337,6 +347,7 @@ func (c *K8sController) createMigrationJob(ctx context.Context, migration Migrat
 			},
 		},
 		Spec: batchv1.JobSpec{
+			TTLSecondsAfterFinished: lo.ToPtr(int32(600)),
 			Template: core.PodTemplateSpec{
 				ObjectMeta: meta.ObjectMeta{
 					Labels: map[string]string{
@@ -396,17 +407,24 @@ func (c *K8sController) createMigrationEnvVars(migration MigrationParams) []core
 	return envVars
 }
 
-func (c *K8sController) collectAndPrintJobLogs(ctx context.Context, jobName string) ([]string, error) {
+func (c *K8sController) collectJobPodsLogs(ctx context.Context, jobName string) (map[string]interface{}, error) {
 	pods, err := c.clientset.CoreV1().Pods(c.namespace).List(ctx, meta.ListOptions{
 		LabelSelector: fmt.Sprintf("job-name=%s", jobName),
 	})
 	if err != nil {
+		slog.Error("Failed to list pods for job", "job", jobName, "error", err)
 		return nil, fmt.Errorf("failed to list pods for job %s: %v", jobName, err)
 	}
 
-	logs := make([]string, 0)
+	slog.Info("Found pods for job", "job", jobName, "pods", len(pods.Items))
+	logs := make(map[string]interface{})
 
 	for _, pod := range pods.Items {
+		logs["Message"] = pod.Status.Message
+		logs["Reason"] = pod.Status.Reason
+		logs["ContainerStatuses"] = pod.Status.ContainerStatuses
+		logs["Conditions"] = pod.Status.Conditions
+
 		req := c.clientset.CoreV1().Pods(c.namespace).GetLogs(pod.Name, &core.PodLogOptions{})
 		podLogs, err := req.Stream(ctx)
 		if err != nil {
@@ -422,7 +440,7 @@ func (c *K8sController) collectAndPrintJobLogs(ctx context.Context, jobName stri
 			continue
 		}
 
-		logs = append(logs, fmt.Sprintf("Pod %s logs:\n%s", pod.Name, buf.String()))
+		logs["PodLogs"] = buf.String()
 	}
 
 	return logs, nil

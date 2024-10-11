@@ -55,13 +55,13 @@ func (m *MockK8sController) ListRunningPodsWithMetrics(ctx context.Context) ([]k
 	return args.Get(0).([]k8s.PodWithMetrics), args.Error(1)
 }
 
-func (m *MockK8sController) RunMigrations(ctx context.Context, params []k8s.MigrationParams) (map[string][]string, error) {
+func (m *MockK8sController) RunMigrations(ctx context.Context, params []k8s.MigrationParams) (map[string]interface{}, error) {
 	args := m.Called(ctx, params)
 	res1 := args.Get(0)
 	if res1 == nil {
 		return nil, args.Error(1)
 	}
-	return res1.(map[string][]string), args.Error(1)
+	return res1.(map[string]interface{}), args.Error(1)
 }
 
 // SetupHttpTestWithDb sets up two test servers and database accessors.

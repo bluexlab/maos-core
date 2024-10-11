@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
@@ -25,7 +24,7 @@ func TestAdminTokenCreateEndpoint(t *testing.T) {
 		server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
 		actor := fixture.InsertActor(t, ctx, ds, "actor1")
-		fixture.InsertToken(t, ctx, ds, "admin-token", actor.ID, 0, []string{"admin"})
+		fixture.InsertToken(t, ctx, ds, "admin-token", actor.ID, []string{"admin"})
 
 		body := `{"actor_id":1,"created_by":"admin","expire_at":2000000000,"permissions":["config:read","admin"]}`
 		resp, resBody := PostHttp(t, server.URL+"/v1/admin/api_tokens", body, "admin-token")
@@ -58,7 +57,7 @@ func TestAdminTokenCreateEndpoint(t *testing.T) {
 		server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
 		actor := fixture.InsertActor(t, ctx, ds, "actor1")
-		fixture.InsertToken(t, ctx, ds, "admin-token", actor.ID, 0, []string{"admin"})
+		fixture.InsertToken(t, ctx, ds, "admin-token", actor.ID, []string{"admin"})
 
 		body := `{"invalid_json"}`
 		resp, resBody := PostHttp(t, server.URL+"/v1/admin/api_tokens", body, "admin-token")
@@ -74,7 +73,7 @@ func TestAdminTokenCreateEndpoint(t *testing.T) {
 		server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
 		actor := fixture.InsertActor(t, ctx, ds, "actor1")
-		fixture.InsertToken(t, ctx, ds, "admin-token", actor.ID, 0, []string{"admin"})
+		fixture.InsertToken(t, ctx, ds, "admin-token", actor.ID, []string{"admin"})
 
 		body := `{"actor_id":1}`
 		resp, resBody := PostHttp(t, server.URL+"/v1/admin/api_tokens", body, "admin-token")
@@ -90,7 +89,7 @@ func TestAdminTokenCreateEndpoint(t *testing.T) {
 		server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
 		actor := fixture.InsertActor(t, ctx, ds, "actor1")
-		fixture.InsertToken(t, ctx, ds, "actor-token", actor.ID, 0, []string{"user"})
+		fixture.InsertToken(t, ctx, ds, "actor-token", actor.ID, []string{"user"})
 
 		body := `{"actor_id":1,"created_by":"user","expire_at":2000,"permissions":["config:read"]}`
 		resp, _ := PostHttp(t, server.URL+"/v1/admin/api_tokens", body, "actor-token")
@@ -115,8 +114,8 @@ func TestDeleteApiToken(t *testing.T) {
 		server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
 		actor := fixture.InsertActor(t, ctx, ds, "actor1")
-		fixture.InsertToken(t, ctx, ds, "admin-token", actor.ID, 0, []string{"admin"})
-		tokenToDelete := fixture.InsertToken(t, ctx, ds, "token-to-delete", actor.ID, time.Now().Add(24*time.Hour).Unix(), []string{"read"})
+		fixture.InsertToken(t, ctx, ds, "admin-token", actor.ID, []string{"admin"})
+		tokenToDelete := fixture.InsertToken(t, ctx, ds, "token-to-delete", actor.ID, []string{"read"})
 
 		resp, _ := DeleteHttp(t, fmt.Sprintf("%s/v1/admin/api_tokens/%s", server.URL, tokenToDelete.ID), "admin-token")
 
@@ -132,7 +131,7 @@ func TestDeleteApiToken(t *testing.T) {
 		server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
 		actor := fixture.InsertActor(t, ctx, ds, "actor1")
-		fixture.InsertToken(t, ctx, ds, "admin-token", actor.ID, 0, []string{"admin"})
+		fixture.InsertToken(t, ctx, ds, "admin-token", actor.ID, []string{"admin"})
 
 		resp, _ := DeleteHttp(t, fmt.Sprintf("%s/v1/admin/api_tokens/non-existent-token", server.URL), "admin-token")
 
@@ -143,8 +142,8 @@ func TestDeleteApiToken(t *testing.T) {
 		server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
 		actor := fixture.InsertActor(t, ctx, ds, "actor1")
-		fixture.InsertToken(t, ctx, ds, "user-token", actor.ID, 0, []string{"user"})
-		tokenToDelete := fixture.InsertToken(t, ctx, ds, "token-to-delete", actor.ID, time.Now().Add(24*time.Hour).Unix(), []string{"read"})
+		fixture.InsertToken(t, ctx, ds, "user-token", actor.ID, []string{"user"})
+		tokenToDelete := fixture.InsertToken(t, ctx, ds, "token-to-delete", actor.ID, []string{"read"})
 
 		resp, _ := DeleteHttp(t, fmt.Sprintf("%s/v1/admin/api_tokens/%s", server.URL, tokenToDelete.ID), "user-token")
 
@@ -155,7 +154,7 @@ func TestDeleteApiToken(t *testing.T) {
 		server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
 		actor := fixture.InsertActor(t, ctx, ds, "actor1")
-		tokenToDelete := fixture.InsertToken(t, ctx, ds, "token-to-delete", actor.ID, time.Now().Add(24*time.Hour).Unix(), []string{"read"})
+		tokenToDelete := fixture.InsertToken(t, ctx, ds, "token-to-delete", actor.ID, []string{"read"})
 
 		resp, _ := DeleteHttp(t, fmt.Sprintf("%s/v1/admin/api_tokens/%s", server.URL, tokenToDelete.ID), "invalid_token")
 

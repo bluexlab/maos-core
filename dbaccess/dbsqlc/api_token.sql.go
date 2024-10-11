@@ -194,7 +194,7 @@ WITH new_token AS (
   RETURNING id
 ), update_existing AS (
   UPDATE api_tokens
-  SET expire_at = EXTRACT(EPOCH FROM NOW() + INTERVAL '15 minutes')
+  SET expire_at = EXTRACT(EPOCH FROM NOW() + INTERVAL '5 minutes')
   WHERE actor_id = $2
     AND id != (SELECT id FROM new_token)
 )

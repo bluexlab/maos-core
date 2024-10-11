@@ -20,7 +20,7 @@ func TestInvocationReturnResponseEndpoint(t *testing.T) {
 	setup := func(t *testing.T, ctx context.Context) (*httptest.Server, dbaccess.DataSource, *dbsqlc.Actor, *dbsqlc.ApiToken) {
 		server, ds, _ := SetupHttpTestWithDb(t, ctx)
 		actor := fixture.InsertActor(t, ctx, ds, "test-actor")
-		token := fixture.InsertToken(t, ctx, ds, "actor-token", actor.ID, 0, []string{"read:invocation"})
+		token := fixture.InsertToken(t, ctx, ds, "actor-token", actor.ID, []string{"read:invocation"})
 		return server, ds, actor, token
 	}
 
@@ -73,7 +73,7 @@ func TestInvocationReturnResponseEndpoint(t *testing.T) {
 	t.Run("attempted_by mismatch", func(t *testing.T) {
 		server, ds, actor, _ := setup(t, ctx)
 		actor2 := fixture.InsertActor(t, ctx, ds, "test-actor2")
-		token2 := fixture.InsertToken(t, ctx, ds, "actor2-token", actor2.ID, 0, []string{"read:invocation"})
+		token2 := fixture.InsertToken(t, ctx, ds, "actor2-token", actor2.ID, []string{"read:invocation"})
 
 		// insert and change state to running
 		invocation := fixture.InsertInvocation(t, ctx, ds, "available", `{"seq": 1}`, actor.Name)

@@ -61,6 +61,11 @@ func NewBearerAuthMiddleware(fetcher TokenFetcher, cacheTtl time.Duration) (api.
 				return nil, nil
 			}
 
+			if token.ExpireAt < time.Now().Unix() {
+				http.Error(w, `{"error":"Token expired"}`, http.StatusForbidden)
+				return nil, nil
+			}
+
 			newContext := context.WithValue(ctx, TokenContextKey, token)
 
 			// Token is valid, call the next handler

@@ -18,7 +18,8 @@ func TestAdminGetSettingsEndpoint(t *testing.T) {
 	server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
 	actor1 := fixture.InsertActor(t, ctx, ds, "actor1")
-	fixture.InsertToken(t, ctx, ds, "admin-token", actor1.ID, 0, []string{"admin"})
+	fixture.InsertToken(t, ctx, ds, "admin-token", actor1.ID, []string{"admin"})
+	fixture.InsertExpiredToken(t, ctx, ds, "expired-token", actor1.ID, []string{"admin"})
 
 	t.Run("Valid admin token", func(t *testing.T) {
 		_, err := querier.SettingUpdateSystem(ctx, ds, json.RawMessage(`{"display_name":"test-maos", "deployment_approve_required":true}`))
@@ -43,6 +44,11 @@ func TestAdminGetSettingsEndpoint(t *testing.T) {
 		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	})
 
+	t.Run("Expired token", func(t *testing.T) {
+		resp, _ := GetHttp(t, server.URL+"/v1/admin/setting", "expired-token")
+		require.Equal(t, http.StatusForbidden, resp.StatusCode)
+	})
+
 	t.Run("Invalid token", func(t *testing.T) {
 		resp, _ := GetHttp(t, server.URL+"/v1/admin/setting", "invalid_token")
 		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
@@ -55,7 +61,7 @@ func TestAdminUpdateSettingsEndpoint(t *testing.T) {
 	ctx := context.Background()
 	server, ds, _ := SetupHttpTestWithDb(t, ctx)
 	actor1 := fixture.InsertActor(t, ctx, ds, "actor1")
-	fixture.InsertToken(t, ctx, ds, "admin-token", actor1.ID, 0, []string{"admin"})
+	fixture.InsertToken(t, ctx, ds, "admin-token", actor1.ID, []string{"admin"})
 
 	t.Run("Valid admin token", func(t *testing.T) {
 		updateBody := `{"display_name":"updated-maos", "deployment_approve_required":false}`

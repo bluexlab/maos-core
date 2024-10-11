@@ -24,7 +24,7 @@ func TestInvocationGetNextEndpoint(t *testing.T) {
 	setup := func(t *testing.T, ctx context.Context) (*httptest.Server, dbaccess.DataSource, *dbsqlc.Actor, *dbsqlc.ApiToken) {
 		server, ds, _ := SetupHttpTestWithDb(t, ctx)
 		actor := fixture.InsertActor(t, ctx, ds, "test-actor")
-		token := fixture.InsertToken(t, ctx, ds, "actor-token", actor.ID, 0, []string{"read:invocation"})
+		token := fixture.InsertToken(t, ctx, ds, "actor-token", actor.ID, []string{"read:invocation"})
 		return server, ds, actor, token
 	}
 
@@ -69,8 +69,8 @@ func TestInvocationGetNextEndpoint(t *testing.T) {
 
 		actor := fixture.InsertActor(t, ctx, ds, "test-actor")
 		user := fixture.InsertActor(t, ctx, ds, "test-user")
-		token := fixture.InsertToken(t, ctx, ds, "actor-token", actor.ID, 0, []string{"read:invocation", "create:invocation"})
-		userToken := fixture.InsertToken(t, ctx, ds, "user-token", user.ID, 0, []string{"create:invocation"})
+		token := fixture.InsertToken(t, ctx, ds, "actor-token", actor.ID, []string{"read:invocation", "create:invocation"})
+		userToken := fixture.InsertToken(t, ctx, ds, "user-token", user.ID, []string{"create:invocation"})
 
 		var invocationId string
 		go func() {
@@ -96,8 +96,8 @@ func TestInvocationGetNextEndpoint(t *testing.T) {
 
 		actor := fixture.InsertActor(t, ctx, ds, "test-actor")
 		user := fixture.InsertActor(t, ctx, ds, "test-user")
-		token := fixture.InsertToken(t, ctx, ds, "actor-token", actor.ID, 0, []string{"read:invocation", "create:invocation"})
-		userToken := fixture.InsertToken(t, ctx, ds, "user-token", user.ID, 0, []string{"create:invocation"})
+		token := fixture.InsertToken(t, ctx, ds, "actor-token", actor.ID, []string{"read:invocation", "create:invocation"})
+		userToken := fixture.InsertToken(t, ctx, ds, "user-token", user.ID, []string{"create:invocation"})
 
 		count := 10
 		wg := sync.WaitGroup{}

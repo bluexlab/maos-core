@@ -24,7 +24,7 @@ func TestGetActorConfigEndpoint(t *testing.T) {
 		fixture.InsertConfig2(t, ctx, ds, actor.ID, &configSuite.ID, "test-user", map[string]string{"key": "value"})
 		_, err := ds.Exec(ctx, "UPDATE config_suites SET deployed_at = EXTRACT(EPOCH FROM NOW()), active = TRUE WHERE id = $1", configSuite.ID)
 		require.NoError(t, err)
-		fixture.InsertToken(t, ctx, ds, "actor-token", actor.ID, 0, []string{"actor"})
+		fixture.InsertToken(t, ctx, ds, "actor-token", actor.ID, []string{"actor"})
 
 		resp, resBody := GetHttp(t, server.URL+"/v1/config", "actor-token")
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -44,7 +44,7 @@ func TestGetActorConfigEndpoint(t *testing.T) {
 		server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
 		actor := fixture.InsertActor(t, ctx, ds, "test-actor")
-		fixture.InsertToken(t, ctx, ds, "actor-token", actor.ID, 0, []string{"actor"})
+		fixture.InsertToken(t, ctx, ds, "actor-token", actor.ID, []string{"actor"})
 
 		resp, resBody := GetHttp(t, server.URL+"/v1/config", "actor-token")
 		require.Equal(t, http.StatusNotFound, resp.StatusCode)
@@ -68,7 +68,7 @@ func TestGetActorConfigEndpoint(t *testing.T) {
 		require.NoError(t, err)
 		_, err = ds.Exec(ctx, "UPDATE configs SET min_actor_version = ARRAY[1, 2, 3] WHERE actor_id = $1", actor.ID)
 		require.NoError(t, err)
-		fixture.InsertToken(t, ctx, ds, "actor-token", actor.ID, 0, []string{"actor"})
+		fixture.InsertToken(t, ctx, ds, "actor-token", actor.ID, []string{"actor"})
 
 		// Test with a compatible version
 		resp, resBody := GetHttpWithHeader(t, server.URL+"/v1/config", "actor-token", map[string]string{"X-Actor-Version": "1.2.3"})

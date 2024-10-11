@@ -18,7 +18,7 @@ func TestAdminSyncReferenceConfigSuites(t *testing.T) {
 		server, ds, _, suiteStore := SetupHttpTestWithDbAndSuiteStore(t, ctx)
 
 		actor := fixture.InsertActor(t, ctx, ds, "actor1")
-		fixture.InsertToken(t, ctx, ds, "admin-token", actor.ID, 0, []string{"admin"})
+		fixture.InsertToken(t, ctx, ds, "admin-token", actor.ID, []string{"admin"})
 
 		resp, _ := PostHttp(t, server.URL+"/v1/admin/reference_config_suites/sync", "", "admin-token")
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
@@ -40,7 +40,7 @@ func TestAdminSyncReferenceConfigSuites(t *testing.T) {
 		server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
 		actor := fixture.InsertActor(t, ctx, ds, "non-admin")
-		fixture.InsertToken(t, ctx, ds, "non-admin-token", actor.ID, 0, []string{"user"})
+		fixture.InsertToken(t, ctx, ds, "non-admin-token", actor.ID, []string{"user"})
 
 		resp, _ := PostHttp(t, server.URL+"/v1/admin/reference_config_suites/sync", "", "non-admin-token")
 		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)

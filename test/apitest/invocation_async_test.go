@@ -107,7 +107,7 @@ func TestInvocationCreateEndpoint(t *testing.T) {
 			server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
 			actor := fixture.InsertActor(t, ctx, ds, tt.actorName)
-			token := fixture.InsertToken(t, ctx, ds, tt.tokenName, actor.ID, 0, tt.permissions)
+			token := fixture.InsertToken(t, ctx, ds, tt.tokenName, actor.ID, tt.permissions)
 
 			resp, resBody := PostHttp(t, server.URL+"/v1/invocations/async", tt.body, token.ID)
 			require.Equal(t, tt.expectedStatus, resp.StatusCode)
@@ -157,9 +157,9 @@ func TestInvocationGetEndpoint(t *testing.T) {
 	setup := func(t *testing.T, ctx context.Context) (*httptest.Server, string, string, string, *httptest.Server) {
 		server, ds, server2 := SetupHttpTestWithDb(t, ctx)
 		actor := fixture.InsertActor(t, ctx, ds, "actor1")
-		token := fixture.InsertToken(t, ctx, ds, "actor-token", actor.ID, 0, []string{"read:invocation"})
+		token := fixture.InsertToken(t, ctx, ds, "actor-token", actor.ID, []string{"read:invocation"})
 		user := fixture.InsertActor(t, ctx, ds, "user")
-		userToken := fixture.InsertToken(t, ctx, ds, "user-token", user.ID, 0, []string{"create:invocation"})
+		userToken := fixture.InsertToken(t, ctx, ds, "user-token", user.ID, []string{"create:invocation"})
 
 		body := `{"actor":"actor1","meta":{"kind": "test", "trace_id": "123"},"payload":{"req": "16888"}}`
 		resp, respBody := PostHttp(t, server.URL+"/v1/invocations/async", body, userToken.ID)

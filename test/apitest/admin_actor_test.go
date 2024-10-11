@@ -22,8 +22,8 @@ func TestAdminListActorEndpoint(t *testing.T) {
 
 	actor1 := fixture.InsertActor(t, ctx, ds, "actor1")
 	actor2 := fixture.InsertActor(t, ctx, ds, "actor2")
-	fixture.InsertToken(t, ctx, ds, "admin-token", actor1.ID, 0, []string{"admin"})
-	fixture.InsertToken(t, ctx, ds, "actor-token", actor2.ID, 0, []string{"user"})
+	fixture.InsertToken(t, ctx, ds, "admin-token", actor1.ID, []string{"admin"})
+	fixture.InsertToken(t, ctx, ds, "actor-token", actor2.ID, []string{"user"})
 
 	t.Run("Valid admin token", func(t *testing.T) {
 		resp, resBody := GetHttp(t, server.URL+"/v1/admin/actors", "admin-token")
@@ -74,8 +74,8 @@ func TestAdminCreateActorEndpoint(t *testing.T) {
 
 	actor1 := fixture.InsertActor(t, ctx, ds, "actor1")
 	actor2 := fixture.InsertActor(t, ctx, ds, "actor2")
-	fixture.InsertToken(t, ctx, ds, "admin-token", actor1.ID, 0, []string{"admin"})
-	fixture.InsertToken(t, ctx, ds, "actor-token", actor2.ID, 0, []string{"user"})
+	fixture.InsertToken(t, ctx, ds, "admin-token", actor1.ID, []string{"admin"})
+	fixture.InsertToken(t, ctx, ds, "actor-token", actor2.ID, []string{"user"})
 
 	t.Run("Valid admin token", func(t *testing.T) {
 		resp, resBody := PostHttp(t, server.URL+"/v1/admin/actors", `{"name":"new_actor","role":"portal"}`, "admin-token")
@@ -142,8 +142,8 @@ func TestAdminGetActorEndpoint(t *testing.T) {
 
 	actor1 := fixture.InsertActor(t, ctx, ds, "actor1")
 	actor2 := fixture.InsertActor(t, ctx, ds, "actor2")
-	fixture.InsertToken(t, ctx, ds, "admin-token", actor1.ID, 0, []string{"admin"})
-	fixture.InsertToken(t, ctx, ds, "actor-token", actor2.ID, 0, []string{"user"})
+	fixture.InsertToken(t, ctx, ds, "admin-token", actor1.ID, []string{"admin"})
+	fixture.InsertToken(t, ctx, ds, "actor-token", actor2.ID, []string{"user"})
 
 	t.Run("Valid admin token and existing actor", func(t *testing.T) {
 		resp, resBody := GetHttp(t, fmt.Sprintf("%s/v1/admin/actors/%d", server.URL, actor1.ID), "admin-token")
@@ -181,8 +181,8 @@ func TestAdminUpdateActorEndpoint(t *testing.T) {
 
 	actor1 := fixture.InsertActor(t, ctx, ds, "actor1")
 	actor2 := fixture.InsertActor(t, ctx, ds, "actor2")
-	fixture.InsertToken(t, ctx, ds, "admin-token", actor1.ID, 0, []string{"admin"})
-	fixture.InsertToken(t, ctx, ds, "actor-token", actor2.ID, 0, []string{"user"})
+	fixture.InsertToken(t, ctx, ds, "admin-token", actor1.ID, []string{"admin"})
+	fixture.InsertToken(t, ctx, ds, "actor-token", actor2.ID, []string{"user"})
 
 	t.Run("Valid admin token and existing actor", func(t *testing.T) {
 		resp, resBody := PatchHttp(t, fmt.Sprintf("%s/v1/admin/actors/%d", server.URL, actor1.ID), `{"name":"updated_actor","role":"portal"}`, "admin-token")
@@ -238,7 +238,7 @@ func TestAdminDeleteActorEndpoint(t *testing.T) {
 
 	actor1 := fixture.InsertActor(t, ctx, ds, "actor1")
 	adminActor := fixture.InsertActor(t, ctx, ds, "actor2")
-	fixture.InsertToken(t, ctx, ds, "admin-token", adminActor.ID, 0, []string{"admin"})
+	fixture.InsertToken(t, ctx, ds, "admin-token", adminActor.ID, []string{"admin"})
 
 	t.Run("Valid admin token and existing actor", func(t *testing.T) {
 		resp, _ := DeleteHttp(t, fmt.Sprintf("%s/v1/admin/actors/%d", server.URL, actor1.ID), "admin-token")

@@ -3,16 +3,47 @@ package fixture
 import (
 	"context"
 	"testing"
+	"time"
 
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess/dbsqlc"
 )
 
-func InsertToken(t *testing.T, ctx context.Context, ds DataSource, id string, actorId int64, expireAt int64, permissions []string) *dbsqlc.ApiToken {
+func InsertToken(t *testing.T, ctx context.Context, ds DataSource, id string, actorId int64, permissions []string) *dbsqlc.ApiToken {
+	query := dbsqlc.New()
+	token, err := query.ApiTokenInsert(ctx, ds, &dbsqlc.ApiTokenInsertParams{
+		ID:          id,
+		ActorId:     actorId,
+		ExpireAt:    time.Now().Add(5 * time.Minute).Unix(),
+		CreatedBy:   "test",
+		Permissions: permissions,
+	})
+	if err != nil {
+		t.Fatalf("Failed to insert actor: %v", err)
+	}
+	return token
+}
+
+func InsertTokenWithExpireAt(t *testing.T, ctx context.Context, ds DataSource, id string, actorId int64, expireAt int64, permissions []string) *dbsqlc.ApiToken {
 	query := dbsqlc.New()
 	token, err := query.ApiTokenInsert(ctx, ds, &dbsqlc.ApiTokenInsertParams{
 		ID:          id,
 		ActorId:     actorId,
 		ExpireAt:    expireAt,
+		CreatedBy:   "test",
+		Permissions: permissions,
+	})
+	if err != nil {
+		t.Fatalf("Failed to insert actor: %v", err)
+	}
+	return token
+}
+
+func InsertExpiredToken(t *testing.T, ctx context.Context, ds DataSource, id string, actorId int64, permissions []string) *dbsqlc.ApiToken {
+	query := dbsqlc.New()
+	token, err := query.ApiTokenInsert(ctx, ds, &dbsqlc.ApiTokenInsertParams{
+		ID:          id,
+		ActorId:     actorId,
+		ExpireAt:    time.Now().Add(-5 * time.Minute).Unix(),
 		CreatedBy:   "test",
 		Permissions: permissions,
 	})

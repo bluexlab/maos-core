@@ -25,9 +25,9 @@ func TestInvocationExecuteEndpoint(t *testing.T) {
 		server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
 		actor := fixture.InsertActor(t, ctx, ds, "actor1")
-		token := fixture.InsertToken(t, ctx, ds, "actor-token", actor.ID, 0, []string{"read:invocation"})
+		token := fixture.InsertToken(t, ctx, ds, "actor-token", actor.ID, []string{"read:invocation"})
 		user := fixture.InsertActor(t, ctx, ds, "user")
-		userToken := fixture.InsertToken(t, ctx, ds, "user-token", user.ID, 0, []string{"create:invocation"})
+		userToken := fixture.InsertToken(t, ctx, ds, "user-token", user.ID, []string{"create:invocation"})
 
 		var invocationId int64
 		go func() {
@@ -65,7 +65,7 @@ func TestInvocationExecuteEndpoint(t *testing.T) {
 
 		fixture.InsertActor(t, ctx, ds, "actor1")
 		user := fixture.InsertActor(t, ctx, ds, "user")
-		userToken := fixture.InsertToken(t, ctx, ds, "user-token", user.ID, 0, []string{"create:invocation"})
+		userToken := fixture.InsertToken(t, ctx, ds, "user-token", user.ID, []string{"create:invocation"})
 
 		body := `{"actor":"actor1","meta":{"kind": "test", "trace_id": "456"},"payload":{"key1": 16888,"key2":{"key3": "value3"}}}`
 		resp, body := PostHttp(t, server.URL+"/v1/invocations/sync?wait=1", body, userToken.ID)
@@ -84,9 +84,9 @@ func TestInvocationExecuteEndpoint(t *testing.T) {
 		)
 
 		actor := fixture.InsertActor(t, ctx, ds, "actor1")
-		token := fixture.InsertToken(t, ctx, ds, "actor-token", actor.ID, 0, []string{"read:invocation"})
+		token := fixture.InsertToken(t, ctx, ds, "actor-token", actor.ID, []string{"read:invocation"})
 		user := fixture.InsertActor(t, ctx, ds, "user")
-		userToken := fixture.InsertToken(t, ctx, ds, "user-token", user.ID, 0, []string{"create:invocation"})
+		userToken := fixture.InsertToken(t, ctx, ds, "user-token", user.ID, []string{"create:invocation"})
 
 		errCh := make(chan error, executeCount)
 
@@ -236,7 +236,7 @@ func TestInvocationExecuteEndpointErrorCases(t *testing.T) {
 			server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
 			actor := fixture.InsertActor(t, ctx, ds, tt.actorName)
-			token := fixture.InsertToken(t, ctx, ds, tt.tokenName, actor.ID, 0, tt.permissions)
+			token := fixture.InsertToken(t, ctx, ds, tt.tokenName, actor.ID, tt.permissions)
 
 			resp, resBody := PostHttp(t, server.URL+"/v1/invocations/sync", tt.body, token.ID)
 			require.Equal(t, tt.expectedStatus, resp.StatusCode)

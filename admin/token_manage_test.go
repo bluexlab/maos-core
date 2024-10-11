@@ -31,8 +31,8 @@ func TestListApiTokensWithDB(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		actor1 := fixture.InsertActor(t, ctx, dbPool, "actor1")
 		actor2 := fixture.InsertActor(t, ctx, dbPool, "actor2")
-		fixture.InsertToken(t, ctx, dbPool, "token001", actor1.ID, expireAt, []string{"invocation:read", "invocation:create"})
-		fixture.InsertToken(t, ctx, dbPool, "token002", actor2.ID, expireAt, []string{"admin"})
+		fixture.InsertTokenWithExpireAt(t, ctx, dbPool, "token001", actor1.ID, expireAt, []string{"invocation:read", "invocation:create"})
+		fixture.InsertTokenWithExpireAt(t, ctx, dbPool, "token002", actor2.ID, expireAt, []string{"admin"})
 
 		request := api.AdminListApiTokensRequestObject{
 			Params: api.AdminListApiTokensParams{
@@ -221,7 +221,7 @@ func TestDeleteApiToken(t *testing.T) {
 	t.Run("Successful deletion", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		actor := fixture.InsertActor(t, ctx, dbPool, "actor1")
-		token := fixture.InsertToken(t, ctx, dbPool, "token001", actor.ID, time.Now().Add(24*time.Hour).Unix(), []string{"read"})
+		token := fixture.InsertToken(t, ctx, dbPool, "token001", actor.ID, []string{"read"})
 
 		request := api.AdminDeleteApiTokenRequestObject{
 			Id: token.ID,
@@ -258,7 +258,7 @@ func TestDeleteApiToken(t *testing.T) {
 	t.Run("Database error", func(t *testing.T) {
 		dbPool := testhelper.TestDB(ctx, t)
 		actor := fixture.InsertActor(t, ctx, dbPool, "actor1")
-		token := fixture.InsertToken(t, ctx, dbPool, "token001", actor.ID, time.Now().Add(24*time.Hour).Unix(), []string{"read"})
+		token := fixture.InsertToken(t, ctx, dbPool, "token001", actor.ID, []string{"read"})
 
 		request := api.AdminDeleteApiTokenRequestObject{
 			Id: token.ID,

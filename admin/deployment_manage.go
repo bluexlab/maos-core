@@ -461,7 +461,7 @@ func RestartDeployment(
 	// rotate actor api keys
 	// it generates new api keys for each actor
 	// and set the old ones to expire after 15 minutes
-	apiTokens, err := rotateActorApiKeys(ctx, tx, configs, request.Body.User)
+	apiTokens, err := rotateActorApiKeys(ctx, tx, configs)
 	if err != nil {
 		logger.Error("Cannot rotate actor api keys", "error", err)
 		return api.AdminRestartDeployment500JSONResponse{
@@ -469,7 +469,7 @@ func RestartDeployment(
 		}, nil
 	}
 
-	err = updateKubernetesDeployments(ctx, controller, deployment, configs, apiTokens)
+	err = updateKubernetesDeployments(ctx, controller, configs, apiTokens)
 	if err != nil {
 		logger.Error("Cannot update kubernetes deployments", "error", err)
 		return api.AdminRestartDeployment500JSONResponse{
@@ -653,13 +653,13 @@ func doRunDeploymentMigrationsAndUpdateDeployment(
 	// rotate actor api keys
 	// it generates new api keys for each actor
 	// and set the old ones to expire after 15 minutes
-	apiTokens, err := rotateActorApiKeys(ctx, tx, configs, user)
+	apiTokens, err := rotateActorApiKeys(ctx, tx, configs)
 	if err != nil {
 		logger.Error("Cannot rotate actor api keys", "error", err)
 		return fmt.Errorf("Cannot rotate actor api keys: %v", err)
 	}
 
-	err = updateKubernetesDeployments(ctx, controller, deployment, configs, apiTokens)
+	err = updateKubernetesDeployments(ctx, controller, configs, apiTokens)
 	if err != nil {
 		logger.Error("Cannot update kubernetes deployments", "error", err)
 		return fmt.Errorf("Cannot update kubernetes deployments: %v", err)
@@ -733,7 +733,6 @@ func runDeploymentMigrations(
 func updateKubernetesDeployments(
 	ctx context.Context,
 	controller k8s.Controller,
-	deployment *dbsqlc.Deployment,
 	configs []*dbsqlc.ConfigListBySuiteIdGroupByActorRow,
 	apiTokens map[int64]string,
 ) error {
@@ -822,11 +821,14 @@ func rotateActorApiKeys(
 	ctx context.Context,
 	tx pgx.Tx,
 	configs []*dbsqlc.ConfigListBySuiteIdGroupByActorRow,
-	createdBy string,
 ) (map[int64]string, error) {
 	apiTokens := make(map[int64]string)
 
 	for _, config := range configs {
+		if !config.ActorDeployable || config.ActorRole != "agent" {
+			continue
+		}
+
 		newApiToken := GenerateAPIToken()
 
 		expirationTime := time.Now().Add(60 * 24 * time.Hour)
@@ -834,7 +836,7 @@ func rotateActorApiKeys(
 			ID:          newApiToken,
 			ActorId:     config.ActorId,
 			NewExpireAt: int64(expirationTime.Unix()),
-			CreatedBy:   createdBy,
+			CreatedBy:   "maos-core",
 			Permissions: []string{"read:invocation"}, // TODO: read permissions from actor config
 		})
 		if err != nil {

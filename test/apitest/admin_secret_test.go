@@ -23,7 +23,7 @@ func TestAdminListSecretsEndpoint(t *testing.T) {
 		server, ds, mockController := SetupHttpTestWithDbAndK8s(t, ctx)
 
 		adminActor := fixture.InsertActor(t, ctx, ds, "admin")
-		fixture.InsertToken(t, ctx, ds, "admin-token", adminActor.ID, 0, []string{"admin"})
+		fixture.InsertToken(t, ctx, ds, "admin-token", adminActor.ID, []string{"admin"})
 
 		mockController.On("ListSecrets", mock.Anything).Return([]k8s.Secret{
 			{Name: "secret1", Keys: []string{"key1", "key2"}},
@@ -50,7 +50,7 @@ func TestAdminListSecretsEndpoint(t *testing.T) {
 		server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
 		adminActor := fixture.InsertActor(t, ctx, ds, "admin")
-		fixture.InsertToken(t, ctx, ds, "actor-token", adminActor.ID, 0, []string{"user"})
+		fixture.InsertToken(t, ctx, ds, "actor-token", adminActor.ID, []string{"user"})
 
 		resp, _ := GetHttp(t, server.URL+"/v1/admin/secrets", "actor-token")
 		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
@@ -72,7 +72,7 @@ func TestAdminUpdateSecretEndpoint(t *testing.T) {
 		server, ds, mockController := SetupHttpTestWithDbAndK8s(t, ctx)
 
 		adminActor := fixture.InsertActor(t, ctx, ds, "admin")
-		fixture.InsertToken(t, ctx, ds, "admin-token", adminActor.ID, 0, []string{"admin"})
+		fixture.InsertToken(t, ctx, ds, "admin-token", adminActor.ID, []string{"admin"})
 
 		mockController.On("UpdateSecret", mock.Anything, "test-secret", map[string]string{"test-key": "new-value"}).Return(nil)
 
@@ -87,7 +87,7 @@ func TestAdminUpdateSecretEndpoint(t *testing.T) {
 		server, ds, _ := SetupHttpTestWithDbAndK8s(t, ctx)
 
 		adminActor := fixture.InsertActor(t, ctx, ds, "admin")
-		fixture.InsertToken(t, ctx, ds, "actor-token", adminActor.ID, 0, []string{"user"})
+		fixture.InsertToken(t, ctx, ds, "actor-token", adminActor.ID, []string{"user"})
 
 		body := `{"test-key":"new-value"}`
 		resp, _ := PatchHttp(t, server.URL+"/v1/admin/secrets/test-secret", body, "actor-token")
@@ -106,7 +106,7 @@ func TestAdminUpdateSecretEndpoint(t *testing.T) {
 		server, ds, _ := SetupHttpTestWithDbAndK8s(t, ctx)
 
 		adminActor := fixture.InsertActor(t, ctx, ds, "admin")
-		fixture.InsertToken(t, ctx, ds, "admin-token", adminActor.ID, 0, []string{"admin"})
+		fixture.InsertToken(t, ctx, ds, "admin-token", adminActor.ID, []string{"admin"})
 
 		body := `{"invalid_json"}`
 		resp, resBody := PatchHttp(t, server.URL+"/v1/admin/secrets/test-secret", body, "admin-token")
@@ -126,7 +126,7 @@ func TestAdminDeleteSecretEndpoint(t *testing.T) {
 		server, ds, mockController := SetupHttpTestWithDbAndK8s(t, ctx)
 
 		adminActor := fixture.InsertActor(t, ctx, ds, "admin")
-		fixture.InsertToken(t, ctx, ds, "admin-token", adminActor.ID, 0, []string{"admin"})
+		fixture.InsertToken(t, ctx, ds, "admin-token", adminActor.ID, []string{"admin"})
 
 		mockController.On("DeleteSecret", mock.Anything, "test-secret").Return(nil)
 
@@ -140,7 +140,7 @@ func TestAdminDeleteSecretEndpoint(t *testing.T) {
 		server, ds, _ := SetupHttpTestWithDbAndK8s(t, ctx)
 
 		adminActor := fixture.InsertActor(t, ctx, ds, "admin")
-		fixture.InsertToken(t, ctx, ds, "actor-token", adminActor.ID, 0, []string{"user"})
+		fixture.InsertToken(t, ctx, ds, "actor-token", adminActor.ID, []string{"user"})
 
 		resp, _ := DeleteHttp(t, server.URL+"/v1/admin/secrets/test-secret", "actor-token")
 		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
@@ -157,7 +157,7 @@ func TestAdminDeleteSecretEndpoint(t *testing.T) {
 		server, ds, mockController := SetupHttpTestWithDbAndK8s(t, ctx)
 
 		adminActor := fixture.InsertActor(t, ctx, ds, "admin")
-		fixture.InsertToken(t, ctx, ds, "admin-token", adminActor.ID, 0, []string{"admin"})
+		fixture.InsertToken(t, ctx, ds, "admin-token", adminActor.ID, []string{"admin"})
 
 		mockController.On("DeleteSecret", mock.Anything, "test-secret").Return(assert.AnError)
 

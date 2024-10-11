@@ -21,7 +21,7 @@ func TestUpdateConfigEndpoint(t *testing.T) {
 		server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
 		actor := fixture.InsertActor(t, ctx, ds, "actor1")
-		fixture.InsertToken(t, ctx, ds, "admin-token", actor.ID, 0, []string{"admin"})
+		fixture.InsertToken(t, ctx, ds, "admin-token", actor.ID, []string{"admin"})
 
 		setupActor := fixture.InsertActor(t, ctx, ds, "TestActor")
 		configSuite := fixture.InsertConfigSuite(t, ctx, ds)
@@ -51,7 +51,7 @@ func TestUpdateConfigEndpoint(t *testing.T) {
 		server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
 		actor := fixture.InsertActor(t, ctx, ds, "actor1")
-		fixture.InsertToken(t, ctx, ds, "admin-token", actor.ID, 0, []string{"admin"})
+		fixture.InsertToken(t, ctx, ds, "admin-token", actor.ID, []string{"admin"})
 
 		body := `{"content":{"key":"value"},"user":"testuser"}`
 		resp, resBody := PatchHttp(t, fmt.Sprintf("%s/v1/admin/configs/%d", server.URL, 999999), body, "admin-token")
@@ -63,7 +63,7 @@ func TestUpdateConfigEndpoint(t *testing.T) {
 		server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
 		actor := fixture.InsertActor(t, ctx, ds, "actor1")
-		fixture.InsertToken(t, ctx, ds, "admin-token", actor.ID, 0, []string{"admin"})
+		fixture.InsertToken(t, ctx, ds, "admin-token", actor.ID, []string{"admin"})
 
 		setupActor := fixture.InsertActor(t, ctx, ds, "TestActor")
 		configSuite := fixture.InsertConfigSuite(t, ctx, ds)
@@ -81,7 +81,7 @@ func TestUpdateConfigEndpoint(t *testing.T) {
 		server, ds, _ := SetupHttpTestWithDb(t, ctx)
 
 		actor := fixture.InsertActor(t, ctx, ds, "actor1")
-		fixture.InsertToken(t, ctx, ds, "admin-token", actor.ID, 0, []string{"admin"})
+		fixture.InsertToken(t, ctx, ds, "admin-token", actor.ID, []string{"admin"})
 
 		body := `{"content":{"key":"value"},"user":"testuser"}`
 		resp, _ := PatchHttp(t, fmt.Sprintf("%s/v1/admin/configs/%d", server.URL, 1), body, "invalid-token")

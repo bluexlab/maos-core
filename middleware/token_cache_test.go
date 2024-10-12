@@ -67,6 +67,12 @@ func TestApiTokenCache_GetToken(t *testing.T) {
 		assert.Nil(t, token)
 
 		mockFetcher.AssertExpectations(t)
+
+		// Second call, it should return nil without calling the fetcher
+		cache.Wait()
+		token = cache.GetToken(ctx, apiToken)
+		assert.Nil(t, token)
+		mockFetcher.AssertExpectations(t)
 	})
 
 	t.Run("Handles fetch error", func(t *testing.T) {

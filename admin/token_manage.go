@@ -44,7 +44,11 @@ func ListApiTokens(ctx context.Context, logger *slog.Logger, ds dbaccess.DataSou
 		},
 	)
 	response := api.AdminListApiTokens200JSONResponse{Data: data}
-	response.Meta.TotalPages = int((res[0].TotalCount + int64(*pageSize) - 1) / int64(*pageSize))
+	totalCount := 0
+	if len(res) > 0 {
+		totalCount = int(res[0].TotalCount)
+	}
+	response.Meta.TotalPages = int((totalCount + *pageSize - 1) / *pageSize)
 	return response, nil
 }
 

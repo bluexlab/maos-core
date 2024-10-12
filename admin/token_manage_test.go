@@ -74,6 +74,22 @@ func TestListApiTokensWithDB(t *testing.T) {
 		}
 	})
 
+	t.Run("Successful listing with no tokens", func(t *testing.T) {
+		ctx := context.Background()
+		dbPool := testhelper.TestDB(ctx, t)
+		fixture.InsertActor(t, ctx, dbPool, "actor1")
+
+		response, err := ListApiTokens(ctx, slog.Default(), dbPool, api.AdminListApiTokensRequestObject{})
+
+		assert.NoError(t, err)
+		assert.IsType(t, api.AdminListApiTokens200JSONResponse{}, response)
+
+		jsonResponse := response.(api.AdminListApiTokens200JSONResponse)
+		assert.NotNil(t, jsonResponse.Data)
+		assert.Len(t, jsonResponse.Data, 0)
+		require.Equal(t, 0, jsonResponse.Meta.TotalPages)
+	})
+
 	t.Run("Custom page and page size", func(t *testing.T) {
 		ctx := context.Background()
 		dbPool := testhelper.TestDB(ctx, t)

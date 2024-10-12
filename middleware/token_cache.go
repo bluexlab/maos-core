@@ -38,6 +38,9 @@ func NewApiTokenCache(fetcher TokenFetcher, ttl time.Duration) *ApiTokenCache {
 func (c *ApiTokenCache) GetToken(ctx context.Context, apiToken string) *Token {
 	value, found := c.cache.Get(apiToken)
 	if found {
+		if value == nil {
+			return nil
+		}
 		return value.(*Token)
 	}
 
@@ -54,7 +57,7 @@ func (c *ApiTokenCache) GetToken(ctx context.Context, apiToken string) *Token {
 			return nil, nil
 		}
 
-		c.cache.SetWithTTL(apiToken, token, 1, 10*time.Second)
+		c.cache.SetWithTTL(apiToken, token, 1, c.ttl)
 		return token, nil
 	})
 
@@ -66,6 +69,10 @@ func (c *ApiTokenCache) GetToken(ctx context.Context, apiToken string) *Token {
 		return nil
 	}
 	return fetched.(*Token)
+}
+
+func (c *ApiTokenCache) Wait() {
+	c.cache.Wait()
 }
 
 func createCache() *ristretto.Cache {

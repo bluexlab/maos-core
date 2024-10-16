@@ -191,6 +191,41 @@ func CreateDeployment(ctx context.Context, logger *slog.Logger, ds dbaccess.Data
 		}, nil
 	}
 
+	if request.Body.CloneFrom != nil {
+		deployment, err := querier.DeploymentCloneFrom(ctx, ds, &dbsqlc.DeploymentCloneFromParams{
+			CloneFrom: int64(*request.Body.CloneFrom),
+			Name:      request.Body.Name,
+			CreatedBy: request.Body.User,
+		})
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				return api.AdminCreateDeployment400JSONResponse{
+					N400JSONResponse: api.N400JSONResponse{Error: "Cannot clone from deployment: deployment not found"},
+				}, nil
+			}
+			logger.Error("Cannot create deployment", "error", err)
+			return api.AdminCreateDeployment500JSONResponse{
+				N500JSONResponse: api.N500JSONResponse{Error: fmt.Sprintf("Cannot create deployment: %v", err)},
+			}, nil
+		}
+
+		return api.AdminCreateDeployment201JSONResponse{
+			Data: api.Deployment{
+				Id:            deployment.ID,
+				Name:          deployment.Name,
+				Status:        api.DeploymentStatus(deployment.Status),
+				Reviewers:     deployment.Reviewers,
+				ConfigSuiteId: deployment.ConfigSuiteID,
+				CreatedBy:     deployment.CreatedBy,
+				CreatedAt:     deployment.CreatedAt,
+				ApprovedBy:    deployment.ApprovedBy,
+				ApprovedAt:    deployment.ApprovedAt,
+				FinishedBy:    deployment.FinishedBy,
+				FinishedAt:    deployment.FinishedAt,
+			},
+		}, nil
+	}
+
 	deployment, err := querier.DeploymentInsertWithConfigSuite(ctx, ds, &dbsqlc.DeploymentInsertWithConfigSuiteParams{
 		Name:      request.Body.Name,
 		Reviewers: lo.FromPtrOr(request.Body.Reviewers, nil),

@@ -104,6 +104,10 @@ post:
                 type: string
             user:
               type: string
+            clone_from:
+              type: integer
+              format: int64
+              description: Clone from deployment id
           required:
             - name
             - user

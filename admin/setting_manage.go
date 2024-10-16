@@ -14,6 +14,10 @@ import (
 type SettingType struct {
 	DisplayName               *string `json:"display_name,omitempty"`
 	DeploymentApproveRequired *bool   `json:"deployment_approve_required,omitempty"`
+	EnableSecretsBackup       *bool   `json:"enable_secrets_backup,omitempty"`
+	SecretsBackupPublicKey    *string `json:"secrets_backup_public_key,omitempty"`
+	SecretsBackupBucket       *string `json:"secrets_backup_bucket,omitempty"`
+	SecretsBackupPrefix       *string `json:"secrets_backup_prefix,omitempty"`
 }
 
 func GetSetting(ctx context.Context, logger *slog.Logger, ds dbaccess.DataSource, request api.AdminGetSettingRequestObject) (api.AdminGetSettingResponseObject, error) {
@@ -44,13 +48,17 @@ func GetSetting(ctx context.Context, logger *slog.Logger, ds dbaccess.DataSource
 	return api.AdminGetSetting200JSONResponse{
 		DisplayName:               lo.FromPtrOr(settingContent.DisplayName, ""),
 		DeploymentApproveRequired: lo.FromPtrOr(settingContent.DeploymentApproveRequired, false),
+		EnableSecretsBackup:       lo.FromPtrOr(settingContent.EnableSecretsBackup, false),
+		SecretsBackupPublicKey:    settingContent.SecretsBackupPublicKey,
+		SecretsBackupBucket:       settingContent.SecretsBackupBucket,
+		SecretsBackupPrefix:       settingContent.SecretsBackupPrefix,
 	}, nil
 }
 
 func UpdateSetting(ctx context.Context, logger *slog.Logger, ds dbaccess.DataSource, request api.AdminUpdateSettingRequestObject) (api.AdminUpdateSettingResponseObject, error) {
 	logger.Info("UpdateSetting", "request", request.Body)
 
-	return500Error := func() (api.AdminUpdateSettingResponseObject, error) {
+	internalError := func() (api.AdminUpdateSettingResponseObject, error) {
 		return api.AdminUpdateSetting500JSONResponse{
 			N500JSONResponse: api.N500JSONResponse{
 				Error: "Internal server error",
@@ -70,31 +78,25 @@ func UpdateSetting(ctx context.Context, logger *slog.Logger, ds dbaccess.DataSou
 	settingContent := SettingType{
 		DisplayName:               request.Body.DisplayName,
 		DeploymentApproveRequired: request.Body.DeploymentApproveRequired,
+		EnableSecretsBackup:       request.Body.EnableSecretsBackup,
+		SecretsBackupPublicKey:    request.Body.SecretsBackupPublicKey,
+		SecretsBackupBucket:       request.Body.SecretsBackupBucket,
+		SecretsBackupPrefix:       request.Body.SecretsBackupPrefix,
 	}
-
 	// Marshal updated setting
 	updatedSettingBytes, err := json.Marshal(settingContent)
 	if err != nil {
 		logger.Error("Failed to marshal updated setting", "error", err)
-		return return500Error()
+		return internalError()
 	}
 
-	// Save update to database
-	setting, err := querier.SettingUpdateSystem(ctx, ds, updatedSettingBytes)
+	_, err = querier.SettingUpdateSystem(ctx, ds, updatedSettingBytes)
 	if err != nil {
 		logger.Error("Failed to update setting", "error", err)
-		return return500Error()
+		return internalError()
 	}
 
-	updatedSetting, err := deserializeSetting(setting.Value, logger)
-	if err != nil {
-		return return500Error()
-	}
-
-	return api.AdminUpdateSetting200JSONResponse{
-		DisplayName:               lo.FromPtrOr(updatedSetting.DisplayName, ""),
-		DeploymentApproveRequired: lo.FromPtrOr(updatedSetting.DeploymentApproveRequired, false),
-	}, nil
+	return api.AdminUpdateSetting200Response{}, nil
 }
 
 func deserializeSetting(content []byte, logger *slog.Logger) (SettingType, error) {

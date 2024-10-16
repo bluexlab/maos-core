@@ -4,6 +4,15 @@ properties:
     type: boolean
   display_name:
     type: string
+  enable_secrets_backup:
+    type: boolean
+  secrets_backup_public_key:
+    type: string
+  secrets_backup_bucket:
+    type: string
+  secrets_backup_prefix:
+    type: string
 required:
   - deployment_approve_required
   - display_name
+  - enable_secrets_backup

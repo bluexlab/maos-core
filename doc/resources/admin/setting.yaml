@@ -31,14 +31,20 @@ patch:
               type: string
             deployment_approve_required:
               type: boolean
-
+            enable_secrets_backup:
+              type: boolean
+            secrets_backup_public_key:
+              type: string
+              description: The public key for encrypting secrets backup
+            secrets_backup_bucket:
+              type: string
+              description: The S3 bucket for storing secrets backup
+            secrets_backup_prefix:
+              type: string
+              description: The S3 prefix for storing secrets backup
   responses:
     "200":
       description: Updated system setting
-      content:
-        application/json:
-          schema:
-            $ref: "../../schemas/Setting.yaml"
     "401":
       description: Unauthorized
     "404":

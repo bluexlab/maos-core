@@ -19,7 +19,7 @@ func InsertActor(t *testing.T, ctx context.Context, ds DataSource, name string) 
 		QueueID:      queue.ID,
 		Enabled:      true,
 		Deployable:   false,
-		Configurable: false,
+		Configurable: true,
 		Migratable:   false,
 	})
 	if err != nil {

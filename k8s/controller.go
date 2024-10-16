@@ -1,17 +1,21 @@
 package k8s
 
 import (
+	"bytes"
 	"context"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
 	"time"
 
-	"bytes"
-	"io"
-
+	"github.com/go-jose/go-jose/v4"
 	"github.com/samber/lo"
 	apps "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -1003,4 +1007,74 @@ func getCurrentNamespace() (string, error) {
 	}
 
 	return strings.TrimSpace(string(data)), nil
+}
+
+// SecretData represents the structure of a secret with its data
+type SecretData struct {
+	Name string            `json:"name"`
+	Data map[string]string `json:"data"`
+}
+
+// SerializeSecretsToJSON reads all secrets and serializes them to a JSON string
+func (c *K8sController) SerializeSecretsToJSON(ctx context.Context, publicKey string) (string, error) {
+	secretList, err := c.clientset.CoreV1().Secrets(c.namespace).List(ctx, meta.ListOptions{})
+	if err != nil {
+		return "", fmt.Errorf("failed to list secrets: %v", err)
+	}
+
+	secretsData := make([]SecretData, 0, len(secretList.Items))
+	for _, secret := range secretList.Items {
+		data := make(map[string]string)
+		for key, value := range secret.Data {
+			data[key] = base64.StdEncoding.EncodeToString(value)
+		}
+		secretsData = append(secretsData, SecretData{
+			Name: secret.Name,
+			Data: data,
+		})
+	}
+
+	jsonData, err := json.Marshal(secretsData)
+	if err != nil {
+		return "", fmt.Errorf("failed to serialize secrets to JSON: %v", err)
+	}
+
+	// Parse the RSA public key
+	block, _ := pem.Decode([]byte(publicKey))
+	if block == nil {
+		return "", fmt.Errorf("failed to parse PEM block containing the public key")
+	}
+	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse public key: %v", err)
+	}
+	rsaPub, ok := pub.(*rsa.PublicKey)
+	if !ok {
+		return "", fmt.Errorf("not an RSA public key")
+	}
+
+	// Create a JWE encrypter
+	encrypter, err := jose.NewEncrypter(
+		jose.A256GCM,
+		jose.Recipient{Algorithm: jose.RSA_OAEP_256, Key: rsaPub},
+		(&jose.EncrypterOptions{}).WithType("JWE").WithContentType("application/json"),
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to create JWE encrypter: %v", err)
+	}
+
+	// Encrypt the JSON data
+	jwe, err := encrypter.Encrypt(jsonData)
+	if err != nil {
+		return "", fmt.Errorf("failed to encrypt data: %v", err)
+	}
+
+	// Serialize the JWE
+	serialized, err := jwe.CompactSerialize()
+	if err != nil {
+		return "", fmt.Errorf("failed to serialize JWE: %v", err)
+	}
+
+	slog.Info("Serialized secrets", "data", serialized)
+	return serialized, nil
 }

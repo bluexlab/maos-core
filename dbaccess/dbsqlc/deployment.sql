@@ -97,8 +97,66 @@ actor_configs AS (
       '{}'::jsonb
     )
   FROM actors
+  WHERE configurable = TRUE
 )
 SELECT * FROM inserted_deployment;
+
+-- name: DeploymentCloneFrom :one
+-- Clone a deployment and its associated config suite.
+-- The new deployment will be in the draft status.
+WITH source_deployment AS (
+  SELECT config_suite_id FROM deployments WHERE id = @clone_from::bigint
+),
+inserted_config_suite AS (
+  INSERT INTO config_suites (created_by)
+  SELECT @created_by::text
+  FROM source_deployment
+  RETURNING id
+),
+inserted_deployment AS (
+  INSERT INTO deployments (
+    name,
+    status,
+    reviewers,
+    created_by,
+    config_suite_id
+  )
+  SELECT
+    sqlc.arg(name)::text,
+    'draft',
+    COALESCE(sqlc.narg(reviewers)::text[], '{}'),
+    @created_by::text,
+    (SELECT id FROM inserted_config_suite)
+  FROM source_deployment
+  RETURNING *
+),
+actor_configs AS (
+  INSERT INTO configs (actor_id, config_suite_id, created_by, min_actor_version, content)
+  SELECT
+    actors.id,
+    (SELECT config_suite_id FROM inserted_deployment),
+    @created_by::text,
+    COALESCE(
+      (SELECT min_actor_version FROM configs WHERE actor_id = actors.id ORDER BY created_at DESC LIMIT 1),
+      NULL
+    ),
+    COALESCE(
+      (SELECT content FROM configs
+        WHERE actor_id = actors.id
+          AND config_suite_id = (SELECT config_suite_id FROM source_deployment)
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1),
+      (SELECT content FROM configs
+        WHERE actor_id = actors.id
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1),
+      '{}'::jsonb
+    )
+  FROM actors
+  WHERE configurable = TRUE AND EXISTS (SELECT 1 FROM source_deployment)
+)
+SELECT * FROM inserted_deployment;
+
 
 -- name: DeploymentUpdate :one
 UPDATE deployments

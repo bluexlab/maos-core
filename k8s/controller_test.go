@@ -2,11 +2,19 @@ package k8s
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/json"
+	"encoding/pem"
 	"log/slog"
 	"testing"
 	"time"
 
+	"github.com/go-jose/go-jose/v4"
 	"github.com/samber/lo"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	apps "k8s.io/api/apps/v1"
 	core "k8s.io/api/core/v1"
@@ -1169,4 +1177,107 @@ func TestK8sController_RunMigrations_MultipleJobs(t *testing.T) {
 	// Assert no errors and no failures
 	require.NoError(t, err)
 	require.Empty(t, failures)
+}
+
+func TestSerializeSecretsToJSON(t *testing.T) {
+	// Create a fake clientset
+	clientset := fake.NewSimpleClientset()
+
+	// Create a test controller
+	controller := &K8sController{
+		clientset: clientset,
+		namespace: "default",
+	}
+
+	// Create some test secrets
+	testSecrets := []core.Secret{
+		{
+			ObjectMeta: meta.ObjectMeta{
+				Name: "secret1",
+				Labels: map[string]string{
+					"created-by": "maos",
+				},
+			},
+			Data: map[string][]byte{
+				"key1": []byte("value1"),
+				"key2": []byte("value2"),
+			},
+		},
+		{
+			ObjectMeta: meta.ObjectMeta{
+				Name: "secret2",
+				Labels: map[string]string{
+					"created-by": "maos",
+				},
+			},
+			Data: map[string][]byte{
+				"key3": []byte("value3"),
+			},
+		},
+	}
+
+	// Add test secrets to the fake clientset
+	for _, secret := range testSecrets {
+		_, err := clientset.CoreV1().Secrets("default").Create(context.Background(), &secret, meta.CreateOptions{})
+		require.NoError(t, err)
+	}
+
+	// Generate RSA key pair
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	publicKey := &privateKey.PublicKey
+	publicKeyBytes, err := x509.MarshalPKIXPublicKey(publicKey)
+	require.NoError(t, err)
+
+	publicKeyPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "RSA PUBLIC KEY",
+		Bytes: publicKeyBytes,
+	})
+
+	// Call SerializeSecretsToJSON
+	result, err := controller.SerializeSecretsToJSON(context.Background(), string(publicKeyPEM))
+	require.NoError(t, err)
+
+	// Parse the JWE
+	var allKeyAlgorithms = []jose.KeyAlgorithm{
+		jose.RSA1_5,
+		jose.RSA_OAEP,
+		jose.RSA_OAEP_256,
+		jose.ECDH_ES,
+		jose.ECDH_ES_A128KW,
+		jose.ECDH_ES_A192KW,
+		jose.ECDH_ES_A256KW,
+	}
+	var allContentEncryptions = []jose.ContentEncryption{
+		jose.A128GCM,
+		jose.A192GCM,
+		jose.A256GCM,
+	}
+
+	jwe, err := jose.ParseEncrypted(result, allKeyAlgorithms, allContentEncryptions)
+	require.NoError(t, err)
+
+	// Decrypt the JWE
+	decrypted, err := jwe.Decrypt(privateKey)
+	require.NoError(t, err)
+
+	// Unmarshal the decrypted data
+	var secretsData []SecretData
+	err = json.Unmarshal(decrypted, &secretsData)
+	require.NoError(t, err)
+
+	// Assert the decrypted data matches the original secrets
+	assert.Len(t, secretsData, len(testSecrets))
+	for _, secret := range secretsData {
+		originalSecret, found := lo.Find(testSecrets, func(s core.Secret) bool {
+			return s.Name == secret.Name
+		})
+		assert.True(t, found)
+		for key, value := range secret.Data {
+			decodedValue, err := base64.StdEncoding.DecodeString(value)
+			require.NoError(t, err)
+			assert.Equal(t, string(originalSecret.Data[key]), string(decodedValue))
+		}
+	}
 }

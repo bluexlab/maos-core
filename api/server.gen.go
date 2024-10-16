@@ -146,7 +146,9 @@ const (
 	AdminListDeploymentsParamsStatusApproved  AdminListDeploymentsParamsStatus = "approved"
 	AdminListDeploymentsParamsStatusCancelled AdminListDeploymentsParamsStatus = "cancelled"
 	AdminListDeploymentsParamsStatusDeployed  AdminListDeploymentsParamsStatus = "deployed"
+	AdminListDeploymentsParamsStatusDeploying AdminListDeploymentsParamsStatus = "deploying"
 	AdminListDeploymentsParamsStatusDraft     AdminListDeploymentsParamsStatus = "draft"
+	AdminListDeploymentsParamsStatusFailed    AdminListDeploymentsParamsStatus = "failed"
 	AdminListDeploymentsParamsStatusRejected  AdminListDeploymentsParamsStatus = "rejected"
 	AdminListDeploymentsParamsStatusRetired   AdminListDeploymentsParamsStatus = "retired"
 	AdminListDeploymentsParamsStatusReviewing AdminListDeploymentsParamsStatus = "reviewing"
@@ -464,8 +466,12 @@ type RerankResult struct {
 
 // Setting defines model for Setting.
 type Setting struct {
-	DeploymentApproveRequired bool   `json:"deployment_approve_required"`
-	DisplayName               string `json:"display_name"`
+	DeploymentApproveRequired bool    `json:"deployment_approve_required"`
+	DisplayName               string  `json:"display_name"`
+	EnableSecretsBackup       bool    `json:"enable_secrets_backup"`
+	SecretsBackupBucket       *string `json:"secrets_backup_bucket,omitempty"`
+	SecretsBackupPrefix       *string `json:"secrets_backup_prefix,omitempty"`
+	SecretsBackupPublicKey    *string `json:"secrets_backup_public_key,omitempty"`
 }
 
 // Tool The tool that is used to process the message.
@@ -559,6 +565,8 @@ type AdminListDeploymentsParamsStatus string
 
 // AdminCreateDeploymentJSONBody defines parameters for AdminCreateDeployment.
 type AdminCreateDeploymentJSONBody struct {
+	// CloneFrom Clone from deployment id
+	CloneFrom *int64    `json:"clone_from,omitempty"`
 	Name      string    `json:"name"`
 	Reviewers *[]string `json:"reviewers,omitempty"`
 	User      string    `json:"user"`
@@ -598,6 +606,16 @@ type AdminUpdateSecretJSONBody map[string]string
 type AdminUpdateSettingJSONBody struct {
 	DeploymentApproveRequired *bool   `json:"deployment_approve_required,omitempty"`
 	DisplayName               *string `json:"display_name,omitempty"`
+	EnableSecretsBackup       *bool   `json:"enable_secrets_backup,omitempty"`
+
+	// SecretsBackupBucket The S3 bucket for storing secrets backup
+	SecretsBackupBucket *string `json:"secrets_backup_bucket,omitempty"`
+
+	// SecretsBackupPrefix The S3 prefix for storing secrets backup
+	SecretsBackupPrefix *string `json:"secrets_backup_prefix,omitempty"`
+
+	// SecretsBackupPublicKey The public key for encrypting secrets backup
+	SecretsBackupPublicKey *string `json:"secrets_backup_public_key,omitempty"`
 }
 
 // CreateCompletionJSONBody defines parameters for CreateCompletion.
@@ -3924,13 +3942,12 @@ type AdminUpdateSettingResponseObject interface {
 	VisitAdminUpdateSettingResponse(w http.ResponseWriter) error
 }
 
-type AdminUpdateSetting200JSONResponse Setting
+type AdminUpdateSetting200Response struct {
+}
 
-func (response AdminUpdateSetting200JSONResponse) VisitAdminUpdateSettingResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
+func (response AdminUpdateSetting200Response) VisitAdminUpdateSettingResponse(w http.ResponseWriter) error {
 	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
+	return nil
 }
 
 type AdminUpdateSetting400JSONResponse struct{ N400JSONResponse }

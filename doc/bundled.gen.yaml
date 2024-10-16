@@ -1342,8 +1342,10 @@ paths:
               - approved
               - rejected
               - deployed
+              - deploying
               - retired
               - cancelled
+              - failed
           description: Filter by deployment status.
         - in: query
           name: name
@@ -1414,6 +1416,10 @@ paths:
                     type: string
                 user:
                   type: string
+                clone_from:
+                  type: integer
+                  format: int64
+                  description: Clone from deployment id
               required:
                 - name
                 - user
@@ -1799,13 +1805,20 @@ paths:
                   type: string
                 deployment_approve_required:
                   type: boolean
+                enable_secrets_backup:
+                  type: boolean
+                secrets_backup_public_key:
+                  type: string
+                  description: The public key for encrypting secrets backup
+                secrets_backup_bucket:
+                  type: string
+                  description: The S3 bucket for storing secrets backup
+                secrets_backup_prefix:
+                  type: string
+                  description: The S3 prefix for storing secrets backup
       responses:
         '200':
           description: Updated system setting
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Setting'
         '400':
           $ref: '#/components/responses/400'
         '401':
@@ -2555,9 +2568,18 @@ components:
           type: boolean
         display_name:
           type: string
+        enable_secrets_backup:
+          type: boolean
+        secrets_backup_public_key:
+          type: string
+        secrets_backup_bucket:
+          type: string
+        secrets_backup_prefix:
+          type: string
       required:
         - deployment_approve_required
         - display_name
+        - enable_secrets_backup
     ReferenceConfigSuite:
       type: object
       properties:

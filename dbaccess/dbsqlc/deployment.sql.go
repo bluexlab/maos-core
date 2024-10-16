@@ -9,6 +9,118 @@ import (
 	"context"
 )
 
+const deploymentCloneFrom = `-- name: DeploymentCloneFrom :one
+WITH source_deployment AS (
+  SELECT config_suite_id FROM deployments WHERE id = $1::bigint
+),
+inserted_config_suite AS (
+  INSERT INTO config_suites (created_by)
+  SELECT $2::text
+  FROM source_deployment
+  RETURNING id
+),
+inserted_deployment AS (
+  INSERT INTO deployments (
+    name,
+    status,
+    reviewers,
+    created_by,
+    config_suite_id
+  )
+  SELECT
+    $3::text,
+    'draft',
+    COALESCE($4::text[], '{}'),
+    $2::text,
+    (SELECT id FROM inserted_config_suite)
+  FROM source_deployment
+  RETURNING id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at, migration_logs, last_error, deploying_at, deployed_at
+),
+actor_configs AS (
+  INSERT INTO configs (actor_id, config_suite_id, created_by, min_actor_version, content)
+  SELECT
+    actors.id,
+    (SELECT config_suite_id FROM inserted_deployment),
+    $2::text,
+    COALESCE(
+      (SELECT min_actor_version FROM configs WHERE actor_id = actors.id ORDER BY created_at DESC LIMIT 1),
+      NULL
+    ),
+    COALESCE(
+      (SELECT content FROM configs
+        WHERE actor_id = actors.id
+          AND config_suite_id = (SELECT config_suite_id FROM source_deployment)
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1),
+      (SELECT content FROM configs
+        WHERE actor_id = actors.id
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1),
+      '{}'::jsonb
+    )
+  FROM actors
+  WHERE configurable = TRUE AND EXISTS (SELECT 1 FROM source_deployment)
+)
+SELECT id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at, migration_logs, last_error, deploying_at, deployed_at FROM inserted_deployment
+`
+
+type DeploymentCloneFromParams struct {
+	CloneFrom int64
+	CreatedBy string
+	Name      string
+	Reviewers []string
+}
+
+type DeploymentCloneFromRow struct {
+	ID            int64
+	Name          string
+	Status        DeploymentStatus
+	Reviewers     []string
+	ConfigSuiteID *int64
+	Notes         []byte
+	CreatedBy     string
+	CreatedAt     int64
+	ApprovedBy    *string
+	ApprovedAt    *int64
+	FinishedBy    *string
+	FinishedAt    *int64
+	MigrationLogs []byte
+	LastError     *string
+	DeployingAt   *int64
+	DeployedAt    *int64
+}
+
+// Clone a deployment and its associated config suite.
+// The new deployment will be in the draft status.
+func (q *Queries) DeploymentCloneFrom(ctx context.Context, db DBTX, arg *DeploymentCloneFromParams) (*DeploymentCloneFromRow, error) {
+	row := db.QueryRow(ctx, deploymentCloneFrom,
+		arg.CloneFrom,
+		arg.CreatedBy,
+		arg.Name,
+		arg.Reviewers,
+	)
+	var i DeploymentCloneFromRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Status,
+		&i.Reviewers,
+		&i.ConfigSuiteID,
+		&i.Notes,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.ApprovedBy,
+		&i.ApprovedAt,
+		&i.FinishedBy,
+		&i.FinishedAt,
+		&i.MigrationLogs,
+		&i.LastError,
+		&i.DeployingAt,
+		&i.DeployedAt,
+	)
+	return &i, err
+}
+
 const deploymentDelete = `-- name: DeploymentDelete :one
 DELETE FROM deployments
 WHERE id = $1::bigint AND status = 'draft'
@@ -171,6 +283,7 @@ actor_configs AS (
       '{}'::jsonb
     )
   FROM actors
+  WHERE configurable = TRUE
 )
 SELECT id, name, status, reviewers, config_suite_id, notes, created_by, created_at, approved_by, approved_at, finished_by, finished_at, migration_logs, last_error, deploying_at, deployed_at FROM inserted_deployment
 `

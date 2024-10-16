@@ -135,7 +135,7 @@ func TestListActorsWithDB(t *testing.T) {
 		assert.EqualValues(t, actor.Role, actorResponse.Role)
 		assert.True(t, actorResponse.Enabled)
 		assert.False(t, actorResponse.Deployable)
-		assert.False(t, actorResponse.Configurable)
+		assert.True(t, actorResponse.Configurable)
 		assert.False(t, actorResponse.Renameable)
 	})
 

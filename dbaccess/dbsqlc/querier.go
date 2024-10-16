@@ -32,6 +32,9 @@ type Querier interface {
 	ConfigSuiteActivate(ctx context.Context, db DBTX, arg *ConfigSuiteActivateParams) (int64, error)
 	ConfigSuiteGetById(ctx context.Context, db DBTX, id int64) (*ConfigSuite, error)
 	ConfigUpdateInactiveContentByCreator(ctx context.Context, db DBTX, arg *ConfigUpdateInactiveContentByCreatorParams) (*ConfigUpdateInactiveContentByCreatorRow, error)
+	// Clone a deployment and its associated config suite.
+	// The new deployment will be in the draft status.
+	DeploymentCloneFrom(ctx context.Context, db DBTX, arg *DeploymentCloneFromParams) (*DeploymentCloneFromRow, error)
 	DeploymentDelete(ctx context.Context, db DBTX, id int64) (*Deployment, error)
 	DeploymentGetById(ctx context.Context, db DBTX, id int64) (*Deployment, error)
 	DeploymentInsert(ctx context.Context, db DBTX, arg *DeploymentInsertParams) (*Deployment, error)

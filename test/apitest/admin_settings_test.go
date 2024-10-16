@@ -65,24 +65,15 @@ func TestAdminUpdateSettingsEndpoint(t *testing.T) {
 
 	t.Run("Valid admin token", func(t *testing.T) {
 		updateBody := `{"display_name":"updated-maos", "deployment_approve_required":false}`
-		resp, resBody := PatchHttp(t, server.URL+"/v1/admin/setting", updateBody, "admin-token")
+		resp, _ := PatchHttp(t, server.URL+"/v1/admin/setting", updateBody, "admin-token")
 		require.Equal(t, http.StatusOK, resp.StatusCode)
-
-		var response api.AdminUpdateSetting200JSONResponse
-		err := json.Unmarshal([]byte(resBody), &response)
-		require.NoError(t, err)
-
-		expectedResponse := api.AdminUpdateSetting200JSONResponse{}
-		err = json.Unmarshal([]byte(updateBody), &expectedResponse)
-		require.NoError(t, err)
-		require.Equal(t, expectedResponse, response)
 
 		// Verify the setting were actually updated in the database
 		getResp, getResBody := GetHttp(t, server.URL+"/v1/admin/setting", "admin-token")
 		require.Equal(t, http.StatusOK, getResp.StatusCode)
 
 		var getResponse api.AdminGetSetting200JSONResponse
-		err = json.Unmarshal([]byte(getResBody), &getResponse)
+		err := json.Unmarshal([]byte(getResBody), &getResponse)
 		require.NoError(t, err)
 		require.Equal(t, "updated-maos", getResponse.DisplayName)
 		require.Equal(t, false, getResponse.DeploymentApproveRequired)

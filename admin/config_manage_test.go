@@ -253,10 +253,11 @@ func TestUpdateConfig(t *testing.T) {
 		config := fixture.InsertConfig2(t, ctx, dbPool, actor.ID, &configSuite.ID, user, initialContent)
 
 		validKubeConfig := map[string]string{
-			"KUBE_REPLICAS":       "2",
-			"KUBE_DOCKER_IMAGE":   "myregistry.com/myimage:latest",
-			"KUBE_CPU_REQUEST":    "200m",
-			"KUBE_MEMORY_REQUEST": "256Mi",
+			"KUBE_REPLICAS":          "2",
+			"KUBE_DOCKER_IMAGE":      "myregistry.com/myimage:latest",
+			"KUBE_PULL_IMAGE_SECRET": "mysecret",
+			"KUBE_CPU_REQUEST":       "200m",
+			"KUBE_MEMORY_REQUEST":    "256Mi",
 		}
 
 		request := api.AdminUpdateConfigRequestObject{
@@ -274,6 +275,7 @@ func TestUpdateConfig(t *testing.T) {
 		jsonResponse := response.(api.AdminUpdateConfig200JSONResponse)
 		require.Equal(t, validKubeConfig["KUBE_REPLICAS"], jsonResponse.Data.Content["KUBE_REPLICAS"])
 		require.Equal(t, validKubeConfig["KUBE_DOCKER_IMAGE"], jsonResponse.Data.Content["KUBE_DOCKER_IMAGE"])
+		require.Equal(t, validKubeConfig["KUBE_PULL_IMAGE_SECRET"], jsonResponse.Data.Content["KUBE_PULL_IMAGE_SECRET"])
 		require.Equal(t, validKubeConfig["KUBE_CPU_REQUEST"], jsonResponse.Data.Content["KUBE_CPU_REQUEST"])
 		require.Equal(t, validKubeConfig["KUBE_MEMORY_REQUEST"], jsonResponse.Data.Content["KUBE_MEMORY_REQUEST"])
 	})

@@ -800,19 +800,20 @@ func updateKubernetesDeployments(
 
 		// Prepare deployment params
 		params := k8s.DeploymentParams{
-			Name:          "maos-" + config.ActorName,
-			Replicas:      getReplicasFromContent(content),
-			Labels:        map[string]string{"app": config.ActorName},
-			Image:         content["KUBE_DOCKER_IMAGE"],
-			EnvVars:       filterNonKubeConfigs(content),
-			APIKey:        apiTokens[config.ActorId],
-			MemoryRequest: content["KUBE_MEMORY_REQUEST"],
-			MemoryLimit:   content["KUBE_MEMORY_LIMIT"],
-			HasService:    hasService,
-			ServicePorts:  servicePorts,
-			HasIngress:    hasIngress,
-			IngressHost:   content["KUBE_INGRESS_HOST"],
-			BodyLimit:     content["KUBE_INGRESS_BODY_LIMIT"],
+			Name:             "maos-" + config.ActorName,
+			Replicas:         getReplicasFromContent(content),
+			Labels:           map[string]string{"app": config.ActorName},
+			Image:            content["KUBE_DOCKER_IMAGE"],
+			ImagePullSecrets: content["KUBE_MIGRATE_PULL_IMAGE_SECRET"],
+			EnvVars:          filterNonKubeConfigs(content),
+			APIKey:           apiTokens[config.ActorId],
+			MemoryRequest:    content["KUBE_MEMORY_REQUEST"],
+			MemoryLimit:      content["KUBE_MEMORY_LIMIT"],
+			HasService:       hasService,
+			ServicePorts:     servicePorts,
+			HasIngress:       hasIngress,
+			IngressHost:      content["KUBE_INGRESS_HOST"],
+			BodyLimit:        content["KUBE_INGRESS_BODY_LIMIT"],
 		}
 
 		deploymentSet = append(deploymentSet, params)

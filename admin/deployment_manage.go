@@ -735,7 +735,7 @@ func runDeploymentMigrations(
 			Serial:           deploymentId,
 			Name:             "maos-" + config.ActorName,
 			Image:            content["KUBE_MIGRATE_DOCKER_IMAGE"],
-			ImagePullSecrets: content["KUBE_MIGRATE_PULL_IMAGE_SECRET"],
+			ImagePullSecrets: content["KUBE_MIGRATE_IMAGE_PULL_SECRET"],
 			EnvVars:          filterNonKubeConfigs(content),
 			Command:          command,
 			MemoryRequest:    content["KUBE_MIGRATE_MEMORY_REQUEST"],

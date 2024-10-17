@@ -432,12 +432,13 @@ func TestGetDeployment(t *testing.T) {
 
 		// Create config with custom Kube settings
 		customKubeConfig := map[string]string{
-			"KUBE_REPLICAS":       "3",
-			"KUBE_DOCKER_IMAGE":   "custom-image:latest",
-			"KUBE_CPU_REQUEST":    "250m",
-			"KUBE_MEMORY_REQUEST": "512Mi",
-			"KUBE_CPU_LIMIT":      "500m",
-			"KUBE_MEMORY_LIMIT":   "1Gi",
+			"KUBE_REPLICAS":          "3",
+			"KUBE_DOCKER_IMAGE":      "custom-image:latest",
+			"KUBE_IMAGE_PULL_SECRET": "custom-image-pull-secret",
+			"KUBE_CPU_REQUEST":       "250m",
+			"KUBE_MEMORY_REQUEST":    "512Mi",
+			"KUBE_CPU_LIMIT":         "500m",
+			"KUBE_MEMORY_LIMIT":      "1Gi",
 		}
 		fixture.InsertConfig2(t, ctx, dbPool, actor.ID, createdDeployment.ConfigSuiteId, "testuser", customKubeConfig)
 
@@ -1355,11 +1356,12 @@ func TestPublishDeployment(t *testing.T) {
 
 		// Create configs for each actor
 		actor1EnvVars := map[string]string{
-			"key":                 "value1",
-			"KUBE_DOCKER_IMAGE":   "actor1-image:latest",
-			"KUBE_REPLICAS":       "2",
-			"KUBE_MEMORY_REQUEST": "256Mi",
-			"KUBE_MEMORY_LIMIT":   "512Mi",
+			"key":                    "value1",
+			"KUBE_DOCKER_IMAGE":      "actor1-image:latest",
+			"KUBE_IMAGE_PULL_SECRET": "custom-image-pull-secret",
+			"KUBE_REPLICAS":          "2",
+			"KUBE_MEMORY_REQUEST":    "256Mi",
+			"KUBE_MEMORY_LIMIT":      "512Mi",
 		}
 		actor2EnvVars := map[string]string{
 			"key":                 "value2",
@@ -1371,10 +1373,12 @@ func TestPublishDeployment(t *testing.T) {
 
 		if withMigrations {
 			actor1EnvVars["KUBE_MIGRATE_DOCKER_IMAGE"] = "actor1-image:latest"
+			actor1EnvVars["KUBE_MIGRATE_IMAGE_PULL_SECRET"] = "custom-image-pull-secret"
 			actor1EnvVars["KUBE_MIGRATE_COMMAND"] = "migrate.sh up"
 			actor1EnvVars["KUBE_MIGRATE_MEMORY_REQUEST"] = "266Mi"
 			actor1EnvVars["KUBE_MIGRATE_MEMORY_LIMIT"] = "522Mi"
 			actor2EnvVars["KUBE_MIGRATE_DOCKER_IMAGE"] = "actor2-image:latest"
+			actor2EnvVars["KUBE_MIGRATE_IMAGE_PULL_SECRET"] = "custom-image-pull-secret"
 			actor2EnvVars["KUBE_MIGRATE_COMMAND"] = "migrate.sh up"
 			actor2EnvVars["KUBE_MIGRATE_MEMORY_REQUEST"] = "268Mi"
 			actor2EnvVars["KUBE_MIGRATE_MEMORY_LIMIT"] = "532Mi"
@@ -1449,11 +1453,12 @@ func TestPublishDeployment(t *testing.T) {
 			switch actorConfig.ActorName {
 			case "actor1":
 				require.Equal(t, map[string]string{
-					"key":                 "value1",
-					"KUBE_DOCKER_IMAGE":   "actor1-image:latest",
-					"KUBE_REPLICAS":       "2",
-					"KUBE_MEMORY_REQUEST": "256Mi",
-					"KUBE_MEMORY_LIMIT":   "512Mi",
+					"key":                    "value1",
+					"KUBE_DOCKER_IMAGE":      "actor1-image:latest",
+					"KUBE_IMAGE_PULL_SECRET": "custom-image-pull-secret",
+					"KUBE_REPLICAS":          "2",
+					"KUBE_MEMORY_REQUEST":    "256Mi",
+					"KUBE_MEMORY_LIMIT":      "512Mi",
 				}, actorConfig.Configs)
 			case "actor2":
 				require.Equal(t, map[string]string{
@@ -1552,7 +1557,7 @@ func TestPublishDeployment(t *testing.T) {
 			Name:             "maos-actor1",
 			Image:            "actor1-image:latest",
 			Command:          []string{"migrate.sh", "up"},
-			ImagePullSecrets: "",
+			ImagePullSecrets: "custom-image-pull-secret",
 			EnvVars:          map[string]string{"key": "value1"},
 			MemoryRequest:    "266Mi",
 			MemoryLimit:      "522Mi",
@@ -1562,7 +1567,7 @@ func TestPublishDeployment(t *testing.T) {
 			Name:             "maos-actor2",
 			Image:            "actor2-image:latest",
 			Command:          []string{"migrate.sh", "up"},
-			ImagePullSecrets: "",
+			ImagePullSecrets: "custom-image-pull-secret",
 			EnvVars:          map[string]string{"key": "value2"},
 			MemoryRequest:    "268Mi",
 			MemoryLimit:      "532Mi",

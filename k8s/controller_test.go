@@ -8,7 +8,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
-	"log/slog"
 	"testing"
 	"time"
 
@@ -85,14 +84,15 @@ func TestK8sController_UpdateDeploymentSet(t *testing.T) {
 			MemoryLimit:   "512Mi",
 		},
 		{
-			Name:          "new-deployment",
-			Replicas:      1,
-			Labels:        map[string]string{"component": "new-test"},
-			Image:         "new-image:v1",
-			EnvVars:       map[string]string{"NEW_ENV": "new-value"},
-			APIKey:        "new-api-key",
-			MemoryRequest: "128Mi",
-			MemoryLimit:   "256Mi",
+			Name:             "new-deployment",
+			Replicas:         1,
+			Labels:           map[string]string{"component": "new-test"},
+			Image:            "new-image:v1",
+			ImagePullSecrets: "new-image-pull-secret",
+			EnvVars:          map[string]string{"NEW_ENV": "new-value"},
+			APIKey:           "new-api-key",
+			MemoryRequest:    "128Mi",
+			MemoryLimit:      "256Mi",
 		},
 	}
 
@@ -120,6 +120,7 @@ func TestK8sController_UpdateDeploymentSet(t *testing.T) {
 	require.NotNil(t, newDeployment)
 	require.Equal(t, int32(1), *newDeployment.Spec.Replicas)
 	require.Equal(t, "new-image:v1", newDeployment.Spec.Template.Spec.Containers[0].Image)
+	require.Equal(t, "new-image-pull-secret", newDeployment.Spec.Template.Spec.ImagePullSecrets[0].Name)
 	require.Equal(t, "new-test", newDeployment.Labels["component"])
 
 	// Verify the new secret was created
@@ -210,17 +211,18 @@ func TestK8sController_UpdateDeploymentSet_HasService_WithEmptyCluster(t *testin
 	// Create a deployment set with a service
 	deploymentSet := []DeploymentParams{
 		{
-			Name:          "existing-deployment",
-			Replicas:      2,
-			Labels:        map[string]string{"component": "test-app"},
-			Image:         "test-image:v1",
-			EnvVars:       map[string]string{"ENV_VAR": "value"},
-			APIKey:        "test-api-key",
-			MemoryRequest: "64Mi",
-			MemoryLimit:   "128Mi",
-			HasService:    true, // Set hasService to true
-			ServicePorts:  []int32{8080},
-			BodyLimit:     "1Mi", // Set bodyLimit
+			Name:             "existing-deployment",
+			Replicas:         2,
+			Labels:           map[string]string{"component": "test-app"},
+			Image:            "test-image:v1",
+			ImagePullSecrets: "test-image-pull-secret",
+			EnvVars:          map[string]string{"ENV_VAR": "value"},
+			APIKey:           "test-api-key",
+			MemoryRequest:    "64Mi",
+			MemoryLimit:      "128Mi",
+			HasService:       true, // Set hasService to true
+			ServicePorts:     []int32{8080},
+			BodyLimit:        "1Mi", // Set bodyLimit
 		},
 	}
 
@@ -234,6 +236,7 @@ func TestK8sController_UpdateDeploymentSet_HasService_WithEmptyCluster(t *testin
 	require.NotNil(t, newDeployment)
 	require.Equal(t, int32(2), *newDeployment.Spec.Replicas)
 	require.Equal(t, "test-image:v1", newDeployment.Spec.Template.Spec.Containers[0].Image)
+	require.Equal(t, "test-image-pull-secret", newDeployment.Spec.Template.Spec.ImagePullSecrets[0].Name)
 	require.Equal(t, "test-app", newDeployment.Labels["component"])
 	// verify service was updated
 	updatedService, err := clientset.CoreV1().Services("test-namespace").Get(ctx, "existing-deployment", meta.GetOptions{})
@@ -991,22 +994,21 @@ func TestK8sController_RunMigrations_Success(t *testing.T) {
 	// Create migration params
 	migrations := []MigrationParams{
 		{
-			Serial:        1,
-			Name:          "migration1",
-			Image:         "migration-image:v1",
-			EnvVars:       map[string]string{"ENV_VAR": "value"},
-			Command:       []string{"run", "migration"},
-			MemoryRequest: "64Mi",
-			MemoryLimit:   "128Mi",
+			Serial:           1,
+			Name:             "migration1",
+			Image:            "migration-image:v1",
+			ImagePullSecrets: "test-image-pull-secret",
+			EnvVars:          map[string]string{"ENV_VAR": "value"},
+			Command:          []string{"run", "migration"},
+			MemoryRequest:    "64Mi",
+			MemoryLimit:      "128Mi",
 		},
 	}
 
 	go func() {
 		time.Sleep(300 * time.Millisecond)
 		// Verify that the job was created
-		slog.Info("---- list jobs")
 		jobs, err := clientset.BatchV1().Jobs("test-namespace").List(ctx, meta.ListOptions{})
-		slog.Info("---- after list jobs", "jobs", jobs, "err", err)
 		require.NoError(t, err)
 		require.Len(t, jobs.Items, 1)
 		require.Equal(t, "migration-migration1-1", jobs.Items[0].Name)
@@ -1014,14 +1016,22 @@ func TestK8sController_RunMigrations_Success(t *testing.T) {
 		// Simulate job completion
 		job := &jobs.Items[0]
 		job.Status.Succeeded = 1
-		slog.Info("---- before job status", "status", job.Status)
-		job, err = clientset.BatchV1().Jobs("test-namespace").UpdateStatus(ctx, job, meta.UpdateOptions{})
-		slog.Info("---- job status", "status", job.Status)
+		_, err = clientset.BatchV1().Jobs("test-namespace").UpdateStatus(ctx, job, meta.UpdateOptions{})
 		require.NoError(t, err)
 	}()
 
 	// Run the migrations
 	failures, err := controller.RunMigrations(ctx, migrations)
+	jobs, err := clientset.BatchV1().Jobs("test-namespace").List(ctx, meta.ListOptions{})
+	require.NoError(t, err)
+	require.Len(t, jobs.Items, 1)
+	require.Equal(t, "migration-migration1-1", jobs.Items[0].Name)
+	require.Equal(t, "migration-image:v1", jobs.Items[0].Spec.Template.Spec.Containers[0].Image)
+	require.Equal(t, "test-image-pull-secret", jobs.Items[0].Spec.Template.Spec.ImagePullSecrets[0].Name)
+	require.Equal(t, "64Mi", jobs.Items[0].Spec.Template.Spec.Containers[0].Resources.Requests.Memory().String())
+	require.Equal(t, "128Mi", jobs.Items[0].Spec.Template.Spec.Containers[0].Resources.Limits.Memory().String())
+	require.Equal(t, "run", jobs.Items[0].Spec.Template.Spec.Containers[0].Command[0])
+	require.Equal(t, "migration", jobs.Items[0].Spec.Template.Spec.Containers[0].Command[1])
 
 	// Assert no errors and no failures
 	require.NoError(t, err)

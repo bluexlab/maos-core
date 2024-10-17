@@ -804,7 +804,7 @@ func updateKubernetesDeployments(
 			Replicas:         getReplicasFromContent(content),
 			Labels:           map[string]string{"app": config.ActorName},
 			Image:            content["KUBE_DOCKER_IMAGE"],
-			ImagePullSecrets: content["KUBE_MIGRATE_PULL_IMAGE_SECRET"],
+			ImagePullSecrets: content["KUBE_PULL_IMAGE_SECRET"],
 			EnvVars:          filterNonKubeConfigs(content),
 			APIKey:           apiTokens[config.ActorId],
 			MemoryRequest:    content["KUBE_MEMORY_REQUEST"],

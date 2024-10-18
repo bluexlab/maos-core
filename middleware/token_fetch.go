@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"gitlab.com/navyx/ai/maos/maos-core/dbaccess"
@@ -37,7 +38,7 @@ func NewDatabaseApiTokenFetch(dataSource dbaccess.DataSource, bootstrapApiToken 
 					Id:          "bootstraping",
 					ActorId:     0,
 					QueueId:     0,
-					ExpireAt:    0,
+					ExpireAt:    time.Now().Add(1 * time.Minute).Unix(),
 					Permissions: []string{"admin"},
 				}, nil
 			}

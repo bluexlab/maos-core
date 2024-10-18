@@ -26,6 +26,7 @@ var KubeConfigsWithDefaultForService = map[string]string{
 	"KUBE_MEMORY_REQUEST":    "100Mi",
 	"KUBE_MEMORY_LIMIT":      "100Mi",
 	"KUBE_SERVICE_PORT":      "3000",
+	"KUBE_SERVICE_NAME":      "",
 }
 
 var KubeConfigsWithDefaultForPortal = map[string]string{
@@ -37,6 +38,7 @@ var KubeConfigsWithDefaultForPortal = map[string]string{
 	"KUBE_MEMORY_REQUEST":     "100Mi",
 	"KUBE_MEMORY_LIMIT":       "100Mi",
 	"KUBE_SERVICE_PORT":       "3000",
+	"KUBE_SERVICE_NAME":       "",
 	"KUBE_INGRESS_HOST":       "portal.example.com",
 	"KUBE_INGRESS_BODY_LIMIT": "11m",
 }

@@ -222,6 +222,7 @@ func TestK8sController_UpdateDeploymentSet_HasService_WithEmptyCluster(t *testin
 			MemoryLimit:      "128Mi",
 			HasService:       true, // Set hasService to true
 			ServicePorts:     []int32{8080},
+			ServiceName:      "my-service",
 			BodyLimit:        "1Mi", // Set bodyLimit
 		},
 	}
@@ -239,7 +240,7 @@ func TestK8sController_UpdateDeploymentSet_HasService_WithEmptyCluster(t *testin
 	require.Equal(t, "test-image-pull-secret", newDeployment.Spec.Template.Spec.ImagePullSecrets[0].Name)
 	require.Equal(t, "test-app", newDeployment.Labels["component"])
 	// verify service was updated
-	updatedService, err := clientset.CoreV1().Services("test-namespace").Get(ctx, "existing-deployment", meta.GetOptions{})
+	updatedService, err := clientset.CoreV1().Services("test-namespace").Get(ctx, "my-service", meta.GetOptions{})
 	require.NoError(t, err)
 	require.NotNil(t, updatedService)
 	require.Equal(t, int32(8080), updatedService.Spec.Ports[0].Port)

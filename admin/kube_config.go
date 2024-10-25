@@ -9,7 +9,7 @@ import (
 
 var KubeConfigsWithDefault = map[string]string{
 	"KUBE_DOCKER_IMAGE":      "",
-	"KUBE_PULL_IMAGE_SECRET": "",
+	"KUBE_IMAGE_PULL_SECRET": "",
 	"KUBE_REPLICAS":          "1",
 	"KUBE_CPU_REQUEST":       "10m",
 	"KUBE_CPU_LIMIT":         "500m",
@@ -19,7 +19,7 @@ var KubeConfigsWithDefault = map[string]string{
 
 var KubeConfigsWithDefaultForService = map[string]string{
 	"KUBE_DOCKER_IMAGE":      "",
-	"KUBE_PULL_IMAGE_SECRET": "",
+	"KUBE_IMAGE_PULL_SECRET": "",
 	"KUBE_REPLICAS":          "1",
 	"KUBE_CPU_REQUEST":       "10m",
 	"KUBE_CPU_LIMIT":         "500m",
@@ -31,7 +31,7 @@ var KubeConfigsWithDefaultForService = map[string]string{
 
 var KubeConfigsWithDefaultForPortal = map[string]string{
 	"KUBE_DOCKER_IMAGE":       "",
-	"KUBE_PULL_IMAGE_SECRET":  "",
+	"KUBE_IMAGE_PULL_SECRET":  "",
 	"KUBE_REPLICAS":           "1",
 	"KUBE_CPU_REQUEST":        "10m",
 	"KUBE_CPU_LIMIT":          "500m",
@@ -45,7 +45,7 @@ var KubeConfigsWithDefaultForPortal = map[string]string{
 
 var KubeConfigsWithDefaultForMigratable = map[string]string{
 	"KUBE_MIGRATE_DOCKER_IMAGE":      "",
-	"KUBE_MIGRATE_PULL_IMAGE_SECRET": "",
+	"KUBE_MIGRATE_IMAGE_PULL_SECRET": "",
 	"KUBE_MIGRATE_COMMAND":           "",
 	"KUBE_MIGRATE_MEMORY_REQUEST":    "100Mi",
 	"KUBE_MIGRATE_MEMORY_LIMIT":      "100Mi",

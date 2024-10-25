@@ -669,6 +669,19 @@ func (c *K8sController) checkDeploymentExists(ctx context.Context, name string) 
 }
 
 func (c *K8sController) createServiceAccount(ctx context.Context, name string) (*core.ServiceAccount, error) {
+	// Check if the service account already exists
+	existingSA, err := c.clientset.CoreV1().ServiceAccounts(c.namespace).Get(ctx, name, meta.GetOptions{})
+	if err == nil {
+		// Service account already exists, return it
+		return existingSA, nil
+	}
+
+	// If the error is not "NotFound", return the error
+	if !errors.IsNotFound(err) {
+		return nil, fmt.Errorf("error checking service account existence: %v", err)
+	}
+
+	// Service account doesn't exist, create it
 	sa := &core.ServiceAccount{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      name,

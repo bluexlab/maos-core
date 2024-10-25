@@ -592,7 +592,9 @@ func runDeploymentMigrationsAndUpdateDeployment(
 	err := doRunDeploymentMigrationsAndUpdateDeployment(ctx, logger, controller, suiteStore, ds, deploymentId, user)
 	if err != nil {
 		logger.Error("Cannot run deployment migrations", "error", err)
-		// store error to deployment
+		// store error to deployment with new context because the context might be expired
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
 		err = querier.UpdateDeploymentLastError(ctx, ds, &dbsqlc.UpdateDeploymentLastErrorParams{
 			ID:        deploymentId,
 			LastError: err.Error(),

@@ -10,6 +10,7 @@ import (
 var KubeConfigsWithDefault = map[string]string{
 	"KUBE_DOCKER_IMAGE":      "",
 	"KUBE_IMAGE_PULL_SECRET": "",
+	"KUBE_LAUNCH_COMMAND":    "",
 	"KUBE_REPLICAS":          "1",
 	"KUBE_CPU_REQUEST":       "10m",
 	"KUBE_CPU_LIMIT":         "500m",

@@ -78,6 +78,7 @@ func TestK8sController_UpdateDeploymentSet(t *testing.T) {
 			Replicas:      2,
 			Labels:        map[string]string{"component": "updated-test"},
 			Image:         "updated-image:v2",
+			LaunchCommand: []string{"launch.sh", "run"},
 			EnvVars:       map[string]string{"UPDATED_ENV": "updated-value"},
 			APIKey:        "updated-api-key",
 			MemoryRequest: "256Mi",
@@ -106,6 +107,7 @@ func TestK8sController_UpdateDeploymentSet(t *testing.T) {
 	require.NotNil(t, updatedDeployment)
 	require.Equal(t, int32(2), *updatedDeployment.Spec.Replicas)
 	require.Equal(t, "updated-image:v2", updatedDeployment.Spec.Template.Spec.Containers[0].Image)
+	require.Equal(t, []string{"launch.sh", "run"}, updatedDeployment.Spec.Template.Spec.Containers[0].Command)
 	require.Equal(t, "updated-test", updatedDeployment.Labels["component"])
 
 	// Verify the existing secret was updated

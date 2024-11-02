@@ -51,6 +51,7 @@ type DeploymentParams struct {
 	Labels           map[string]string // Labels to apply to the deployment
 	Image            string            // Name with tag of the Docker image to use
 	ImagePullSecrets string            // Name of the secret containing image pull credentials
+	LaunchCommand    []string          // Command to run the deployment
 	EnvVars          map[string]string // Environment variables to pass to the container
 	APIKey           string            // API key to use for the deployment
 	MemoryRequest    string            // Memory request for the container
@@ -758,6 +759,13 @@ func (c *K8sController) createDeploymentStruct(params DeploymentParams, sa *core
 			Selector: &meta.LabelSelector{
 				MatchLabels: params.Labels,
 			},
+			Strategy: apps.DeploymentStrategy{
+				Type: apps.RollingUpdateDeploymentStrategyType,
+				RollingUpdate: &apps.RollingUpdateDeployment{
+					MaxUnavailable: &intstr.IntOrString{Type: intstr.Int, IntVal: 0},
+					MaxSurge:       &intstr.IntOrString{Type: intstr.Int, IntVal: 2},
+				},
+			},
 			Template: core.PodTemplateSpec{
 				ObjectMeta: meta.ObjectMeta{
 					Labels: params.Labels,
@@ -770,6 +778,7 @@ func (c *K8sController) createDeploymentStruct(params DeploymentParams, sa *core
 							Image:           params.Image,
 							ImagePullPolicy: core.PullAlways,
 							Env:             envVars,
+							Command:         params.LaunchCommand,
 							Resources: core.ResourceRequirements{
 								Requests: core.ResourceList{
 									core.ResourceMemory: memoryRequest,

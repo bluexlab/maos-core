@@ -800,6 +800,11 @@ func updateKubernetesDeployments(
 		}
 		hasIngress := config.ActorRole == "portal"
 
+		launchCommand, err := util.TokenizeCommand(content["KUBE_LAUNCH_COMMAND"])
+		if err != nil {
+			return fmt.Errorf("failed to tokenize KUBE_LAUNCH_COMMAND: %v", err)
+		}
+
 		// Prepare deployment params
 		params := k8s.DeploymentParams{
 			Name:             "maos-" + config.ActorName,
@@ -807,6 +812,7 @@ func updateKubernetesDeployments(
 			Labels:           map[string]string{"app": config.ActorName},
 			Image:            content["KUBE_DOCKER_IMAGE"],
 			ImagePullSecrets: content["KUBE_IMAGE_PULL_SECRET"],
+			LaunchCommand:    launchCommand,
 			EnvVars:          filterNonKubeConfigs(content),
 			APIKey:           apiTokens[config.ActorId],
 			MemoryRequest:    content["KUBE_MEMORY_REQUEST"],

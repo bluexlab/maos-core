@@ -1360,6 +1360,7 @@ func TestPublishDeployment(t *testing.T) {
 			"KUBE_DOCKER_IMAGE":      "actor1-image:latest",
 			"KUBE_IMAGE_PULL_SECRET": "custom-image-pull-secret",
 			"KUBE_REPLICAS":          "2",
+			"KUBE_LAUNCH_COMMAND":    "launch.sh run",
 			"KUBE_MEMORY_REQUEST":    "256Mi",
 			"KUBE_MEMORY_LIMIT":      "512Mi",
 		}
@@ -1456,6 +1457,7 @@ func TestPublishDeployment(t *testing.T) {
 					"key":                    "value1",
 					"KUBE_DOCKER_IMAGE":      "actor1-image:latest",
 					"KUBE_IMAGE_PULL_SECRET": "custom-image-pull-secret",
+					"KUBE_LAUNCH_COMMAND":    "launch.sh run",
 					"KUBE_REPLICAS":          "2",
 					"KUBE_MEMORY_REQUEST":    "256Mi",
 					"KUBE_MEMORY_LIMIT":      "512Mi",
